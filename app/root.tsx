@@ -5,18 +5,29 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLoaderData,
+  useLocation,
 } from 'react-router';
-import { ConfigProvider, Layout as AntLayout, Menu, theme } from 'antd';
+import { ConfigProvider, Layout as AntLayout, Button, Menu, Space, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import type { Route } from './+types/root';
+import { getAppContext } from '~/services/context';
+import { getCurrentUser } from '~/services/guard';
 
 // antd 的 Layout 重命名为 AntLayout，避免与 React Router 约定的文档骨架导出 Layout 冲突
 const { Header, Content, Footer } = AntLayout;
 
 /**
- * 顶部导航菜单项。「我的」在未登录时也展示，点击后由路由守卫重定向到登录页。
- * 后续（Task 18）会接入当前用户，动态显示登录/登出。
+ * 根 loader：把当前登录用户带给全站，用于导航栏显示登录态。
+ * 游客返回 null，页面照常渲染（公开内容都能看）。
  */
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const { db } = getAppContext(context);
+  const user = await getCurrentUser(request, db);
+  return { user };
+}
+
+/** 顶部导航菜单项 */
 const NAV_ITEMS = [
   { key: '/', label: '首页' },
   { key: '/master', label: '主人的盘' },
@@ -30,7 +41,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>模拟基金 · 定投</title>
         <Meta />
         <Links />
       </head>
@@ -44,6 +54,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const data = useLoaderData<typeof loader>();
+  const location = useLocation();
+  const user = data?.user ?? null;
+
+  // 高亮当前所在的一级导航
+  const selectedKey =
+    NAV_ITEMS.filter((i) => i.key !== '/' && location.pathname.startsWith(i.key))
+      .map((i) => i.key)
+      .at(0) ?? (location.pathname === '/' ? '/' : '');
+
   return (
     // antd 全局配置：中文语言包 + 主题色（国内习惯红涨绿跌，主色用喜庆红）
     <ConfigProvider
@@ -54,22 +74,47 @@ export default function App() {
       }}
     >
       <AntLayout style={{ minHeight: '100vh' }}>
-        <Header style={{ display: 'flex', alignItems: 'center' }}>
-          <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>
+        <Header style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <a href="/" style={{ color: '#fff', fontWeight: 700, fontSize: 18 }}>
             模拟基金
-          </div>
+          </a>
           <Menu
             theme="dark"
             mode="horizontal"
-            selectable={false}
+            selectedKeys={selectedKey ? [selectedKey] : []}
             items={NAV_ITEMS.map((i) => ({
               key: i.key,
               label: <a href={i.key}>{i.label}</a>,
             }))}
             style={{ flex: 1, minWidth: 0 }}
           />
+          {/* 登录态区域：已登录显示用户名与登出，游客显示登录/注册 */}
+          {user ? (
+            <Space>
+              <span style={{ color: 'rgba(255,255,255,.85)' }}>
+                {user.username}
+                {user.role === 'admin' ? '（主人）' : ''}
+              </span>
+              <form method="post" action="/logout" style={{ display: 'inline' }}>
+                <Button size="small" htmlType="submit">
+                  登出
+                </Button>
+              </form>
+            </Space>
+          ) : (
+            <Space>
+              <Button size="small" href="/login">
+                登录
+              </Button>
+              <Button size="small" type="primary" href="/register">
+                注册
+              </Button>
+            </Space>
+          )}
         </Header>
-        <Content style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+        <Content
+          style={{ padding: 24, maxWidth: 1200, margin: '0 auto', width: '100%' }}
+        >
           <Outlet />
         </Content>
         <Footer style={{ textAlign: 'center' }}>

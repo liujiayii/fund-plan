@@ -1,9 +1,25 @@
 import { type RouteConfig, index, route } from '@react-router/dev/routes';
 
 /**
- * 显式路由表。公开页（游客可见）与需登录页混排，鉴权在各自 loader 内做。
- * 现阶段（Task 1 脚手架）只声明首页，其余页面在后续任务逐个加入。
+ * 显式路由表。
+ *
+ * 公开页（游客可见）：/ /master /funds /funds/:code /login /register
+ * 需登录页：/me 系列（鉴权在各自 loader 里用 requireUser 做）
  */
 export default [
+  // ==== 公开 ====
   index('routes/_index.tsx'),
+  route('master', 'routes/master.tsx'),
+  route('funds', 'routes/funds._index.tsx'),
+  route('funds/:code', 'routes/funds.$code.tsx'),
+  route('login', 'routes/login.tsx'),
+  route('register', 'routes/register.tsx'),
+  route('logout', 'routes/logout.tsx'),
+
+  // ==== 需登录 ====
+  route('me', 'routes/me._index.tsx'),
+  route('me/holdings', 'routes/me.holdings.tsx'),
+  route('me/orders', 'routes/me.orders.tsx'),
+  route('me/dca', 'routes/me.dca.tsx'),
+  route('me/settings', 'routes/me.settings.tsx'),
 ] satisfies RouteConfig;
