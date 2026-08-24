@@ -1,4 +1,346 @@
-// 占位，随后填充实现
-export default function Placeholder() {
-  return null;
+import {
+  Alert,
+  Button,
+  Card,
+  Empty,
+  Space,
+  Statistic,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
+import { and, eq, sql } from 'drizzle-orm';
+import { useState } from 'react';
+import { useFetcher } from 'react-router';
+import type { Route } from './+types/me.holdings';
+import { BuyDrawer } from '~/components/BuyDrawer';
+import { SellDrawer } from '~/components/SellDrawer';
+import { account, fund, fundNav, orders, shareLot } from '~/db/schema';
+import { centsToYuan, navToDisplay, sharesToDisplay, yuanToCents, SHARE_SCALE } from '~/domain/money';
+import { DEFAULT_REDEEM_TIERS, type RedeemTier } from '~/domain/redeem';
+import { resolveConfirmDate } from '~/domain/trading-calendar';
+import { getAppContext } from '~/services/context';
+import { requireUser } from '~/services/guard';
+import { getPortfolio, type HoldingView } from '~/services/portfolio-service';
+import { placeBuyOrder, placeSellOrder } from '~/services/trade';
+
+const { Title, Text, Paragraph } = Typography;
+
+export function meta(_: Route.MetaArgs) {
+  return [{ title: '我的持仓 · 模拟基金' }];
+}
+
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const { db } = getAppContext(context);
+  const user = await requireUser(request, db);
+
+  const portfolio = await getPortfolio(db, user.id);
+  const acc = await db.query.account.findFirst({
+    where: eq(account.userId, user.id),
+  });
+
+  // 为每只持仓准备赎回所需的批次与费率，供抽屉做 FIFO 试算
+  const details = await Promise.all(
+    portfolio.holdings.map(async (h) => {
+      const lots = await db
+        .select()
+        .from(shareLot)
+        .where(
+          and(eq(shareLot.userId, user.id), eq(shareLot.fundCode, h.fundCode)),
+        )
+        .orderBy(shareLot.confirmDate, shareLot.id);
+
+      // 待确认的赎回单占用的份额，不能重复赎回
+      const pend = await db
+        .select({ total: sql<number>`coalesce(sum(${orders.shares}), 0)` })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.userId, user.id),
+            eq(orders.fundCode, h.fundCode),
+            eq(orders.side, 'sell'),
+            eq(orders.status, 'pending'),
+          ),
+        );
+      const pendingShares = Number(pend[0]?.total ?? 0);
+
+      const f = await db.query.fund.findFirst({
+        where: eq(fund.code, h.fundCode),
+      });
+
+      return {
+        fundCode: h.fundCode,
+        lots: lots.map((l) => ({
+          id: l.id,
+          sharesScaled: l.shares,
+          costCents: l.cost,
+          confirmDate: l.confirmDate,
+        })),
+        pendingShares,
+        availableShares: h.sharesScaled - pendingShares,
+        tiers: (f?.redeemTiers as RedeemTier[]) ?? DEFAULT_REDEEM_TIERS,
+        purchaseRate: f?.purchaseRate ?? 0,
+        minPurchase: f?.minPurchase ?? 1000,
+      };
+    }),
+  );
+
+  return {
+    portfolio,
+    details,
+    cash: acc?.cash ?? 0,
+    // 现在下单会落到哪个确认日，供抽屉展示与试算持有天数
+    confirmDate: resolveConfirmDate(new Date()),
+  };
+}
+
+/** 买入与赎回共用一个 action，用 intent 区分 */
+export async function action({ request, context }: Route.ActionArgs) {
+  const { db, env } = getAppContext(context);
+  const user = await requireUser(request, db);
+
+  const fd = await request.formData();
+  const intent = String(fd.get('intent') ?? '');
+  const fundCode = String(fd.get('fundCode') ?? '');
+
+  try {
+    if (intent === 'buy') {
+      const amount = String(fd.get('amount') ?? '');
+      const n = Number(amount);
+      if (!Number.isFinite(n) || n <= 0) return { error: '请输入正确的金额' };
+      await placeBuyOrder(db, env, {
+        userId: user.id,
+        fundCode,
+        amountCents: yuanToCents(amount),
+      });
+      return { ok: true, message: '加仓下单成功，待 T+1 确认' };
+    }
+
+    if (intent === 'sell') {
+      const shares = String(fd.get('shares') ?? '');
+      const n = Number(shares);
+      if (!Number.isFinite(n) || n <= 0) return { error: '请输入正确的份额' };
+      await placeSellOrder(db, env, {
+        userId: user.id,
+        fundCode,
+        sharesScaled: Math.round(n * SHARE_SCALE),
+      });
+      return { ok: true, message: '赎回下单成功，待 T+1 确认后到账' };
+    }
+
+    return { error: '未知操作' };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : '操作失败' };
+  }
+}
+
+function pnlColor(v: number): string {
+  if (v > 0) return '#c62828';
+  if (v < 0) return '#2e7d32';
+  return undefined as unknown as string;
+}
+
+export default function MeHoldings({ loaderData }: Route.ComponentProps) {
+  const { portfolio, details, cash, confirmDate } = loaderData;
+  const { summary, holdings } = portfolio;
+  const fetcher = useFetcher<typeof action>();
+
+  const [buyTarget, setBuyTarget] = useState<HoldingView | null>(null);
+  const [sellTarget, setSellTarget] = useState<HoldingView | null>(null);
+
+  const detailOf = (code: string) => details.find((d) => d.fundCode === code)!;
+
+  return (
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Title level={3} style={{ marginBottom: 0 }}>
+        我的持仓
+      </Title>
+
+      {fetcher.data?.ok && (
+        <Alert type="success" showIcon message={fetcher.data.message} closable />
+      )}
+      {fetcher.data?.error && (
+        <Alert type="error" showIcon message={fetcher.data.error} closable />
+      )}
+
+      <Card>
+        <Space size="large" wrap>
+          <Statistic title="持仓市值" value={centsToYuan(summary.marketValueCents)} suffix="元" />
+          <Statistic title="可用现金" value={centsToYuan(cash)} suffix="元" />
+          <Statistic
+            title="浮动盈亏"
+            value={centsToYuan(summary.totalPnlCents)}
+            suffix="元"
+            valueStyle={{ color: pnlColor(summary.totalPnlCents) }}
+            prefix={summary.totalPnlCents > 0 ? '+' : ''}
+          />
+        </Space>
+      </Card>
+
+      <Card title={`持仓明细（${holdings.length} 只）`}>
+        {holdings.length === 0 ? (
+          <Empty description="还没有持仓">
+            <Button type="primary" href="/funds">
+              去挑一只基金
+            </Button>
+          </Empty>
+        ) : (
+          <Table<HoldingView>
+            rowKey="fundCode"
+            dataSource={holdings}
+            pagination={false}
+            scroll={{ x: 900 }}
+            columns={[
+              {
+                title: '基金',
+                dataIndex: 'fundName',
+                fixed: 'left',
+                width: 200,
+                render: (name: string, r) => (
+                  <a href={`/funds/${r.fundCode}`}>
+                    {name}
+                    <br />
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {r.fundCode}
+                    </Text>
+                  </a>
+                ),
+              },
+              {
+                title: '持有份额',
+                dataIndex: 'sharesScaled',
+                align: 'right',
+                render: (v: number, r) => {
+                  const d = detailOf(r.fundCode);
+                  return (
+                    <span>
+                      {sharesToDisplay(v)}
+                      {d.pendingShares > 0 && (
+                        <>
+                          <br />
+                          <Text type="warning" style={{ fontSize: 12 }}>
+                            {sharesToDisplay(d.pendingShares)} 待赎回
+                          </Text>
+                        </>
+                      )}
+                    </span>
+                  );
+                },
+              },
+              {
+                title: '成本',
+                dataIndex: 'costCents',
+                align: 'right',
+                render: (v: number) => `${centsToYuan(v)} 元`,
+              },
+              {
+                title: '净值',
+                dataIndex: 'navScaled',
+                align: 'right',
+                render: (v: number, r) => (
+                  <span>
+                    {navToDisplay(v)}
+                    {r.navDate && (
+                      <>
+                        <br />
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {r.navDate}
+                        </Text>
+                      </>
+                    )}
+                  </span>
+                ),
+              },
+              {
+                title: '市值',
+                dataIndex: 'marketValueCents',
+                align: 'right',
+                render: (v: number) => `${centsToYuan(v)} 元`,
+              },
+              {
+                title: '盈亏',
+                dataIndex: 'pnlCents',
+                align: 'right',
+                render: (v: number, r) => (
+                  <span style={{ color: pnlColor(v) }}>
+                    {v > 0 ? '+' : ''}
+                    {centsToYuan(v)}
+                    <br />
+                    <Text style={{ color: pnlColor(v), fontSize: 12 }}>
+                      {(r.pnlRate * 100).toFixed(2)}%
+                    </Text>
+                  </span>
+                ),
+              },
+              {
+                title: '批次',
+                align: 'center',
+                width: 80,
+                render: (_: unknown, r) => (
+                  <Tag>{detailOf(r.fundCode).lots.length} 批</Tag>
+                ),
+              },
+              {
+                title: '操作',
+                fixed: 'right',
+                width: 140,
+                render: (_: unknown, r) => (
+                  <Space>
+                    <Button size="small" onClick={() => setBuyTarget(r)}>
+                      加仓
+                    </Button>
+                    <Button
+                      size="small"
+                      danger
+                      onClick={() => setSellTarget(r)}
+                      disabled={detailOf(r.fundCode).availableShares <= 0}
+                    >
+                      赎回
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        )}
+        <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
+          「批次」是同一只基金分次买入形成的份额批，赎回时按买入时间先进先出消耗，
+          每批按各自持有天数计赎回费。
+        </Paragraph>
+      </Card>
+
+      {/* 加仓抽屉 */}
+      {buyTarget && (
+        <BuyDrawer
+          open={!!buyTarget}
+          onClose={() => setBuyTarget(null)}
+          fundCode={buyTarget.fundCode}
+          fundName={buyTarget.fundName}
+          purchaseRate={detailOf(buyTarget.fundCode).purchaseRate}
+          minPurchaseCents={detailOf(buyTarget.fundCode).minPurchase}
+          navScaled={buyTarget.navScaled}
+          navDate={buyTarget.navDate}
+          cashCents={cash}
+          action="/me/holdings"
+        />
+      )}
+
+      {/* 赎回抽屉 */}
+      {sellTarget && (
+        <SellDrawer
+          open={!!sellTarget}
+          onClose={() => setSellTarget(null)}
+          fundCode={sellTarget.fundCode}
+          fundName={sellTarget.fundName}
+          availableSharesScaled={detailOf(sellTarget.fundCode).availableShares}
+          navScaled={sellTarget.navScaled}
+          navDate={sellTarget.navDate}
+          lots={detailOf(sellTarget.fundCode).lots}
+          tiers={detailOf(sellTarget.fundCode).tiers}
+          confirmDate={confirmDate}
+          action="/me/holdings"
+        />
+      )}
+    </Space>
+  );
 }
