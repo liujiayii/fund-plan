@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787590892675,
+      "tag": "0000_majestic_grandmaster",
+      "breakpoints": true
+    }
+  ]
+}

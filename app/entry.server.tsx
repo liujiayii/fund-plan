@@ -1,4 +1,4 @@
-import type { AppLoadContext, EntryContext } from 'react-router';
+import type { EntryContext, RouterContextProvider } from 'react-router';
 import { ServerRouter } from 'react-router';
 import { renderToReadableStream } from 'react-dom/server';
 import { createCache, extractStyle, StyleProvider } from '@ant-design/cssinjs';
@@ -15,7 +15,7 @@ export default async function handleRequest(
   responseStatusCode: number,
   responseHeaders: Headers,
   routerContext: EntryContext,
-  _loadContext: AppLoadContext,
+  _loadContext: RouterContextProvider,
 ) {
   let statusCode = responseStatusCode;
 

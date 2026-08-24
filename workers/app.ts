@@ -1,17 +1,13 @@
-import { createRequestHandler } from 'react-router';
+import { createContext, createRequestHandler, RouterContextProvider } from 'react-router';
 
 /**
- * 扩展 React Router 的 AppLoadContext，把 Cloudflare 运行时环境注入到
- * 所有 loader / action 里，这样应用层可以直接拿到 D1、KV 与环境变量。
+ * Cloudflare 运行时上下文键。React Router 8 的 loader/action 通过
+ * context.get(cloudflareContext) 取到 env（D1/KV/环境变量）与 ctx。
  */
-declare module 'react-router' {
-  export interface AppLoadContext {
-    cloudflare: {
-      env: Env;
-      ctx: ExecutionContext;
-    };
-  }
-}
+export const cloudflareContext = createContext<{
+  env: Env;
+  ctx: ExecutionContext;
+}>();
 
 // React Router 的 SSR 请求处理器，虚拟模块由 @react-router/dev 插件提供
 const requestHandler = createRequestHandler(
@@ -20,11 +16,11 @@ const requestHandler = createRequestHandler(
 );
 
 export default {
-  /** HTTP 请求入口：全部交给 React Router 处理 */
+  /** HTTP 请求入口：把 Cloudflare env/ctx 注入 RouterContext，再交给 React Router */
   async fetch(request, env, ctx) {
-    return requestHandler(request, {
-      cloudflare: { env, ctx },
-    });
+    const context = new RouterContextProvider();
+    context.set(cloudflareContext, { env, ctx });
+    return requestHandler(request, context);
   },
 
   /**

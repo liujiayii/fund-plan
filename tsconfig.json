@@ -11,10 +11,10 @@
     "module": "ES2022",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     // React Router 自动生成的路由类型放在 .react-router/types 下
     "rootDirs": [".", "./.react-router/types"],
-    "baseUrl": ".",
+    // TypeScript 7 已移除 baseUrl，paths 直接写相对当前 tsconfig 的路径
     "paths": {
       "~/*": ["./app/*"]
     },
