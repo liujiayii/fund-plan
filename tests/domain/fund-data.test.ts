@@ -258,12 +258,15 @@ describe('fetchNavHistory 历史净值', () => {
   });
 
   it('请求带 Referer 头（东财防盗链要求）', async () => {
-    const spy = vi.fn(async () => new Response(JSON.stringify(navResponse)));
+    const spy = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify(navResponse)),
+    );
     vi.stubGlobal('fetch', spy);
     await fetchNavHistory(fakeEnv(), '000001');
 
-    const init = spy.mock.calls[0][1] as RequestInit;
-    const headers = new Headers(init.headers);
+    const init = spy.mock.calls[0][1];
+    const headers = new Headers(init?.headers);
     expect(headers.get('Referer')).toContain('eastmoney.com');
   });
 
