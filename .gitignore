@@ -6,6 +6,12 @@ build/
 dist/
 .wrangler/
 
+# React Router 自动生成的路由类型（每次 typegen 重建，不入库）
+.react-router/
+
+# Cloudflare 生成的环境类型声明（由 pnpm cf-typegen 重建）
+worker-configuration.d.ts
+
 # CodeGraph 本地索引（各人本地生成，不入库）
 .codegraph/
 
