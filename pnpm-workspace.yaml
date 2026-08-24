@@ -1,0 +1,7 @@
+# pnpm 设置
+# 放行这两个依赖的 postinstall 构建脚本：它们需要下载原生二进制，
+# 不放行则 vite（依赖 esbuild）与 wrangler 本地运行时（依赖 workerd）无法启动。
+# 注意：pnpm 11 起该配置项名为 allowBuilds（早期版本叫 onlyBuiltDependencies，已废弃）。
+allowBuilds:
+  esbuild: true
+  workerd: true

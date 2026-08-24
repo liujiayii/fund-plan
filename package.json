@@ -1,0 +1,53 @@
+{
+  "name": "fund-plan",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "react-router dev",
+    "build": "react-router build",
+    "start": "wrangler dev",
+    "deploy": "pnpm run build && wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "react-router typegen && tsc",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply fund-plan-db --local",
+    "db:migrate:prod": "wrangler d1 migrations apply fund-plan-db --remote",
+    "cf-typegen": "wrangler types"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@ant-design/cssinjs": "^2.1.2",
+    "@cloudflare/vite-plugin": "^1.53.1",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@react-router/dev": "^8.3.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.125.0"
+  },
+  "dependencies": {
+    "@ant-design/charts": "^2.6.7",
+    "@react-router/node": "^8.3.0",
+    "antd": "^6.6.1",
+    "dayjs": "^1.11.23",
+    "decimal.js": "^10.6.0",
+    "drizzle-orm": "^0.45.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.3.0",
+    "zod": "^4.4.3"
+  },
+  "packageManager": "pnpm@11.3.0",
+  "private": true
+}

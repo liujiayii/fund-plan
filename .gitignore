@@ -1,0 +1,30 @@
+# 依赖
+node_modules/
+
+# 构建产物
+build/
+dist/
+.wrangler/
+
+# CodeGraph 本地索引（各人本地生成，不入库）
+.codegraph/
+
+# Cloudflare 本地密钥（切勿提交）
+.dev.vars
+.dev.vars.*
+
+# 环境与本地文件
+*.local
+.env
+.env.*
+
+# 编辑器/系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# 测试与缓存
+coverage/
+*.log

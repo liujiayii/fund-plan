@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fund-plan",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2026-08-01",
+  // nodejs_compat：Drizzle / decimal.js 等库需要部分 Node 内建模块垫片
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    // 管理员用户名：注册时用户名与此一致者获得 admin 角色，其组合公开展示
+    "ADMIN_USERNAME": "liujiayii"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fund-plan-db",
+      // 部署前用 `wrangler d1 create fund-plan-db` 创建后，把返回的 id 填到这里
+      "database_id": "REPLACE_WITH_REAL_D1_ID",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      // 部署前用 `wrangler kv namespace create KV` 创建后，把返回的 id 填到这里
+      "id": "REPLACE_WITH_REAL_KV_ID"
+    }
+  ],
+  "triggers": {
+    // Cron 一律用 UTC 书写，注释标注对应北京时间（UTC+8）
+    "crons": [
+      "0 2 * * *", // 北京 10:00 —— 定投扫描：到期计划生成 pending 申购单
+      "30 12 * * *" // 北京 20:30 —— 净值同步 + T+1 撮合确认
+    ]
+  }
+}
