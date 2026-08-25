@@ -1516,8 +1516,12 @@ const WEEKDAY_LABEL = ["", "一", "二", "三", "四", "五", "六", "日"];
 function frequencyText(p: DcaPlanView): string {
   if (p.frequency === "daily")
     return "每个交易日";
+  // ⚠️ 用 `||` 而非 `??`：WEEKDAY_LABEL 的索引 0 是空串占位，
+  // `??` 只接 null/undefined，接不住空串 —— dayOfWeek 为 null 时会渲染成
+  // 光秃秃的「每周」。被替换掉的 me.dca.tsx 版本（WEEKDAYS.find()?.label）
+  // 对 null 是正确回退到「—」的，这里必须保持等价。
   if (p.frequency === "weekly")
-    return `每周${WEEKDAY_LABEL[p.dayOfWeek ?? 0] ?? "—"}`;
+    return `每周${WEEKDAY_LABEL[p.dayOfWeek ?? 0] || "—"}`;
   return `每月 ${p.dayOfMonth} 号`;
 }
 
@@ -1718,7 +1722,7 @@ git commit -m "feat(ui): 新增 DcaPlanList，定投页卡片化
 
 收敛 2 处 <Table<DcaPlanView>>，并统一 frequencyText ——
 它此前在 me.dca.tsx 与 master.tsx 各实现一遍且写法不同
-（一个 find+slice(1)，一个查表），现导出自 DcaPlanList.tsx。
+（一个 find+slice(1)，一个查表），现收敛为 DcaPlanList.tsx 的模块内私有函数。
 
 信息层级调整：「下次扣款日」从第 4 列提到名称下方——
 那是用户第二关心的事，不该藏在横向滚动区里。
