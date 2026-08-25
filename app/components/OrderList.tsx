@@ -19,8 +19,10 @@ const STATUS_TAG: Partial<Record<OrderView["status"], { color: string; text: str
 export interface OrderListProps {
   orders: OrderView[];
   /**
-   * true 时右侧副值展示完整成交信息（成交净值 / 份额 / 手续费）。
-   * 订单页传 true；首页「最近订单」与公开盘传 false（只要方向和金额）。
+   * true 时右侧副值展示完整成交信息（净申购/到账金额 · 成交净值 · 份额 · 手续费）。
+   * 订单页与公开盘传 true —— 公开盘的旧表格有「成交金额」列，不传就丢了这个字段，
+   * 且赎回行的主值会从「元」变成「份」，量纲都不对。
+   * 只有首页「最近操作」传 false：那里是五行概览，要的是方向和委托金额。
    */
   detailed?: boolean;
 }

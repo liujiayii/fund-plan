@@ -1,18 +1,12 @@
 import type { Route } from "./+types/_index";
-import {
-  Button,
-  Card,
-  Col,
-  Row,
-  Space,
-  Tag,
-  Typography,
-} from "antd";
+import { Button, Card, Col, Row, Space, Tag, Typography } from "antd";
+import { OrderList } from "~/components/OrderList";
 import {
   AdminNotReady,
   HoldingListReadonly,
   PortfolioSummary,
 } from "~/components/PortfolioView";
+import { SectionCard } from "~/components/ui/SectionCard";
 import { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS } from "~/domain/checkin";
 import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { centsToYuan } from "~/domain/money";
@@ -86,7 +80,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       {/* 头图区 */}
-      <Card>
+      <SectionCard>
         <Title level={2} style={{ marginBottom: 8 }}>
           用真实基金数据，玩一把不心疼的模拟盘
         </Title>
@@ -135,7 +129,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
                 </>
               )}
         </Space>
-      </Card>
+      </SectionCard>
 
       {/* 主人的盘 */}
       {loaderData.admin === null
@@ -143,11 +137,11 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             <AdminNotReady adminName={loaderData.adminName} />
           )
         : (
-            <Card
+            <SectionCard
               title={(
                 <span>
                   主人的示范盘
-                  <Tag color="red" style={{ marginLeft: 8 }}>
+                  <Tag color="blue" style={{ marginLeft: 8 }}>
                     公开
                   </Tag>
                 </span>
@@ -162,32 +156,10 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               {loaderData.orders.length > 0 && (
                 <div style={{ marginTop: 24 }}>
                   <Title level={5}>最近操作</Title>
-                  <Space direction="vertical" style={{ width: "100%" }}>
-                    {loaderData.orders.slice(0, 5).map(o => (
-                      <div key={o.id}>
-                        <Text type="secondary">{o.placeDate}</Text>
-                        {" "}
-                        <Tag color={o.side === "buy" ? "red" : "green"}>
-                          {o.side === "buy" ? "申购" : "赎回"}
-                        </Tag>
-                        {" "}
-                        <a href={`/funds/${o.fundCode}`}>{o.fundName}</a>
-                        {" "}
-                        {o.side === "buy" && o.amount !== null && (
-                          <Text>
-                            {centsToYuan(o.amount)}
-                            {" "}
-                            元
-                          </Text>
-                        )}
-                        {o.source === "dca" && <Tag color="blue">定投</Tag>}
-                        {o.status === "pending" && <Tag color="orange">待确认</Tag>}
-                      </div>
-                    ))}
-                  </Space>
+                  <OrderList orders={loaderData.orders.slice(0, 5)} />
                 </div>
               )}
-            </Card>
+            </SectionCard>
           )}
 
       {/* 卖点。这里用 UnoCSS 工具类替代内联 style，验证工具链接入生效 */}
