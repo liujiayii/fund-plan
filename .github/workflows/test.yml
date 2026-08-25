@@ -1,0 +1,87 @@
+# 测试流水线：静态检查 + 单测 + 集成测试
+#
+# 触发时机：
+#   - 创建/更新 PR —— 每次改动先过测试
+#   - 推送到 main —— 合并后再全量验证一遍，全部通过后由 deploy.yml 接手部署
+#
+# 说明：
+# - worker-configuration.d.ts 与 .react-router/ 都被 gitignore，
+#   全新 checkout 里不存在，所以 typecheck 前必须先跑 pnpm cf-typegen
+#   （typecheck 脚本本身会跑 react-router typegen）。
+# - 应用层集成测试（test:workers）用 vitest-pool-workers 起真实 workerd + 本地 D1，
+#   建表逻辑由 tests/setup-d1.ts 读取 drizzle/ 迁移完成，无需额外迁移步骤。
+# - 项目 .npmrc 指向淘宝镜像（给国内开发机用）；GitHub Actions 的 runner 在海外，
+#   官方源更快更稳，安装时覆盖回 npmjs。
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支的新推送取消还在跑的旧任务，省额度
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # 静态检查与构建验证
+  quality:
+    name: Lint & Typecheck & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 版本读 package.json 的 packageManager 字段（pnpm@11.3.0）
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+
+      - name: 生成 Worker 类型声明
+        run: pnpm cf-typegen
+
+      - name: ESLint
+        run: pnpm lint
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: 构建（含 UnoCSS 产物生成）
+        run: pnpm build
+
+  # 测试：领域层单测（node 环境）+ 应用层集成测试（真实 workerd + D1）
+  test:
+    name: Unit & Workers Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+
+      - name: 领域层单测
+        run: pnpm test
+
+      - name: 应用层集成测试
+        run: pnpm test:workers
