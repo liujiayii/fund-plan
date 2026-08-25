@@ -751,8 +751,16 @@ me.settings.tsx 作为第一个消费者验证组件设计，顺带把「管理�
   - `FundListItem(props: { fundCode: string; fundName: string; fundType?: string; note?: ReactNode; primary?: ReactNode; secondary?: ReactNode; actions?: ReactNode; href?: string; last?: boolean })`
   - `EmptyState(props: { description: ReactNode; children?: ReactNode })`
 
-  `FundListItem` 是后续 Task 4/5/6/9 的四个列表组件共同的行骨架 ——
+  `FundListItem` 是后续 **三个**列表组件（Task 4 的 `HoldingList`、
+  Task 5 的 `OrderList`、Task 6 的 `DcaPlanList`）共同的行骨架 ——
   它们只负责往 `note` / `primary` / `secondary` / `actions` 四个插槽里塞内容。
+
+  ⚠️ **Task 9 的 `TxList` 不是它的消费者**，这是有意的：资金流水的行没有基金主体。
+  `transactions` 表**没有 fund 字段**，`checkin` / `init` 类型的行天然与基金无关，
+  连 `buy` / `sell` 也只带一个可空的 `orderId`。所以 `TxList` 自建行 `div`
+  （见 Task 9 的代码），而 `fundCode` / `fundName` 在 `FundListItem` 里
+  **保持必填** —— 为一个不存在的消费者加可选性属 YAGNI，
+  还会削弱三个真实消费者的契约强度。
 
 - [ ] **Step 1: 写 `app/components/ui/FundListItem.tsx`**
 
@@ -789,7 +797,11 @@ export interface FundListItemProps {
  *
  * 存在的理由：重构前「基金」这一列的 render 在 8 个文件里各写了一遍
  * （`<a href={/funds/{code}}>{name}<br/><Text type="secondary">{code}</Text></a>`），
- * 改一处样式要改 8 个地方。所有实体列表统一消费这个骨架。
+ * 改一处样式要改 8 个地方。持仓 / 订单 / 定投三个列表统一消费这个骨架。
+ *
+ * ⚠️ 资金流水（`TxList`）**不用**它 —— 流水的行没有基金主体：
+ * `transactions` 表无 fund 字段，`checkin` / `init` 行天然与基金无关。
+ * 所以 `fundCode` / `fundName` 在这里是必填的。
  */
 export function FundListItem(props: FundListItemProps) {
   const {
