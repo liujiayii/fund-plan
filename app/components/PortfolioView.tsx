@@ -4,7 +4,7 @@ import { EmptyState } from "~/components/ui/EmptyState";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
-import { centsToYuan } from "~/domain/money";
+import { centsToYuan, navToDisplay } from "~/domain/money";
 import { pnlColor } from "~/theme";
 import { HoldingList } from "./HoldingList";
 
@@ -79,7 +79,19 @@ export function HoldingListReadonly({ holdings }: { holdings: HoldingView[] }) {
   if (holdings.length === 0) {
     return <EmptyState description="暂无持仓" />;
   }
-  return <HoldingList holdings={holdings} />;
+  return (
+    <HoldingList
+      holdings={holdings}
+      // 净值与其日期必须露出：净值可能合法滞后数天（拉不到净值时订单顺延），
+      // 不标估值时点，围观者就分不清今天的估值与上周五的估值。
+      // 逐行标注比页面级单一日期更准 —— 各基金的净值日期可能不同。
+      //
+      // ⚠️ 无 navDate 时返回 undefined 而非 null：FundListItem 的 note
+      // 判空是 `!== undefined`，返回 null 会通过守卫并渲染出空的 div。
+      renderNote={h =>
+        h.navDate ? `净值 ${navToDisplay(h.navScaled)}（${h.navDate}）` : undefined}
+    />
+  );
 }
 
 /** 主人还没注册时的引导提示 */

@@ -47,6 +47,7 @@ export function HoldingList({
               }}
             >
               {centsToYuan(h.marketValueCents)}
+              <span style={{ fontSize: 12, color: COLOR.textSecondary }}> 元</span>
             </span>
           )}
           secondary={<PnlText cents={h.pnlCents} rate={h.pnlRate} size={12} />}
