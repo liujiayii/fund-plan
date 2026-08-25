@@ -5,6 +5,7 @@ import {
   INITIAL_CASH_CENTS,
   TRADE_CUTOFF_HOUR,
 } from "~/domain/config";
+import { ANTD_TOKEN, COLOR, pnlColor } from "~/theme";
 
 /**
  * 冒烟测试：验证测试框架跑得起来、路径别名 ~/ 解析正常、
@@ -30,5 +31,27 @@ describe("脚手架冒烟测试", () => {
 
   it("T+1 切分时点为北京时间 15:00", () => {
     expect(TRADE_CUTOFF_HOUR).toBe(15);
+  });
+});
+
+describe("视觉 token 不变式", () => {
+  it("主色不能与涨色相同（否则按钮和「涨」撞色，是重构前最大的视觉问题）", () => {
+    expect(COLOR.primary).not.toBe(COLOR.up);
+  });
+
+  it("涨色与跌色必须不同", () => {
+    expect(COLOR.up).not.toBe(COLOR.down);
+  });
+
+  it("pnlColor 三态：正涨、负跌、零中性", () => {
+    expect(pnlColor(1)).toBe(COLOR.up);
+    expect(pnlColor(-1)).toBe(COLOR.down);
+    expect(pnlColor(0)).toBe(COLOR.neutral);
+  });
+
+  it("antd 语义色未被涨跌色覆盖（否则错误提示会变绿、成功提示会变红）", () => {
+    const token = ANTD_TOKEN.token as Record<string, unknown>;
+    expect(token.colorSuccess).toBeUndefined();
+    expect(token.colorError).toBeUndefined();
   });
 });

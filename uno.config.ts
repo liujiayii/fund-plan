@@ -46,19 +46,21 @@ export default defineConfig({
   ],
   // 项目里常用的组合，抽成快捷方式
   shortcuts: {
-    // 涨红跌绿（国内习惯），与 antd 主题色呼应
-    "text-rise": "text-[#c62828]",
-    "text-fall": "text-[#2e7d32]",
+    // 涨红跌绿（国内习惯）。⚠️ 色值必须与 app/theme.ts 的 COLOR 保持一致，
+    // 但这里不能 import ——UnoCSS 配置在构建期独立求值，走不通 ~/ 别名。
+    // 改色时两处都要改（app/theme.ts 是权威，这里是镜像）。
+    "text-rise": "text-[#F5222D]",
+    "text-fall": "text-[#00A870]",
     // 常用布局
     "flex-center": "flex items-center justify-center",
     "flex-between": "flex items-center justify-between",
   },
   theme: {
     colors: {
-      // 与 antd ConfigProvider 里的 colorPrimary 保持一致
-      primary: "#c62828",
-      rise: "#c62828",
-      fall: "#2e7d32",
+      // 与 app/theme.ts 的 COLOR 保持一致（镜像，见上方说明）
+      primary: "#1677FF",
+      rise: "#F5222D",
+      fall: "#00A870",
     },
   },
   /**
