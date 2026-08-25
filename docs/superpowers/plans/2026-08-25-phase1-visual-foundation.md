@@ -2790,7 +2790,46 @@ git diff --stat app/uno.gen.css
 前面几个任务动过 `className`（`_index.tsx` 的 `h-full` / `text-center` 仍在用），
 且 Task 1 改了 `shortcuts` 与 `theme.colors` 的色值，产物必须重新生成。
 
-- [ ] **Step 2: 全量校验**
+- [ ] **Step 2: 补两条测试硬化断言**
+
+Task 1 的 review 发现现有守卫有两个洞，在这里补上。
+
+**2a.** `tests/smoke.test.ts` 的「视觉 token 不变式」describe 块里追加：
+
+```ts
+  it("送进 antd 的主色必须就是 COLOR.primary（防止硬写色值绕过上面那条断言）", () => {
+    const token = ANTD_TOKEN.token as Record<string, unknown>;
+    expect(token.colorPrimary).toBe(COLOR.primary);
+  });
+```
+
+⚠️ 为什么需要它：上面那条「主色不能与涨色相同」断言的是 `COLOR.primary`，
+但真正渲染按钮的是 `ANTD_TOKEN.token.colorPrimary`。若有人硬写
+`colorPrimary: "#F5222D"` 而留着 `COLOR.primary` 是蓝的，**9 条测试全绿，
+所有按钮变红** —— 正是整期要防的那个 bug。今天两者靠引用相连才没出事，
+这条断言把这个「靠巧合成立」变成「被强制成立」。
+
+**2b.** 同一个 describe 块里追加（文件顶部需要 `import { readFileSync } from "node:fs";`）：
+
+```ts
+  it("uno.config.ts 的镜像色值必须与 theme.ts 一致", () => {
+    // uno.config.ts 引入 unocss preset，无法在 node 测试环境 import，
+    // 只能按文本读。这是 spec 自己标为隐患的手工镜像——
+    // 原本只靠一句「改色时两处都要改」的注释，而注释强制不了任何东西。
+    const src = readFileSync("uno.config.ts", "utf8");
+    expect(src).toContain(COLOR.primary);
+    expect(src).toContain(COLOR.up);
+    expect(src).toContain(COLOR.down);
+  });
+```
+
+跑 `pnpm test tests/smoke.test.ts`，预期 **11/11 passing**（原 9 + 新 2）。
+
+**做一次变异检查证明 2b 有效**：把 `uno.config.ts` 里的 `text-rise` 色值临时改成
+`text-[#c62828]` → 跑测试 → 2b 必须变红；改回 `text-[#F5222D]` → 必须变绿。
+两次输出记进报告。
+
+- [ ] **Step 3: 全量校验**
 
 ```bash
 pnpm verify
@@ -2798,7 +2837,7 @@ pnpm verify
 
 这一条等价于 `pnpm lint && pnpm typecheck && pnpm test`，必须**全绿**。
 
-- [ ] **Step 3: 旧色值清零检查**
+- [ ] **Step 4: 旧色值清零检查**
 
 ```bash
 git grep -n "c62828" ; git grep -n "2e7d32"
@@ -2806,7 +2845,7 @@ git grep -n "c62828" ; git grep -n "2e7d32"
 
 **两条都必须无输出。** 若 `uno.config.ts` 还有残留，说明 Task 1 Step 4 没做完。
 
-- [ ] **Step 4: 死代码检查**
+- [ ] **Step 5: 死代码检查**
 
 ```bash
 git grep -n "HoldingTableReadonly"
@@ -2824,7 +2863,7 @@ git grep -n "function frequencyText"   # 应只剩 app/components/DcaPlanList.ts
 git grep -n "TX_TYPE_MAP"             # 应只剩 app/components/TxList.tsx 一处
 ```
 
-- [ ] **Step 5: 逐页回归**
+- [ ] **Step 6: 逐页回归**
 
 `pnpm dev` 后**登录**并依次打开，确认功能未退化（期一承诺「功能一行不改」）：
 
@@ -2844,7 +2883,7 @@ git grep -n "TX_TYPE_MAP"             # 应只剩 app/components/TxList.tsx 一�
 下单金额低于起购时的警告必须是**橙色**，现金不足的错误必须是**红色**。
 若成功变红或错误变绿，说明 `ANTD_TOKEN` 里错误地映射了 `colorSuccess` / `colorError`。
 
-- [ ] **Step 6: 勾掉设计文档里的期一**
+- [ ] **Step 7: 勾掉设计文档里的期一**
 
 在 `docs/superpowers/specs/2026-08-25-alipay-style-refactor-design.md` 的
 「### 期一 · 视觉地基」标题后加上完成标记：
@@ -2853,7 +2892,7 @@ git grep -n "TX_TYPE_MAP"             # 应只剩 app/components/TxList.tsx 一�
 ### 期一 · 视觉地基（不加功能，纯改观感）✅ 已完成
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add app/uno.gen.css docs/superpowers/specs/2026-08-25-alipay-style-refactor-design.md
