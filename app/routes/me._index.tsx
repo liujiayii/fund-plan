@@ -13,6 +13,7 @@ import { useFetcher } from "react-router";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
 import { EmptyState } from "~/components/ui/EmptyState";
+import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_MAX_CENTS } from "~/domain/checkin";
@@ -119,7 +120,13 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
               suffix="元"
               size={24}
               color={pnlColor(summary.totalPnlCents)}
-              extra={`收益率 ${(summary.totalPnlRate * 100).toFixed(2)}%`}
+              extra={(
+                <>
+                  收益率
+                  {" "}
+                  <PnlText rate={summary.totalPnlRate} size={12} />
+                </>
+              )}
             />
           </Col>
         </Row>
