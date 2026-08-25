@@ -83,7 +83,7 @@
 | `app/routes/funds.$code.tsx` | `Statistic` → `StatBig`；`Descriptions` → `DataRow`；删内联色值 |
 | `app/components/NavChart.tsx` | `Radio.Group` → `ui/PeriodTabs` |
 | `app/components/BuyDrawer.tsx` | `Descriptions` → `DataRow` |
-| `app/components/SellDrawer.tsx` | 2 处色值字面量 → `pnlColor`；FIFO 明细表**保留 Table 结构** |
+| `app/components/SellDrawer.tsx` | `Descriptions` → `DataRow`；2 处色值字面量 → `pnlColor` / `COLOR`；FIFO 明细表**保留 Table 结构** |
 
 ---
 
@@ -2427,7 +2427,7 @@ _index.tsx 的「最近操作」改用 OrderList，
 - Modify: `app/components/NavChart.tsx:1-137`
 - Modify: `app/routes/funds.$code.tsx:1-281`
 - Modify: `app/components/BuyDrawer.tsx:88-110`
-- Modify: `app/components/SellDrawer.tsx:231-252`
+- Modify: `app/components/SellDrawer.tsx:110-129, 231-252`
 
 **Interfaces:**
 - Consumes: `StatBig` / `DataRow` / `SectionCard`（Task 2）、`~/theme`（Task 1）
@@ -2667,15 +2667,38 @@ import { DataRow } from "~/components/ui/DataRow";
         </div>
 ```
 
-- [ ] **Step 5: 改 `app/components/SellDrawer.tsx` 的两处色值**
+- [ ] **Step 5: 改 `app/components/SellDrawer.tsx`**
 
-在第 22 行 `import { calcRedeem } from "~/domain/redeem";` 之后插入：
+从 antd 的 import 里去掉 `Descriptions`（其余保留，**`Table` 必须留着** ——
+FIFO 明细表不动）。在第 22 行 `import { calcRedeem } from "~/domain/redeem";` 之后插入：
 
 ```tsx
+import { DataRow } from "~/components/ui/DataRow";
 import { COLOR, pnlColor } from "~/theme";
 ```
 
-第 231-238 行「预计到账」：
+**5a. 把第 110-129 行的 `<Descriptions … />` 替换为：**
+
+```tsx
+        <div style={{ marginBottom: 16 }}>
+          <DataRow label="基金代码" value={fundCode} />
+          <DataRow
+            label="最新净值"
+            value={`${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`}
+          />
+          <DataRow
+            label="可赎份额"
+            value={`${sharesToDisplay(availableSharesScaled)} 份`}
+          />
+          <DataRow label="预计确认日" value={confirmDate} last />
+        </div>
+```
+
+⚠️ 这一步是预扫补的：`BuyDrawer` 换了 `DataRow` 而 `SellDrawer` 不换，
+两个孪生抽屉会一个新一个旧，视觉不一致。spec 第 4 节把 `DataRow` 定为
+「取代 `Descriptions` 的滥用」，两个抽屉必须同构。
+
+**5b. 第 231-238 行「预计到账」：**
 
 ```tsx
                 <div>
@@ -2690,7 +2713,7 @@ import { COLOR, pnlColor } from "~/theme";
 
 ⚠️ 「预计到账」从红改成主色蓝 —— 那是个金额提示，不是盈亏。
 
-第 239-252 行「已实现盈亏」：
+**5c. 第 239-252 行「已实现盈亏」：**
 
 ```tsx
                 <div>
