@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { HoldingView } from "~/services/portfolio-service";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { PnlText } from "~/components/ui/PnlText";
-import { centsToYuan, navToDisplay } from "~/domain/money";
+import { centsToYuan, navToDisplay, sharesToDisplay } from "~/domain/money";
 import { COLOR, NUM_FONT } from "~/theme";
 
 export interface HoldingListProps {
@@ -17,18 +17,24 @@ export interface HoldingListProps {
 }
 
 /**
- * 「净值 X.XXXX（日期）」的 note 渲染器。
+ * 只读持仓行的 note：「X 份 · 净值 Y（日期）」。
  * 公开盘（`HoldingListReadonly`）与仪表盘速览（`me._index`）共用 ——
- * 两处都只需要露出**估值时点**，不需要份额/成本/批次那些明细。
- * ⚠️ 无 `navDate` 时返回 **`undefined`** 而非 `null`：`FundListItem` 的 `note`
- * 判空是 `!== undefined`，返回 `null` 会通过守卫并渲染出一个带 `marginTop: 4`
- * 的空 div。这个约束刻意收敛在这一个函数里 —— 让它在两个消费者之间不会走偏。
- * 另有一层正确性收益：`portfolio-service` 在拉不到净值时用**成本价兜底**填
- * `navScaled`（同时 `navDate` 为 `null`），所以「有 navDate 才显示净值」
- * 顺带避免了把成本价冒充成净值展示。
+ * 两处的旧表格列完全一致，所以 note 也该一致。
+ *
+ * ⚠️ 「份」必须显式写。旧表格的 `持有份额` 列渲染的是裸 `sharesToDisplay(v)`，
+ * 单位由**列头**承载；卡片里没有列头，去掉后缀就是丢单位。
+ *
+ * ⚠️ 无 `navDate` 时**只返回份额、不渲染净值**，这是刻意偏离旧表格的一处：
+ * 旧列无条件渲染 `navToDisplay(navScaled)`，而 `portfolio-service` 在拉不到
+ * 净值时用**成本价兜底**填 `navScaled`（同时 `navDate` 置 null）——
+ * 旧列等于把成本价当净值给用户看，那是错的，不继承。
+ * 份额恒存在，所以 note 恒非空，藏掉净值不会留下空白。
  */
-export function navDateNote(h: HoldingView): ReactNode {
-  return h.navDate ? `净值 ${navToDisplay(h.navScaled)}（${h.navDate}）` : undefined;
+export function sharesAndNavNote(h: HoldingView): ReactNode {
+  const shares = `${sharesToDisplay(h.sharesScaled)} 份`;
+  return h.navDate
+    ? `${shares} · 净值 ${navToDisplay(h.navScaled)}（${h.navDate}）`
+    : shares;
 }
 
 /**

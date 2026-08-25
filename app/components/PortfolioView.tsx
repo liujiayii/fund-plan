@@ -6,7 +6,7 @@ import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { centsToYuan } from "~/domain/money";
 import { pnlColor } from "~/theme";
-import { HoldingList, navDateNote } from "./HoldingList";
+import { HoldingList, sharesAndNavNote } from "./HoldingList";
 
 const { Paragraph } = Typography;
 
@@ -79,8 +79,8 @@ export function HoldingListReadonly({ holdings }: { holdings: HoldingView[] }) {
   if (holdings.length === 0) {
     return <EmptyState description="暂无持仓" />;
   }
-  // 估值时点必须露出，理由与 undefined-not-null 的约束都在 navDateNote 里
-  return <HoldingList holdings={holdings} renderNote={navDateNote} />;
+  // 份额与估值时点必须露出，理由与条件渲染的取舍都在 sharesAndNavNote 里
+  return <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />;
 }
 
 /** 主人还没注册时的引导提示 */

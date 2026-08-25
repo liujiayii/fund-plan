@@ -10,7 +10,7 @@ import {
   Typography,
 } from "antd";
 import { useFetcher } from "react-router";
-import { HoldingList, navDateNote } from "~/components/HoldingList";
+import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
@@ -198,7 +198,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
               </EmptyState>
             )
           : (
-              <HoldingList holdings={holdings} renderNote={navDateNote} />
+              <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />
             )}
       </SectionCard>
 
