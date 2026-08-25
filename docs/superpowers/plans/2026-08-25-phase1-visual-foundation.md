@@ -999,7 +999,10 @@ git commit -m "feat(ui): 新增 FundListItem 行骨架，搜索结果卡片化
 
 FundListItem 收敛此前在 8 个文件里各写一遍的「基金」列 render
 （名称 + <br/> + 灰色代码），提供 note/primary/secondary/actions 四个插槽，
-后续持仓/订单/定投/流水四个列表组件都复用它。
+后续持仓/订单/定投三个列表组件都复用它。
+
+资金流水（TxList）不用它——transactions 表无 fund 字段，
+checkin/init 行天然与基金无关，故流水行没有基金主体，自建行 div。
 
 funds._index.tsx 的搜索结果表格换成卡片行，去掉横向滚动。
 「热门基金」仍是硬编码，期四换东财排行榜。"
