@@ -10,7 +10,7 @@ import {
   Typography,
 } from "antd";
 import { useFetcher } from "react-router";
-import { HoldingList } from "~/components/HoldingList";
+import { HoldingList, navDateNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
@@ -153,6 +153,12 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
               size="small"
               showInfo={false}
               style={{ marginTop: 8 }}
+              // ⚠️ strokeColor 必须显式传，不能删。
+              // antd 在 percent >= 100 且未显式传 status 时会自动切成
+              // status="success"（antd/lib/progress/progress.js:66-68），
+              // 进度条变**绿** —— 而绿色在本项目专属「跌」。
+              // 连签封顶正是 percent === 100，会渲染出一条绿色进度条，读作亏损。
+              strokeColor={COLOR.primary}
             />
             <Text type="secondary" style={{ fontSize: 12 }}>
               连签递增，每天 +50 元，封顶 500 元
@@ -192,7 +198,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
               </EmptyState>
             )
           : (
-              <HoldingList holdings={holdings} />
+              <HoldingList holdings={holdings} renderNote={navDateNote} />
             )}
       </SectionCard>
 

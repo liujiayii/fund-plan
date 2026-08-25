@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { HoldingView } from "~/services/portfolio-service";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { PnlText } from "~/components/ui/PnlText";
-import { centsToYuan } from "~/domain/money";
+import { centsToYuan, navToDisplay } from "~/domain/money";
 import { COLOR, NUM_FONT } from "~/theme";
 
 export interface HoldingListProps {
@@ -14,6 +14,21 @@ export interface HoldingListProps {
   renderNote?: (h: HoldingView) => ReactNode;
   /** 每行最右的操作按钮。只读页不传 */
   renderActions?: (h: HoldingView) => ReactNode;
+}
+
+/**
+ * 「净值 X.XXXX（日期）」的 note 渲染器。
+ * 公开盘（`HoldingListReadonly`）与仪表盘速览（`me._index`）共用 ——
+ * 两处都只需要露出**估值时点**，不需要份额/成本/批次那些明细。
+ * ⚠️ 无 `navDate` 时返回 **`undefined`** 而非 `null`：`FundListItem` 的 `note`
+ * 判空是 `!== undefined`，返回 `null` 会通过守卫并渲染出一个带 `marginTop: 4`
+ * 的空 div。这个约束刻意收敛在这一个函数里 —— 让它在两个消费者之间不会走偏。
+ * 另有一层正确性收益：`portfolio-service` 在拉不到净值时用**成本价兜底**填
+ * `navScaled`（同时 `navDate` 为 `null`），所以「有 navDate 才显示净值」
+ * 顺带避免了把成本价冒充成净值展示。
+ */
+export function navDateNote(h: HoldingView): ReactNode {
+  return h.navDate ? `净值 ${navToDisplay(h.navScaled)}（${h.navDate}）` : undefined;
 }
 
 /**
