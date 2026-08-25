@@ -3,7 +3,7 @@ import type { DcaPlanView, OrderView, TransactionView } from "~/services/portfol
 import { Card, Empty, Space, Table, Tabs, Tag, Typography } from "antd";
 import {
   AdminNotReady,
-  HoldingTableReadonly,
+  HoldingListReadonly,
   PortfolioSummary,
 } from "~/components/PortfolioView";
 import { centsToYuan } from "~/domain/money";
@@ -105,7 +105,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
             {
               key: "holdings",
               label: `持仓（${portfolio.holdings.length}）`,
-              children: <HoldingTableReadonly holdings={portfolio.holdings} />,
+              children: <HoldingListReadonly holdings={portfolio.holdings} />,
             },
             {
               key: "dca",

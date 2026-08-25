@@ -10,7 +10,7 @@ import {
 } from "antd";
 import {
   AdminNotReady,
-  HoldingTableReadonly,
+  HoldingListReadonly,
   PortfolioSummary,
 } from "~/components/PortfolioView";
 import { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS } from "~/domain/checkin";
@@ -157,7 +157,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               <PortfolioSummary portfolio={loaderData.portfolio} showCash={false} />
               <div style={{ marginTop: 24 }}>
                 <Title level={5}>持仓</Title>
-                <HoldingTableReadonly holdings={loaderData.portfolio.holdings} />
+                <HoldingListReadonly holdings={loaderData.portfolio.holdings} />
               </div>
               {loaderData.orders.length > 0 && (
                 <div style={{ marginTop: 24 }}>
