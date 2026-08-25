@@ -1,0 +1,73 @@
+# 部署流水线：Test 工作流在 main 分支全绿后自动部署到 Cloudflare
+#
+# 触发时机：
+#   - workflow_run —— main 分支的 Test 工作流成功结束后自动接手
+#   - workflow_dispatch —— 手动触发（Actions 页面 Run workflow），
+#     用于失败重试或改完配置后重新发布
+#
+# Secrets 配置（仓库 Settings → Secrets and variables → Actions）：
+#   CLOUDFLARE_API_TOKEN  —— API Token，权限至少：
+#                             Account | Workers Scripts    | Edit
+#                             Account | D1                 | Edit （跑迁移用）
+#                             Account | Workers KV Storage | Edit
+#                           账户资源限定到自己的账号即可
+#   CLOUDFLARE_ACCOUNT_ID —— 账户 ID（CF 控制台 Workers & Pages 概览页右侧）
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [Test] # 必须与 test.yml 的 name 字段完全一致
+    types: [completed]
+    branches: [main] # 只关心 main 分支上的 Test 结果
+  workflow_dispatch:
+
+# 同一个 commit 同时只允许一个部署；排队而不是取消，避免打断进行中的迁移
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare
+    runs-on: ubuntu-latest
+    # 自动触发时：只有 Test 成功才继续，失败则整单跳过；
+    # 手动触发时：无条件执行
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run 触发时默认 checkout 到 main 最新提交，
+          # 这里钉住刚被测过的那个 commit，保证「测过的就是部署的」
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+
+      # 幂等操作：只应用 drizzle/ 里尚未执行过的迁移；没有新迁移则跳过
+      # 不想自动迁移的话删掉这一步，改在本地手动跑 pnpm db:migrate:prod
+      - name: 应用 D1 迁移
+        run: pnpm exec wrangler d1 migrations apply fund-plan-db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: 构建
+        run: pnpm build
+
+      - name: 部署到 Cloudflare Workers
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

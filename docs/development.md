@@ -244,3 +244,65 @@ pnpm 的规则是「更早发布的版本有签名而此版本没有 → 可疑�
 
 将来若再遇到类似报错，**先核实发布时间与 provenance 机制的时间线**，
 确认是误判再用 `trustPolicyExclude` 精确到版本号豁免，不要整体关掉策略。
+
+## ⚠️ 改了 database_id 之后必须重跑本地迁移
+
+miniflare 按 `database_id` **哈希出本地数据库文件名**，所以一旦改动
+`wrangler.jsonc` 里的 `database_id`（比如从占位符换成真实 id），
+本地就会切到一个**全新的空库**，旧库的表和数据都还在硬盘上但用不到了。
+
+症状：页面报 `Failed query: select ... from "session" ...`，
+因为浏览器里还留着旧库发的 session cookie，而新库连 `session` 表都没有。
+
+修法：
+
+```bash
+pnpm db:migrate:local
+```
+
+可以这样确认本地库到底有没有表：
+
+```bash
+npx wrangler d1 execute fund-plan-db --local \
+  --command "SELECT name FROM sqlite_master WHERE type='table'"
+
+# 也能直接看文件大小，空库只有 4KB
+ls -la .wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite
+```
+
+## ⚠️ 纯客户端库必须懒加载（antd charts 的坑）
+
+`@ant-design/charts` 底层是 G2，依赖 canvas / DOM，**不能在 SSR 阶段渲染**。
+直接用会报：
+
+```
+Cannot read properties of null (reading 'useContext')
+```
+
+这个报错很误导——看着像 React 装了两份，实际是 SSR 渲染出空内容、
+客户端 hydration 时结构对不上。
+
+`app/components/NavChart.tsx` 里的正确姿势：
+
+```tsx
+// 1. 懒加载切成独立 chunk，服务端不 import
+const Line = lazy(async () => {
+  const mod = await import("@ant-design/charts");
+  return { default: mod.Line };
+});
+
+// 2. 用 useSyncExternalStore 判断是否已在客户端
+//    （比 useEffect + setState 少一次渲染，也不会触发 lint 告警）
+const emptySubscribe = () => () => {};
+function useIsClient() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false);
+}
+
+// 3. SSR 与加载期间渲染同一个骨架屏，保证结构一致
+{mounted ? <Suspense fallback={<ChartSkeleton />}><Line {...config} /></Suspense> : <ChartSkeleton />}
+```
+
+附带收益：G2 那 2.2MB 被切成独立 chunk，首屏 `root` chunk 里零 antv 引用，
+只有真正访问基金详情页时才下载。
+
+**以后再引入任何依赖 canvas / window / document 的库，都照这个模式处理。**
