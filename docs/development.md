@@ -155,3 +155,92 @@ curl -X DELETE http://localhost:5173/cdn-cgi/local/explorer/api/storage/kv/names
 ```
 
 曾经因为带错 UA 时把空搜索结果缓存下来，导致修好代码后仍然搜不到东西。
+
+## 代码规范与 git 钩子
+
+用 `@antfu/eslint-config`（flat config，见 `eslint.config.js`），风格是**双引号 + 分号 + 2 空格缩进**。
+
+```bash
+pnpm lint       # 检查
+pnpm lint:fix   # 自动修（大部分问题都能自动修）
+pnpm verify     # lint + typecheck + test，提交前全量校验
+```
+
+### git 钩子（simple-git-hooks）
+
+| 钩子 | 动作 | 耗时 |
+|---|---|---|
+| `pre-commit` | `lint-staged` → 对暂存文件跑 `eslint --fix` | 秒级 |
+| `pre-push` | `typecheck` + `test` | 十几秒 |
+
+钩子会**自动格式化并重新 stage**，所以提交时不用手动跑 lint。
+装依赖时 `simple-git-hooks` 的 postinstall 会自动写入 `.git/hooks`
+（需要 `pnpm-workspace.yaml` 的 `allowBuilds` 放行，已配好）。
+
+紧急情况绕过：`git commit --no-verify`。
+
+### ⚠️ TypeScript 7 与 typescript-eslint 的并存
+
+TS 7 是 Go 重写版，`typescript-eslint` 还不支持（会直接抛错拒绝运行）。
+按**微软官方方案**做了双别名并存：
+
+```json
+"@typescript/native": "npm:typescript@^7.0.2",     // 提供 tsc（TS 7，typecheck 用）
+"typescript": "npm:@typescript/typescript6@^6.0.2" // 提供 API（TS 6，eslint 用）
+```
+
+所以 `pnpm typecheck` 走的是 TS 7 的 `tsc`，而 ESLint 内部 `require('typescript')` 拿到的是 6.0.3。
+**不要把 `typescript` 直接升到 7**，否则 lint 会挂。
+
+## UnoCSS（原子化 CSS）
+
+用法就是 Tailwind 那套类名（`presetWind4` 与 Tailwind v4 对齐）：
+
+```tsx
+<Card className="h-full">
+  <Title className="mt-0">标题</Title>
+</Card>
+```
+
+配置在 `uno.config.ts`，另有几个自定义快捷方式：
+`text-rise`（涨红）、`text-fall`（跌绿）、`flex-center`、`flex-between`。
+
+### ⚠️ 为什么是 CLI 预生成，不是 Vite 插件
+
+`pnpm dev` / `pnpm build` 都会先跑 `pnpm uno:build`，把样式生成到 `app/uno.gen.css`
+（该文件**入库**，不要手改，改了下次生成就被覆盖）。
+
+原因是踩了两个坑：
+
+1. **`unocss/vite` 插件 + Vite 8 不兼容**：插件依赖 Vite 的内部 `vite:css-post` 插件，
+   而 Vite 8 换成 Rolldown 内核后该插件不存在。表现极其隐蔽——
+   构建只报一行警告就成功了，但产出的 CSS 里只有一个 48 字节的占位符，**所有工具类全部丢失**。
+2. **PostCSS 模式会让构建挂死**（超过 7 分钟无响应）。
+
+CLI 方案已验证可靠：工具类正确进入最终产物。改了 class 之后如果样式没生效，
+先确认 `pnpm uno:build` 跑过（或用 `pnpm uno:watch` 开监听）。
+
+### ⚠️ 两个必须保持关闭的配置
+
+- **`preflights.reset: false`** —— UnoCSS 的全局重置会冲掉 antd 自带的样式重置，
+  导致按钮没背景色、输入框没边框。antd 已有 reset，不要第二套。
+- **不启用 `presetAttributify`** —— 属性化写法会把 antd 组件的普通 props 误当工具类：
+  `<Tag color="red">` 会生成 `[color~="red"]{color:red}`、
+  `<Table align="middle">` 会生成 `[align~="middle"]{...}`，直接污染 antd 组件渲染。
+  实测开启后 23 条生成规则里有 8 条是这类垃圾。
+
+约定：**UnoCSS 只用来写布局与间距**，颜色/圆角/阴影仍走 antd 主题 token，
+避免两套设计系统打架。
+
+## 供应链策略（pnpm trustPolicy）
+
+`pnpm-workspace.yaml` 里开了 `trustPolicy: no-downgrade`（严格模式），
+并对 `semver@6.3.1` 做了精确豁免。
+
+**这不是偷懒放行**——已核实为 pnpm 的误判：该版本发布于 2022-01，
+而 npm 的 provenance 签名机制 2023-04 才推出，它不可能带有当时还不存在的签名。
+pnpm 的规则是「更早发布的版本有签名而此版本没有 → 可疑」，在此场景下时间序判断失效。
+它是 `@react-router/dev` → `@babel/core` 的传递依赖，无法规避。
+
+将来若再遇到类似报错，**先核实发布时间与 provenance 机制的时间线**，
+确认是误判再用 `trustPolicyExclude` 精确到版本号豁免，不要整体关掉策略。

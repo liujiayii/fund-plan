@@ -88,7 +88,19 @@ pnpm dev
 打开输出的 localhost 地址，注册一个账号即可开玩。
 要成为「主人」，用 `wrangler.jsonc` 里 `ADMIN_USERNAME` 指定的用户名注册。
 
-部署到 Cloudflare 见 [docs/deployment.md](docs/deployment.md)。
+### 线上环境
+
+D1 数据库与 KV 已在 Cloudflare 上创建好，`wrangler.jsonc` 里的 id 已填实：
+
+| 资源 | 名称 / id                   |
+| ---- | --------------------------- |
+| D1   | `fund-plan-db`（区域 WNAM） |
+| KV   | binding `KV`                |
+
+线上库已跑完迁移（10 张业务表）。部署只需 `pnpm deploy`。
+本地开发用的是 miniflare 模拟的独立数据库（`.wrangler/state/`），与线上互不影响。
+
+完整部署步骤见 [docs/deployment.md](docs/deployment.md)。
 开发约定与踩坑记录见 [docs/development.md](docs/development.md)。
 
 ## 测试
@@ -97,7 +109,12 @@ pnpm dev
 pnpm test          # 领域层单测（纯函数，毫秒级）
 pnpm test:workers  # 应用层集成测试（真实 workerd + 真实 D1）
 pnpm test:all      # 全部
+pnpm lint          # 代码规范检查
+pnpm verify        # lint + typecheck + test，提交前全量校验
 ```
+
+提交时 git 钩子会自动跑：`pre-commit` 对暂存文件跑 `eslint --fix`，
+`pre-push` 跑 typecheck 与全部测试。
 
 测试覆盖的关键场景：
 
