@@ -1,8 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
-import type { Db } from '~/db/client';
-import { account, fund, holding, orders, transactions } from '~/db/schema';
-import { centsToYuan, sharesToDisplay } from '~/domain/money';
-import { resolveConfirmDate, toBeijing } from '~/domain/trading-calendar';
+import type { Db } from "~/db/client";
+import { and, eq, sql } from "drizzle-orm";
+import { account, fund, holding, orders, transactions } from "~/db/schema";
+import { centsToYuan, sharesToDisplay } from "~/domain/money";
+import { resolveConfirmDate, toBeijing } from "~/domain/trading-calendar";
 
 /**
  * 下单服务。
@@ -20,7 +20,7 @@ export interface PlaceBuyInput {
   /** 申购金额（分） */
   amountCents: number;
   /** 来源，默认手动 */
-  source?: 'manual' | 'dca';
+  source?: "manual" | "dca";
   /** 下单时刻，默认现在（测试可注入固定时间） */
   now?: Date;
 }
@@ -42,11 +42,11 @@ export async function placeBuyOrder(
   _env: Env,
   input: PlaceBuyInput,
 ): Promise<{ orderId: number }> {
-  const { userId, fundCode, amountCents, source = 'manual' } = input;
+  const { userId, fundCode, amountCents, source = "manual" } = input;
   const now = input.now ?? new Date();
 
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
-    throw new Error('申购金额必须为正整数（分）');
+    throw new Error("申购金额必须为正整数（分）");
   }
 
   // 基金必须存在且开放申购
@@ -64,14 +64,15 @@ export async function placeBuyOrder(
   const acc = await db.query.account.findFirst({
     where: eq(account.userId, userId),
   });
-  if (!acc) throw new Error('账户不存在');
+  if (!acc)
+    throw new Error("账户不存在");
   if (acc.cash < amountCents) {
     throw new Error(
       `现金不足：可用 ${centsToYuan(acc.cash)} 元，需要 ${centsToYuan(amountCents)} 元`,
     );
   }
 
-  const placeDate = toBeijing(now).format('YYYY-MM-DD');
+  const placeDate = toBeijing(now).format("YYYY-MM-DD");
   const confirmDate = resolveConfirmDate(now);
   const newCash = acc.cash - amountCents;
 
@@ -81,8 +82,8 @@ export async function placeBuyOrder(
     .values({
       userId,
       fundCode,
-      side: 'buy',
-      status: 'pending',
+      side: "buy",
+      status: "pending",
       source,
       amount: amountCents,
       shares: null,
@@ -100,7 +101,7 @@ export async function placeBuyOrder(
       .where(eq(account.userId, userId)),
     db.insert(transactions).values({
       userId,
-      type: 'buy',
+      type: "buy",
       amount: -amountCents, // 出账为负
       balance: newCash,
       orderId: created.id,
@@ -125,11 +126,12 @@ export async function placeSellOrder(
   const now = input.now ?? new Date();
 
   if (!Number.isInteger(sharesScaled) || sharesScaled <= 0) {
-    throw new Error('赎回份额必须为正整数');
+    throw new Error("赎回份额必须为正整数");
   }
 
   const f = await db.query.fund.findFirst({ where: eq(fund.code, fundCode) });
-  if (!f) throw new Error(`基金 ${fundCode} 不存在`);
+  if (!f)
+    throw new Error(`基金 ${fundCode} 不存在`);
 
   // 当前持仓
   const h = await db.query.holding.findFirst({
@@ -149,8 +151,8 @@ export async function placeSellOrder(
       and(
         eq(orders.userId, userId),
         eq(orders.fundCode, fundCode),
-        eq(orders.side, 'sell'),
-        eq(orders.status, 'pending'),
+        eq(orders.side, "sell"),
+        eq(orders.status, "pending"),
       ),
     );
   const pendingShares = Number(pendingRows[0]?.total ?? 0);
@@ -158,13 +160,13 @@ export async function placeSellOrder(
 
   if (sharesScaled > available) {
     throw new Error(
-      `份额不足：持有 ${sharesToDisplay(h.totalShares)} 份，` +
-        `其中 ${sharesToDisplay(pendingShares)} 份待确认赎回，` +
-        `可赎 ${sharesToDisplay(available)} 份`,
+      `份额不足：持有 ${sharesToDisplay(h.totalShares)} 份，`
+      + `其中 ${sharesToDisplay(pendingShares)} 份待确认赎回，`
+      + `可赎 ${sharesToDisplay(available)} 份`,
     );
   }
 
-  const placeDate = toBeijing(now).format('YYYY-MM-DD');
+  const placeDate = toBeijing(now).format("YYYY-MM-DD");
   const confirmDate = resolveConfirmDate(now);
 
   const [created] = await db
@@ -172,9 +174,9 @@ export async function placeSellOrder(
     .values({
       userId,
       fundCode,
-      side: 'sell',
-      status: 'pending',
-      source: 'manual',
+      side: "sell",
+      status: "pending",
+      source: "manual",
       amount: null,
       shares: sharesScaled,
       placeDate,

@@ -1,10 +1,11 @@
-import { and, eq, lte } from 'drizzle-orm';
-import type { Db } from '~/db/client';
-import { dcaPlan, fund } from '~/db/schema';
-import { nextRunDate, type Frequency } from '~/domain/dca';
-import { toBeijing } from '~/domain/trading-calendar';
-import { assertOwnership } from './guard';
-import { placeBuyOrder } from './trade';
+import type { Db } from "~/db/client";
+import type { Frequency } from "~/domain/dca";
+import { and, eq, lte } from "drizzle-orm";
+import { dcaPlan, fund } from "~/db/schema";
+import { nextRunDate } from "~/domain/dca";
+import { toBeijing } from "~/domain/trading-calendar";
+import { assertOwnership } from "./guard";
+import { placeBuyOrder } from "./trade";
 
 /**
  * 定投计划管理与扫描。
@@ -48,16 +49,17 @@ export async function createDcaPlan(
   const now = input.now ?? new Date();
 
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
-    throw new Error('每期金额必须为正整数（分）');
+    throw new Error("每期金额必须为正整数（分）");
   }
 
   const f = await db.query.fund.findFirst({ where: eq(fund.code, fundCode) });
-  if (!f) throw new Error(`基金 ${fundCode} 不存在，请先在基金页查看一次`);
+  if (!f)
+    throw new Error(`基金 ${fundCode} 不存在，请先在基金页查看一次`);
   if (amountCents < f.minPurchase) {
     throw new Error(`每期金额低于该基金起购金额`);
   }
 
-  const today = toBeijing(now).format('YYYY-MM-DD');
+  const today = toBeijing(now).format("YYYY-MM-DD");
   // nextRunDate 会校验 dayOfWeek / dayOfMonth 的合法性
   const nextRun = nextRunDate({
     frequency,
@@ -75,7 +77,7 @@ export async function createDcaPlan(
       frequency,
       dayOfWeek: dayOfWeek ?? null,
       dayOfMonth: dayOfMonth ?? null,
-      status: 'active',
+      status: "active",
       nextRun,
       runCount: 0,
       totalInvested: 0,
@@ -91,12 +93,13 @@ export async function toggleDcaPlan(
   db: Db,
   userId: number,
   planId: number,
-  status: 'active' | 'paused',
+  status: "active" | "paused",
 ): Promise<void> {
   const plan = await db.query.dcaPlan.findFirst({
     where: eq(dcaPlan.id, planId),
   });
-  if (!plan) throw new Error('定投计划不存在');
+  if (!plan)
+    throw new Error("定投计划不存在");
   assertOwnership(userId, plan.userId);
 
   await db.update(dcaPlan).set({ status }).where(eq(dcaPlan.id, planId));
@@ -111,7 +114,8 @@ export async function deleteDcaPlan(
   const plan = await db.query.dcaPlan.findFirst({
     where: eq(dcaPlan.id, planId),
   });
-  if (!plan) throw new Error('定投计划不存在');
+  if (!plan)
+    throw new Error("定投计划不存在");
   assertOwnership(userId, plan.userId);
 
   await db.delete(dcaPlan).where(eq(dcaPlan.id, planId));
@@ -128,12 +132,12 @@ export async function scanDcaPlans(
   env: Env,
   now: Date = new Date(),
 ): Promise<ScanResult> {
-  const today = toBeijing(now).format('YYYY-MM-DD');
+  const today = toBeijing(now).format("YYYY-MM-DD");
 
   const due = await db
     .select()
     .from(dcaPlan)
-    .where(and(eq(dcaPlan.status, 'active'), lte(dcaPlan.nextRun, today)));
+    .where(and(eq(dcaPlan.status, "active"), lte(dcaPlan.nextRun, today)));
 
   const result: ScanResult = { triggered: 0, skipped: 0, failed: 0 };
 
@@ -152,7 +156,7 @@ export async function scanDcaPlans(
         userId: plan.userId,
         fundCode: plan.fundCode,
         amountCents: plan.amount,
-        source: 'dca',
+        source: "dca",
         now,
       });
 
@@ -166,7 +170,8 @@ export async function scanDcaPlans(
         .where(eq(dcaPlan.id, plan.id));
 
       result.triggered++;
-    } catch (err) {
+    }
+    catch (err) {
       console.error(`[dca] 计划 ${plan.id} 触发失败：`, err);
       // 失败也要推进日期，否则明天会连着今天的一起失败，日志刷屏
       await db

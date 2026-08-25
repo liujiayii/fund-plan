@@ -1,5 +1,6 @@
-import { cloudflareContext } from '../../workers/app';
-import { getDb, type Db } from '~/db/client';
+import type { Db } from "~/db/client";
+import { getDb } from "~/db/client";
+import { CloudflareContext } from "../../workers/app";
 
 /**
  * loader / action 的公共入口：一把取出 db、env 与 ctx。
@@ -15,7 +16,7 @@ import { getDb, type Db } from '~/db/client';
  *   }
  */
 interface ContextReader {
-  get<T>(key: { defaultValue?: T }): T;
+  get: <T>(key: { defaultValue?: T }) => T;
 }
 
 export function getAppContext(context: unknown): {
@@ -23,6 +24,6 @@ export function getAppContext(context: unknown): {
   env: Env;
   ctx: ExecutionContext;
 } {
-  const cf = (context as ContextReader).get(cloudflareContext);
+  const cf = (context as ContextReader).get(CloudflareContext);
   return { db: getDb(cf.env.DB), env: cf.env, ctx: cf.ctx };
 }

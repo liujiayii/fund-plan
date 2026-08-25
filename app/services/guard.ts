@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
-import { redirect } from 'react-router';
-import type { Db } from '~/db/client';
-import { user } from '~/db/schema';
-import { readSession, readTokenFromRequest } from './session';
+import type { Db } from "~/db/client";
+import { eq } from "drizzle-orm";
+import { redirect } from "react-router";
+import { user } from "~/db/schema";
+import { readSession, readTokenFromRequest } from "./session";
 
 /**
  * 鉴权与权限矩阵。
@@ -20,7 +20,7 @@ import { readSession, readTokenFromRequest } from './session';
 export interface CurrentUser {
   id: number;
   username: string;
-  role: 'admin' | 'user';
+  role: "admin" | "user";
 }
 
 /**
@@ -31,10 +31,12 @@ export async function getCurrentUser(
   db: Db,
 ): Promise<CurrentUser | null> {
   const token = readTokenFromRequest(request);
-  if (!token) return null;
+  if (!token)
+    return null;
 
   const s = await readSession(db, token);
-  if (!s) return null;
+  if (!s)
+    return null;
 
   return { id: s.userId, username: s.username, role: s.role };
 }
@@ -66,12 +68,14 @@ export async function getAdminUser(
   env: Env,
 ): Promise<CurrentUser | null> {
   const name = env.ADMIN_USERNAME?.trim();
-  if (!name) return null;
+  if (!name)
+    return null;
 
   const u = await db.query.user.findFirst({
     where: eq(user.username, name),
   });
-  if (!u) return null;
+  if (!u)
+    return null;
 
   return { id: u.id, username: u.username, role: u.role };
 }
@@ -85,6 +89,6 @@ export function assertOwnership(
   resourceUserId: number,
 ): void {
   if (currentUserId !== resourceUserId) {
-    throw new Response('无权操作他人的数据', { status: 403 });
+    throw new Response("无权操作他人的数据", { status: 403 });
   }
 }

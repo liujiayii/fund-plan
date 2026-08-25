@@ -30,11 +30,11 @@
 
 ### 与 spec 的版本偏离（已确认兼容，实施时以本节为准）
 
-| spec 原文 | 实际采用 | 原因 |
-|---|---|---|
-| React Router v7 | **v8.3.0** | 当前稳定大版本，framework mode API 与 v7 一致 |
-| Ant Design v5 | **v6.6.1** | 当前稳定大版本，peer 要求 react>=18，与 React 19 兼容 |
-| — | React 19.2.8 | antd6 / charts2 / RR8 均兼容 |
+| spec 原文       | 实际采用     | 原因                                                  |
+| --------------- | ------------ | ----------------------------------------------------- |
+| React Router v7 | **v8.3.0**   | 当前稳定大版本，framework mode API 与 v7 一致         |
+| Ant Design v5   | **v6.6.1**   | 当前稳定大版本，peer 要求 react>=18，与 React 19 兼容 |
+| —               | React 19.2.8 | antd6 / charts2 / RR8 均兼容                          |
 
 > `@antv/graphin` 会报 peer 冲突（要求 react ^18），但它是关系图组件，本项目只画净值折线，**不引用即无影响**。
 
@@ -90,11 +90,13 @@ vite.config.ts  vitest.config.ts  tsconfig.json  drizzle.config.ts
 ### Task 1: 项目脚手架（RR8 + CF Workers + Vite + antd + Vitest）
 
 **Files:**
+
 - Create: `vite.config.ts`、`react-router.config.ts`、`tsconfig.json`、`workers/app.ts`、`app/root.tsx`、`app/routes.ts`、`app/entry.server.tsx`、`app/routes/_index.tsx`、`wrangler.jsonc`、`vitest.config.ts`
 - Modify: `package.json`（scripts + onlyBuiltDependencies）
 - Test: `tests/smoke.test.ts`
 
 **Interfaces — Produces:**
+
 - `workers/app.ts` 默认导出 `{ fetch, scheduled } satisfies ExportedHandler<Env>`
 - `Env` 接口（`DB: D1Database`、`KV: KVNamespace`、`ADMIN_USERNAME: string`），全项目共用
 
@@ -111,13 +113,15 @@ vite.config.ts  vitest.config.ts  tsconfig.json  drizzle.config.ts
 **Files:** Create `app/db/schema.ts`、`app/db/client.ts`、`drizzle.config.ts`、`drizzle/*.sql`；Test `tests/db/schema.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
 // app/db/schema.ts —— 表对象（物理名 orders/transactions 规避 SQL 保留字）
-export const fund, fundNav, user, session, account, shareLot, holding, orders, dcaPlan, transactions, checkin
+export const fund, fundNav, user, session, account, shareLot, holding, orders, dcaPlan, transactions, checkin;
 // app/db/client.ts
-export function getDb(d1: D1Database): DrizzleD1Database<typeof schema>
-export type Db = ReturnType<typeof getDb>
+export function getDb(d1: D1Database): DrizzleD1Database<typeof schema>;
+export type Db = ReturnType<typeof getDb>;
 ```
+
 > ⚠️ **命名偏离**：spec 写 `order` / `transaction`，但两者都是 SQLite 保留字。物理表名改用 **`orders`** / **`transactions`**，语义不变。
 
 - [ ] **Step 1**: 写 `schema.ts`：10 张表照 spec 第 4 节逐列定义；金额/份额/净值/费率全 `integer()`；`redeem_tiers` 用 `text({ mode: 'json' })`；`checkin` 加 `unique(user_id, checkin_date)`；每列加中文注释标注单位
@@ -138,16 +142,18 @@ export type Db = ReturnType<typeof getDb>
 **Files:** Create `app/domain/money.ts`；Test `tests/domain/money.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export const YUAN = 100, SHARE_SCALE = 10000, NAV_SCALE = 10000, RATE_SCALE = 10000
-export function yuanToCents(yuan: number | string): number       // 元→分，四舍五入
-export function centsToYuan(cents: number): string               // 分→元，展示 2 位
-export function sharesToDisplay(shares: number): string          // 份额→展示 2 位
-export function navToDisplay(nav: number): string                // 净值→展示 4 位
-export function rateToPercent(rate: number): string              // 万分之→百分比字符串
-export function multiplyCents(cents: number, ratio: Decimal.Value): number
-export function roundInt(v: Decimal.Value): number               // 统一四舍五入取整
+export const YUAN = 100; export const SHARE_SCALE = 10000; export const NAV_SCALE = 10000; export const RATE_SCALE = 10000;
+export function yuanToCents(yuan: number | string): number; // 元→分，四舍五入
+export function centsToYuan(cents: number): string; // 分→元，展示 2 位
+export function sharesToDisplay(shares: number): string; // 份额→展示 2 位
+export function navToDisplay(nav: number): string; // 净值→展示 4 位
+export function rateToPercent(rate: number): string; // 万分之→百分比字符串
+export function multiplyCents(cents: number, ratio: Decimal.Value): number;
+export function roundInt(v: Decimal.Value): number; // 统一四舍五入取整
 ```
+
 - [ ] **Step 1**: 写测试：`yuanToCents('100.00') === 10000`；`yuanToCents(0.1 + 0.2) === 30`（浮点陷阱）；`centsToYuan(10000) === '100.00'`；`navToDisplay(12345) === '1.2345'`；`rateToPercent(150) === '1.50%'`；`multiplyCents(10000, '0.015') === 150`
 - [ ] **Step 2**: 跑测试确认失败（模块不存在）
 - [ ] **Step 3**: 用 `Decimal` 实现，统一 `ROUND_HALF_UP` 后 `.toNumber()`；加中文注释说明每个 scale 的含义
@@ -159,15 +165,17 @@ export function roundInt(v: Decimal.Value): number               // 统一四舍
 **Files:** Create `app/domain/trading-calendar.ts`；Test `tests/domain/trading-calendar.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export const CN_HOLIDAYS: Set<string>          // 硬编码节假日 YYYY-MM-DD（每年需更新，注释标注）
-export const CUTOFF_HOUR = 15                  // 北京时间 15:00 分界
-export function isTradingDay(date: string, knownTradingDays?: Set<string>): boolean
-export function nextTradingDay(date: string): string            // 严格之后的下一个交易日
-export function resolveConfirmDate(placedAtUtc: Date, knownTradingDays?: Set<string>): string
-export function countDays(from: string, to: string): number      // 自然日差，用于持有天数
-export function toBeijing(utc: Date): dayjs.Dayjs                // UTC → 北京时间
+export const CN_HOLIDAYS: Set<string>; // 硬编码节假日 YYYY-MM-DD（每年需更新，注释标注）
+export const CUTOFF_HOUR = 15; // 北京时间 15:00 分界
+export function isTradingDay(date: string, knownTradingDays?: Set<string>): boolean;
+export function nextTradingDay(date: string): string; // 严格之后的下一个交易日
+export function resolveConfirmDate(placedAtUtc: Date, knownTradingDays?: Set<string>): string;
+export function countDays(from: string, to: string): number; // 自然日差，用于持有天数
+export function toBeijing(utc: Date): dayjs.Dayjs; // UTC → 北京时间
 ```
+
 - [ ] **Step 1**: 写测试：`isTradingDay('2026-08-22') === false`（周六）；`isTradingDay('2026-01-01') === false`（元旦）；`nextTradingDay('2026-08-21') === '2026-08-24'`（周五→周一）；周五 14:00 北京下单 → 确认日=当日；周五 15:30 北京下单 → 确认日=下周一；`countDays('2026-01-01','2026-01-08') === 7`；传入 `knownTradingDays` 时以其为准
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: 实现：dayjs + UTC+8 偏移；15:00 cutoff 判断；周末 + `CN_HOLIDAYS` 过滤；`knownTradingDays`（来自沪深300 净值日序列）优先级最高。中文注释标注「节假日表每年更新」
@@ -179,11 +187,13 @@ export function toBeijing(utc: Date): dayjs.Dayjs                // UTC → 北�
 **Files:** Create `app/domain/purchase.ts`；Test `tests/domain/purchase.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export interface PurchaseInput  { amountCents: number; navScaled: number; purchaseRate: number }
+export interface PurchaseInput { amountCents: number; navScaled: number; purchaseRate: number }
 export interface PurchaseResult { netAmountCents: number; feeCents: number; sharesScaled: number }
-export function calcPurchase(input: PurchaseInput): PurchaseResult
+export function calcPurchase(input: PurchaseInput): PurchaseResult;
 ```
+
 公式（spec 第 5 节）：`净申购 = 申购金额 ÷ (1 + 费率)`；`费用 = 申购金额 − 净申购`；`份额 = 净申购 ÷ 确认日净值`
 
 - [ ] **Step 1**: 写测试：申购 1000 元(100000 分)、费率 1.5%(150)、净值 1.5(15000) → `netAmountCents === 98522`、`feeCents === 1478`、`sharesScaled === 6568133`；断言 `netAmountCents + feeCents === amountCents`（一分不丢）；费率 0 时费用为 0 且份额=金额/净值
@@ -197,16 +207,18 @@ export function calcPurchase(input: PurchaseInput): PurchaseResult
 **Files:** Create `app/domain/redeem.ts`；Test `tests/domain/redeem.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
 export interface ShareLotInput { id: number; sharesScaled: number; costCents: number; confirmDate: string }
-export interface RedeemTier    { minDays: number; maxDays: number | null; rate: number } // rate 万分之
-export interface RedeemInput   { lots: ShareLotInput[]; redeemSharesScaled: number; navScaled: number; confirmDate: string; tiers: RedeemTier[] }
+export interface RedeemTier { minDays: number; maxDays: number | null; rate: number } // rate 万分之
+export interface RedeemInput { lots: ShareLotInput[]; redeemSharesScaled: number; navScaled: number; confirmDate: string; tiers: RedeemTier[] }
 export interface RedeemLotResult { lotId: number; consumedSharesScaled: number; holdDays: number; rate: number; grossCents: number; feeCents: number; netCents: number; costCents: number }
-export interface RedeemResult  { lotResults: RedeemLotResult[]; totalGrossCents: number; totalFeeCents: number; totalNetCents: number; totalCostCents: number; realizedPnlCents: number }
-export const DEFAULT_REDEEM_TIERS: RedeemTier[]   // <7:150, 7~<365:50, 365~<730:25, >=730:0
-export function findRedeemRate(tiers: RedeemTier[], holdDays: number): number
-export function calcRedeem(input: RedeemInput): RedeemResult
+export interface RedeemResult { lotResults: RedeemLotResult[]; totalGrossCents: number; totalFeeCents: number; totalNetCents: number; totalCostCents: number; realizedPnlCents: number }
+export const DEFAULT_REDEEM_TIERS: RedeemTier[]; // <7:150, 7~<365:50, 365~<730:25, >=730:0
+export function findRedeemRate(tiers: RedeemTier[], holdDays: number): number;
+export function calcRedeem(input: RedeemInput): RedeemResult;
 ```
+
 - [ ] **Step 1**: 写测试：
   - `findRedeemRate` 边界：0 天→150、6 天→150、**7 天→50**、364 天→50、365 天→25、730 天→0
   - 单批持有 3 天赎回 → 费率 1.5%
@@ -223,11 +235,13 @@ export function calcRedeem(input: RedeemInput): RedeemResult
 **Files:** Create `app/domain/dca.ts`；Test `tests/domain/dca.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export type Frequency = 'daily' | 'weekly' | 'monthly'
+export type Frequency = 'daily' | 'weekly' | 'monthly';
 export interface NextRunInput { frequency: Frequency; dayOfWeek?: number | null; dayOfMonth?: number | null; from: string }
-export function nextRunDate(input: NextRunInput): string   // 返回严格晚于 from 的下次执行日
+export function nextRunDate(input: NextRunInput): string; // 返回严格晚于 from 的下次执行日
 ```
+
 - [ ] **Step 1**: 写测试：`daily` 从 2026-08-24 → `2026-08-25`；`weekly` dayOfWeek=1 从周一 2026-08-24 → `2026-08-31`（严格之后）；`weekly` dayOfWeek=3 从周一 → `2026-08-26`；`monthly` dayOfMonth=15 从 2026-08-24 → `2026-09-15`；`monthly` dayOfMonth=15 从 2026-08-10 → `2026-08-15`；跨年 12 月 → 次年 1 月
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: dayjs 实现，`dayOfMonth` 限制 1–28 规避 2 月问题（表单层同步限制）。中文注释
@@ -239,13 +253,15 @@ export function nextRunDate(input: NextRunInput): string   // 返回严格晚于
 **Files:** Create `app/domain/checkin.ts`；Test `tests/domain/checkin.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export const CHECKIN_BASE_CENTS = 10000   // 基础 100 元
-export const CHECKIN_STEP_CENTS = 5000    // 每多连签一天 +50 元
-export const CHECKIN_MAX_CENTS  = 50000   // 封顶 500 元
-export function calcCheckinReward(streak: number): number   // streak 为本次是第几天连签（1 起）
-export function calcStreak(lastCheckinDate: string | null, lastStreak: number, today: string): number
+export const CHECKIN_BASE_CENTS = 10000; // 基础 100 元
+export const CHECKIN_STEP_CENTS = 5000; // 每多连签一天 +50 元
+export const CHECKIN_MAX_CENTS = 50000; // 封顶 500 元
+export function calcCheckinReward(streak: number): number; // streak 为本次是第几天连签（1 起）
+export function calcStreak(lastCheckinDate: string | null, lastStreak: number, today: string): number;
 ```
+
 - [ ] **Step 1**: 写测试：`calcCheckinReward(1) === 10000`、`(2) === 15000`、`(9) === 50000`、`(20) === 50000`（封顶）；`calcStreak(null, 0, '2026-08-24') === 1`（首签）；`calcStreak('2026-08-23', 5, '2026-08-24') === 6`（昨天签过→续）；`calcStreak('2026-08-22', 5, '2026-08-24') === 1`（断签归零重来）
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: 实现 `min(BASE + (streak-1)*STEP, MAX)`；`calcStreak` 用 `countDays` 判断是否恰好隔一天。中文注释说明「同日重复签到由 DB 唯一约束兜底」
@@ -257,13 +273,15 @@ export function calcStreak(lastCheckinDate: string | null, lastStreak: number, t
 **Files:** Create `app/domain/portfolio.ts`；Test `tests/domain/portfolio.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
 export interface HoldingValuation { fundCode: string; sharesScaled: number; costCents: number; navScaled: number; marketValueCents: number; pnlCents: number; pnlRate: number }
-export function valuateHolding(i: { fundCode: string; totalSharesScaled: number; totalCostCents: number; navScaled: number }): HoldingValuation
+export function valuateHolding(i: { fundCode: string; totalSharesScaled: number; totalCostCents: number; navScaled: number }): HoldingValuation;
 export function valuatePortfolio(holdings: HoldingValuation[], cashCents: number):
-  { totalAssetCents: number; marketValueCents: number; cashCents: number; totalPnlCents: number; totalPnlRate: number }
-export function reconcile(lots: { sharesScaled: number; costCents: number }[], holding: { totalSharesScaled: number; totalCostCents: number }): boolean
+{ totalAssetCents: number; marketValueCents: number; cashCents: number; totalPnlCents: number; totalPnlRate: number };
+export function reconcile(lots: { sharesScaled: number; costCents: number }[], holding: { totalSharesScaled: number; totalCostCents: number }): boolean;
 ```
+
 - [ ] **Step 1**: 写测试：1000 份(10000000)、成本 150000 分、净值 1.6(16000) → `marketValueCents === 160000`、`pnlCents === 10000`、`pnlRate` ≈ 0.0667；空持仓 `pnlRate === 0` 不除零；`valuatePortfolio` 总资产 = Σ市值 + 现金；`reconcile` 在 Σlot 与 holding 一致时 true、篡改一分即 false
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: Decimal 实现，`reconcile` 供撮合后自检。中文注释
@@ -279,23 +297,25 @@ export function reconcile(lots: { sharesScaled: number; costCents: number }[], h
 **Files:** Create `app/services/fund-data.ts`；Test `tests/services/fund-data.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
 export interface FundSearchItem { code: string; name: string; type: string }
 export interface FundBasic { code: string; name: string; type: string; purchaseRate: number; minPurchaseCents: number; riskLevel: number; status: string }
 export interface NavRow { navDate: string; unitNav: number; accNav: number; growthRate: number }
-export function searchFunds(env: Env, keyword: string): Promise<FundSearchItem[]>
-export function fetchFundBasic(env: Env, code: string): Promise<FundBasic | null>
-export function fetchNavHistory(env: Env, code: string, pageSize?: number): Promise<NavRow[]>
-export function percentToRate(pct: string): number   // "1.50%"/"0.15" → 万分之整数
+export function searchFunds(env: Env, keyword: string): Promise<FundSearchItem[]>;
+export function fetchFundBasic(env: Env, code: string): Promise<FundBasic | null>;
+export function fetchNavHistory(env: Env, code: string, pageSize?: number): Promise<NavRow[]>;
+export function percentToRate(pct: string): number; // "1.50%"/"0.15" → 万分之整数
 ```
+
 已验证可用的东财接口（spec 第 9 节）：
 
-| 用途 | 接口 | 缓存 |
-|---|---|---|
-| 基金搜索 | `fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=` | KV 1 天 |
-| 历史净值 | `api.fund.eastmoney.com/f10/lsjz?fundCode=&pageIndex=1&pageSize=` (需 Referer `https://fundf10.eastmoney.com/`) | 入 `fund_nav` |
-| 费率/基本信息 | `fundmobapi.eastmoney.com/FundMNewApi/FundMNNBasicInformation?FCODE=&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8` | 入 `fund` |
-| 全量列表兜底 | `fund.eastmoney.com/js/fundcode_search.js`（3.1MB） | KV，搜索挂时兜底 |
+| 用途          | 接口                                                                                                                    | 缓存             |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 基金搜索      | `fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=`                                                  | KV 1 天          |
+| 历史净值      | `api.fund.eastmoney.com/f10/lsjz?fundCode=&pageIndex=1&pageSize=` (需 Referer `https://fundf10.eastmoney.com/`)         | 入 `fund_nav`    |
+| 费率/基本信息 | `fundmobapi.eastmoney.com/FundMNewApi/FundMNNBasicInformation?FCODE=&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8` | 入 `fund`        |
+| 全量列表兜底  | `fund.eastmoney.com/js/fundcode_search.js`（3.1MB）                                                                     | KV，搜索挂时兜底 |
 
 - [ ] **Step 1**: 写测试（用 `vi.stubGlobal('fetch', ...)` 注入固定响应，不打真网）：搜索返回解析出 code/name/type；`percentToRate('1.50%') === 150`、`percentToRate('0.15') === 15`；`fetchNavHistory` 把 `DWJZ:"1.2345"` 解析成 `unitNav: 12345`、`JZZZL:"0.53"` → `growthRate: 53`；接口抛错时 `searchFunds` 回退 KV 缓存而非崩溃
 - [ ] **Step 2**: 跑测试确认失败
@@ -312,19 +332,21 @@ export function percentToRate(pct: string): number   // "1.50%"/"0.15" → 万�
 **Files:** Create `app/services/auth.ts`、`app/services/session.ts`；Test `tests/services/auth.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
 // auth.ts
-export function hashPassword(password: string, saltHex?: string): Promise<{ hash: string; salt: string }>
-export function verifyPassword(password: string, hash: string, salt: string): Promise<boolean>
-export function registerUser(db: Db, env: Env, username: string, password: string): Promise<{ id: number; role: 'admin' | 'user' }>
-export function loginUser(db: Db, username: string, password: string): Promise<{ id: number; role: string } | null>
+export function hashPassword(password: string, saltHex?: string): Promise<{ hash: string; salt: string }>;
+export function verifyPassword(password: string, hash: string, salt: string): Promise<boolean>;
+export function registerUser(db: Db, env: Env, username: string, password: string): Promise<{ id: number; role: 'admin' | 'user' }>;
+export function loginUser(db: Db, username: string, password: string): Promise<{ id: number; role: string } | null>;
 // session.ts
-export function createSession(db: Db, userId: number): Promise<string>          // 返回 token
-export function readSession(db: Db, token: string): Promise<{ userId: number; role: string } | null>
-export function destroySession(db: Db, token: string): Promise<void>
-export function sessionCookie(token: string, maxAgeSec?: number): string        // httpOnly; Secure; SameSite=Lax
-export function clearSessionCookie(): string
+export function createSession(db: Db, userId: number): Promise<string>; // 返回 token
+export function readSession(db: Db, token: string): Promise<{ userId: number; role: string } | null>;
+export function destroySession(db: Db, token: string): Promise<void>;
+export function sessionCookie(token: string, maxAgeSec?: number): string; // httpOnly; Secure; SameSite=Lax
+export function clearSessionCookie(): string;
 ```
+
 - [ ] **Step 1**: 写测试（真实 D1）：同一密码 + 不同盐 → hash 不同；`verifyPassword` 正确密码 true、错误密码 false；`registerUser` 用户名重复抛错；用户名等于 `env.ADMIN_USERNAME` 时 `role === 'admin'`，否则 `'user'`；注册后自动建 `account` 且 `cash === 10000000`、写入一条 `type:'init'` 的 `transactions`；`createSession` → `readSession` 能取回；过期 token 返回 null
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: 实现：Web Crypto `PBKDF2`（SHA-256，100000 迭代，16 字节随机盐，导出 32 字节，hex 编码）；`crypto.randomUUID()` 作 session token；注册用 `db.batch()` 原子建 user + account + init 流水。中文注释说明「为何不用 bcrypt」
@@ -336,12 +358,14 @@ export function clearSessionCookie(): string
 **Files:** Create `app/services/guard.ts`；Test `tests/services/guard.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
 export interface CurrentUser { id: number; username: string; role: 'admin' | 'user' }
-export function getCurrentUser(request: Request, db: Db): Promise<CurrentUser | null>  // 无会话返回 null（游客）
-export function requireUser(request: Request, db: Db): Promise<CurrentUser>            // 未登录 throw redirect('/login')
-export function getAdminUser(db: Db, env: Env): Promise<CurrentUser | null>            // 按 ADMIN_USERNAME 查主人
+export function getCurrentUser(request: Request, db: Db): Promise<CurrentUser | null>; // 无会话返回 null（游客）
+export function requireUser(request: Request, db: Db): Promise<CurrentUser>; // 未登录 throw redirect('/login')
+export function getAdminUser(db: Db, env: Env): Promise<CurrentUser | null>; // 按 ADMIN_USERNAME 查主人
 ```
+
 - [ ] **Step 1**: 写测试：无 Cookie → `getCurrentUser` 返回 null；有效 Cookie → 返回用户；`requireUser` 无会话时抛出 302 到 `/login`；`getAdminUser` 按 `ADMIN_USERNAME` 找到主人、找不到返回 null
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: 实现 Cookie 解析 + 会话查询；`requireUser` 抛 `redirect`。中文注释说明权限矩阵（游客只读主人盘 / 用户读写自己 + 只读主人 / admin 的 `/me` 即公开盘）
@@ -357,10 +381,12 @@ export function getAdminUser(db: Db, env: Env): Promise<CurrentUser | null>     
 **Files:** Create `app/services/trade.ts`；Test `tests/services/trade.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export function placeBuyOrder(db: Db, env: Env, p: { userId: number; fundCode: string; amountCents: number; source?: 'manual' | 'dca'; now?: Date }): Promise<{ orderId: number }>
-export function placeSellOrder(db: Db, env: Env, p: { userId: number; fundCode: string; sharesScaled: number; now?: Date }): Promise<{ orderId: number }>
+export function placeBuyOrder(db: Db, env: Env, p: { userId: number; fundCode: string; amountCents: number; source?: 'manual' | 'dca'; now?: Date }): Promise<{ orderId: number }>;
+export function placeSellOrder(db: Db, env: Env, p: { userId: number; fundCode: string; sharesScaled: number; now?: Date }): Promise<{ orderId: number }>;
 ```
+
 - [ ] **Step 1**: 写测试（真实 D1）：买入金额 > 现金 → 抛「现金不足」；金额 < 起购 → 抛错；成功时 `orders` 落一条 `status='pending'`、`confirm_date` 由 `resolveConfirmDate` 决定、现金**立即扣减**并写 `transactions`；赎回份额 > 持仓 → 抛错；赎回不扣现金只落 pending 单
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: 实现：Zod 校验入参 → 查 `account`/`holding`/`fund` → 校验 → `db.batch()` 原子写 `orders` + 更新 `account.cash` + 写 `transactions`。中文注释说明「买入即冻结现金，避免超卖」
@@ -372,10 +398,12 @@ export function placeSellOrder(db: Db, env: Env, p: { userId: number; fundCode: 
 **Files:** Create `app/services/settle.ts`；Test `tests/services/settle.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export function syncNav(db: Db, env: Env, fundCodes?: string[]): Promise<{ synced: number }>
-export function settlePendingOrders(db: Db, env: Env, now?: Date): Promise<{ confirmed: number; skipped: number; failed: number }>
+export function syncNav(db: Db, env: Env, fundCodes?: string[]): Promise<{ synced: number }>;
+export function settlePendingOrders(db: Db, env: Env, now?: Date): Promise<{ confirmed: number; skipped: number; failed: number }>;
 ```
+
 - [ ] **Step 1**: 写测试（真实 D1）：
   - 买单 pending + 已有确认日净值 → 转 `confirmed`，回填 `deal_nav/deal_shares/deal_amount/fee`，新增一条 `share_lot`，`holding` 累加，写 `transactions`
   - **幂等**：连续跑两次 `settlePendingOrders`，第二次 `confirmed === 0`、`share_lot` 不重复、`holding` 不翻倍
@@ -392,12 +420,14 @@ export function settlePendingOrders(db: Db, env: Env, now?: Date): Promise<{ con
 **Files:** Create `app/services/dca-service.ts`；Test `tests/services/dca-service.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export function scanDcaPlans(db: Db, env: Env, now?: Date): Promise<{ triggered: number; skipped: number; failed: number }>
-export function createDcaPlan(db: Db, p: { userId: number; fundCode: string; amountCents: number; frequency: Frequency; dayOfWeek?: number | null; dayOfMonth?: number | null }): Promise<{ id: number }>
-export function toggleDcaPlan(db: Db, userId: number, planId: number, status: 'active' | 'paused'): Promise<void>
-export function deleteDcaPlan(db: Db, userId: number, planId: number): Promise<void>
+export function scanDcaPlans(db: Db, env: Env, now?: Date): Promise<{ triggered: number; skipped: number; failed: number }>;
+export function createDcaPlan(db: Db, p: { userId: number; fundCode: string; amountCents: number; frequency: Frequency; dayOfWeek?: number | null; dayOfMonth?: number | null }): Promise<{ id: number }>;
+export function toggleDcaPlan(db: Db, userId: number, planId: number, status: 'active' | 'paused'): Promise<void>;
+export function deleteDcaPlan(db: Db, userId: number, planId: number): Promise<void>;
 ```
+
 - [ ] **Step 1**: 写测试：`next_run <= 今天` 且 `status='active'` 的计划 → 调 `placeBuyOrder` 生成 pending 单、`run_count+1`、`total_invested` 累加、`next_run` 推进到下一期；`paused` 计划不触发；现金不足时该计划 `failed` 计数 +1 但**不阻塞其他计划**；`next_run` 在未来 → skipped；`toggleDcaPlan`/`deleteDcaPlan` 只能操作自己的计划（跨用户抛错）
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: 实现：逐计划 try/catch 隔离失败；用 `nextRunDate` 推进。中文注释
@@ -409,10 +439,12 @@ export function deleteDcaPlan(db: Db, userId: number, planId: number): Promise<v
 **Files:** Create `app/services/checkin-service.ts`；Test `tests/services/checkin-service.test.ts`
 
 **Interfaces — Produces:**
+
 ```ts
-export function doCheckin(db: Db, userId: number, today?: string): Promise<{ reward: number; streak: number; balance: number }>
-export function getCheckinStatus(db: Db, userId: number, today?: string): Promise<{ checkedToday: boolean; streak: number; nextReward: number }>
+export function doCheckin(db: Db, userId: number, today?: string): Promise<{ reward: number; streak: number; balance: number }>;
+export function getCheckinStatus(db: Db, userId: number, today?: string): Promise<{ checkedToday: boolean; streak: number; nextReward: number }>;
 ```
+
 - [ ] **Step 1**: 写测试：首签 → `reward === 10000`、`streak === 1`、`account.cash` +10000、`total_checkin` +10000、落一条 `type:'checkin'` 流水；**同日重复签到 → 抛错且余额不变**；连续第 2 天 → `reward === 15000`、`streak === 2`；断签后 → `streak` 回 1；`getCheckinStatus` 正确反映今日是否已签
 - [ ] **Step 2**: 跑测试确认失败
 - [ ] **Step 3**: 实现：查最近一条 `checkin` → `calcStreak` → `calcCheckinReward` → `db.batch()` 原子写 `checkin` + `account` + `transactions`；靠唯一约束防重复。中文注释

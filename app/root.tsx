@@ -1,3 +1,6 @@
+import type { Route } from "./+types/root";
+import { Layout as AntLayout, Button, ConfigProvider, Menu, Space, theme } from "antd";
+import zhCN from "antd/locale/zh_CN";
 import {
   isRouteErrorResponse,
   Links,
@@ -7,12 +10,12 @@ import {
   ScrollRestoration,
   useLoaderData,
   useLocation,
-} from 'react-router';
-import { ConfigProvider, Layout as AntLayout, Button, Menu, Space, theme } from 'antd';
-import zhCN from 'antd/locale/zh_CN';
-import type { Route } from './+types/root';
-import { getAppContext } from '~/services/context';
-import { getCurrentUser } from '~/services/guard';
+} from "react-router";
+import { getAppContext } from "~/services/context";
+import { getCurrentUser } from "~/services/guard";
+// UnoCSS 预生成的工具类样式（由 `pnpm uno:build` 产出）。
+// 放在 antd 之后引入，保证同优先级下工具类能覆盖 antd 的默认样式。
+import "./uno.gen.css";
 
 // antd 的 Layout 重命名为 AntLayout，避免与 React Router 约定的文档骨架导出 Layout 冲突
 const { Header, Content, Footer } = AntLayout;
@@ -29,10 +32,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 /** 顶部导航菜单项 */
 const NAV_ITEMS = [
-  { key: '/', label: '首页' },
-  { key: '/master', label: '主人的盘' },
-  { key: '/funds', label: '基金' },
-  { key: '/me', label: '我的' },
+  { key: "/", label: "首页" },
+  { key: "/master", label: "主人的盘" },
+  { key: "/funds", label: "基金" },
+  { key: "/me", label: "我的" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -59,10 +62,10 @@ export default function App() {
   const user = data?.user ?? null;
 
   // 高亮当前所在的一级导航
-  const selectedKey =
-    NAV_ITEMS.filter((i) => i.key !== '/' && location.pathname.startsWith(i.key))
-      .map((i) => i.key)
-      .at(0) ?? (location.pathname === '/' ? '/' : '');
+  const selectedKey
+    = NAV_ITEMS.filter(i => i.key !== "/" && location.pathname.startsWith(i.key))
+      .map(i => i.key)
+      .at(0) ?? (location.pathname === "/" ? "/" : "");
 
   return (
     // antd 全局配置：中文语言包 + 主题色（国内习惯红涨绿跌，主色用喜庆红）
@@ -70,54 +73,56 @@ export default function App() {
       locale={zhCN}
       theme={{
         algorithm: theme.defaultAlgorithm,
-        token: { colorPrimary: '#c62828' },
+        token: { colorPrimary: "#c62828" },
       }}
     >
-      <AntLayout style={{ minHeight: '100vh' }}>
-        <Header style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <a href="/" style={{ color: '#fff', fontWeight: 700, fontSize: 18 }}>
+      <AntLayout style={{ minHeight: "100vh" }}>
+        <Header style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <a href="/" style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>
             模拟基金
           </a>
           <Menu
             theme="dark"
             mode="horizontal"
             selectedKeys={selectedKey ? [selectedKey] : []}
-            items={NAV_ITEMS.map((i) => ({
+            items={NAV_ITEMS.map(i => ({
               key: i.key,
               label: <a href={i.key}>{i.label}</a>,
             }))}
             style={{ flex: 1, minWidth: 0 }}
           />
           {/* 登录态区域：已登录显示用户名与登出，游客显示登录/注册 */}
-          {user ? (
-            <Space>
-              <span style={{ color: 'rgba(255,255,255,.85)' }}>
-                {user.username}
-                {user.role === 'admin' ? '（主人）' : ''}
-              </span>
-              <form method="post" action="/logout" style={{ display: 'inline' }}>
-                <Button size="small" htmlType="submit">
-                  登出
-                </Button>
-              </form>
-            </Space>
-          ) : (
-            <Space>
-              <Button size="small" href="/login">
-                登录
-              </Button>
-              <Button size="small" type="primary" href="/register">
-                注册
-              </Button>
-            </Space>
-          )}
+          {user
+            ? (
+                <Space>
+                  <span style={{ color: "rgba(255,255,255,.85)" }}>
+                    {user.username}
+                    {user.role === "admin" ? "（主人）" : ""}
+                  </span>
+                  <form method="post" action="/logout" style={{ display: "inline" }}>
+                    <Button size="small" htmlType="submit">
+                      登出
+                    </Button>
+                  </form>
+                </Space>
+              )
+            : (
+                <Space>
+                  <Button size="small" href="/login">
+                    登录
+                  </Button>
+                  <Button size="small" type="primary" href="/register">
+                    注册
+                  </Button>
+                </Space>
+              )}
         </Header>
         <Content
-          style={{ padding: 24, maxWidth: 1200, margin: '0 auto', width: '100%' }}
+          style={{ padding: 24, maxWidth: 1200, margin: "0 auto", width: "100%" }}
         >
           <Outlet />
         </Content>
-        <Footer style={{ textAlign: 'center' }}>
+        <Footer style={{ textAlign: "center" }}>
           模拟盘 · 数据来自公开接口 · 仅供学习，不构成投资建议
         </Footer>
       </AntLayout>
@@ -127,16 +132,17 @@ export default function App() {
 
 /** 全局错误边界：区分 404 等路由错误与运行时异常 */
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let title = '出错了';
-  let detail = '发生了未知错误';
+  let title = "出错了";
+  let detail = "发生了未知错误";
   if (isRouteErrorResponse(error)) {
     title = `${error.status}`;
     detail = error.statusText || detail;
-  } else if (error instanceof Error) {
+  }
+  else if (error instanceof Error) {
     detail = error.message;
   }
   return (
-    <div style={{ padding: 48, textAlign: 'center' }}>
+    <div style={{ padding: 48, textAlign: "center" }}>
       <h1>{title}</h1>
       <p>{detail}</p>
       <a href="/">返回首页</a>

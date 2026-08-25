@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm';
-import type { Db } from '~/db/client';
-import { account, transactions, user } from '~/db/schema';
-import { INITIAL_CASH_CENTS } from '~/domain/config';
+import type { Db } from "~/db/client";
+import { eq } from "drizzle-orm";
+import { account, transactions, user } from "~/db/schema";
+import { INITIAL_CASH_CENTS } from "~/domain/config";
 
 /**
  * 认证服务。
@@ -22,21 +22,22 @@ const KEY_BITS = 256;
 /** 字节数组 → hex 字符串 */
 function toHex(buf: ArrayBuffer): string {
   return [...new Uint8Array(buf)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /** hex 字符串 → 字节数组 */
 function fromHex(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
 }
 
 /**
  * 派生密码哈希。
+ * @param password 明文密码
  * @param saltHex 可选；不传则随机生成新盐（注册用），传入则复现哈希（校验用）
  */
 export async function hashPassword(
@@ -48,19 +49,19 @@ export async function hashPassword(
     : crypto.getRandomValues(new Uint8Array(SALT_BYTES));
 
   const keyMaterial = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     new TextEncoder().encode(password),
-    'PBKDF2',
+    "PBKDF2",
     false,
-    ['deriveBits'],
+    ["deriveBits"],
   );
 
   const bits = await crypto.subtle.deriveBits(
     {
-      name: 'PBKDF2',
+      name: "PBKDF2",
       salt: salt as BufferSource,
       iterations: PBKDF2_ITERATIONS,
-      hash: 'SHA-256',
+      hash: "SHA-256",
     },
     keyMaterial,
     KEY_BITS,
@@ -82,7 +83,8 @@ export async function verifyPassword(
   salt: string,
 ): Promise<boolean> {
   const { hash: computed } = await hashPassword(password, salt);
-  if (computed.length !== hash.length) return false;
+  if (computed.length !== hash.length)
+    return false;
   let diff = 0;
   for (let i = 0; i < computed.length; i++) {
     diff |= computed.charCodeAt(i) ^ hash.charCodeAt(i);
@@ -90,8 +92,12 @@ export async function verifyPassword(
   return diff === 0;
 }
 
-/** 用户名规则：3-20 位，字母数字下划线中文 */
-const USERNAME_RE = /^[\w一-龥]{3,20}$/;
+/**
+ * 用户名规则：3-20 位，字母数字下划线中文。
+ * 中文范围用 Unicode 转义写明，比字面量 `一-龥` 更清晰：
+ * U+4E00–U+9FA5 是 CJK 统一汉字基本区。
+ */
+const USERNAME_RE = /^[\w\u4E00-\u9FA5]{3,20}$/;
 
 /**
  * 注册新用户。
@@ -109,14 +115,14 @@ export async function registerUser(
   env: Env,
   username: string,
   password: string,
-): Promise<{ id: number; username: string; role: 'admin' | 'user' }> {
+): Promise<{ id: number; username: string; role: "admin" | "user" }> {
   const name = username.trim();
 
   if (!USERNAME_RE.test(name)) {
-    throw new Error('用户名需为 3-20 位字母、数字、下划线或中文');
+    throw new Error("用户名需为 3-20 位字母、数字、下划线或中文");
   }
   if (password.length < 6) {
-    throw new Error('密码至少 6 位');
+    throw new Error("密码至少 6 位");
   }
 
   // 先查重，给出友好错误（唯一约束是最后防线）
@@ -129,7 +135,7 @@ export async function registerUser(
 
   const { hash, salt } = await hashPassword(password);
   // 用户名与环境变量指定的管理员一致 → 授予 admin，其组合将公开展示
-  const role: 'admin' | 'user' = name === env.ADMIN_USERNAME ? 'admin' : 'user';
+  const role: "admin" | "user" = name === env.ADMIN_USERNAME ? "admin" : "user";
   const now = Date.now();
 
   const [created] = await db
@@ -154,10 +160,10 @@ export async function registerUser(
     }),
     db.insert(transactions).values({
       userId: created.id,
-      type: 'init',
+      type: "init",
       amount: INITIAL_CASH_CENTS,
       balance: INITIAL_CASH_CENTS,
-      note: '注册赠送初始本金',
+      note: "注册赠送初始本金",
       createdAt: now,
     }),
   ]);
@@ -173,14 +179,16 @@ export async function loginUser(
   db: Db,
   username: string,
   password: string,
-): Promise<{ id: number; username: string; role: 'admin' | 'user' } | null> {
+): Promise<{ id: number; username: string; role: "admin" | "user" } | null> {
   const u = await db.query.user.findFirst({
     where: eq(user.username, username.trim()),
   });
-  if (!u) return null;
+  if (!u)
+    return null;
 
   const ok = await verifyPassword(password, u.passwordHash, u.salt);
-  if (!ok) return null;
+  if (!ok)
+    return null;
 
   return { id: u.id, username: u.username, role: u.role };
 }
@@ -195,14 +203,16 @@ export async function changePassword(
   newPassword: string,
 ): Promise<void> {
   if (newPassword.length < 6) {
-    throw new Error('新密码至少 6 位');
+    throw new Error("新密码至少 6 位");
   }
 
   const u = await db.query.user.findFirst({ where: eq(user.id, userId) });
-  if (!u) throw new Error('用户不存在');
+  if (!u)
+    throw new Error("用户不存在");
 
   const ok = await verifyPassword(oldPassword, u.passwordHash, u.salt);
-  if (!ok) throw new Error('旧密码不正确');
+  if (!ok)
+    throw new Error("旧密码不正确");
 
   const { hash, salt } = await hashPassword(newPassword);
   await db

@@ -2,8 +2,8 @@ import {
   CHECKIN_BASE_CENTS,
   CHECKIN_MAX_CENTS,
   CHECKIN_STEP_CENTS,
-} from './config';
-import { countDays } from './trading-calendar';
+} from "./config";
+import { countDays } from "./trading-calendar";
 
 export { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS, CHECKIN_STEP_CENTS };
 
@@ -39,7 +39,8 @@ export function calcStreak(
   today: string,
 ): number {
   // 从未签到过：这是第 1 天
-  if (lastCheckinDate === null) return 1;
+  if (lastCheckinDate === null)
+    return 1;
 
   const gap = countDays(lastCheckinDate, today);
 
@@ -52,7 +53,8 @@ export function calcStreak(
     );
   }
   // 恰好隔一天 → 连签延续
-  if (gap === 1) return lastStreak + 1;
+  if (gap === 1)
+    return lastStreak + 1;
   // 断签 → 归零重来
   return 1;
 }

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { calcPurchase } from '~/domain/purchase';
+import { describe, expect, it } from "vitest";
+import { calcPurchase } from "~/domain/purchase";
 
 /**
  * 申购「内扣法」——真实中国公募基金的费用算法。
@@ -11,8 +11,8 @@ import { calcPurchase } from '~/domain/purchase';
  *
  * 常见错误实现是 `费用 = 金额 × 费率`（外扣法），会算多收费。
  */
-describe('purchase 申购内扣法', () => {
-  it('标准场景：1000 元、费率 1.5%、净值 1.5000', () => {
+describe("purchase 申购内扣法", () => {
+  it("标准场景：1000 元、费率 1.5%、净值 1.5000", () => {
     const r = calcPurchase({
       amountCents: 100000, // 1000 元
       navScaled: 15000, // 净值 1.5000
@@ -23,7 +23,7 @@ describe('purchase 申购内扣法', () => {
     expect(r.sharesScaled).toBe(6568133); // 656.8133 份
   });
 
-  it('一分不丢：净申购 + 费用 必须精确等于申购金额', () => {
+  it("一分不丢：净申购 + 费用 必须精确等于申购金额", () => {
     const cases = [
       { amountCents: 100000, navScaled: 15000, purchaseRate: 150 },
       { amountCents: 99999, navScaled: 12345, purchaseRate: 15 },
@@ -36,7 +36,7 @@ describe('purchase 申购内扣法', () => {
     }
   });
 
-  it('内扣法与外扣法不同：费用应小于「金额×费率」', () => {
+  it("内扣法与外扣法不同：费用应小于「金额×费率」", () => {
     const r = calcPurchase({
       amountCents: 100000,
       navScaled: 10000,
@@ -47,7 +47,7 @@ describe('purchase 申购内扣法', () => {
     expect(r.feeCents).toBe(1478);
   });
 
-  it('费率为 0 时无费用，份额 = 金额 ÷ 净值', () => {
+  it("费率为 0 时无费用，份额 = 金额 ÷ 净值", () => {
     const r = calcPurchase({
       amountCents: 100000, // 1000 元
       navScaled: 20000, // 净值 2.0000
@@ -58,7 +58,7 @@ describe('purchase 申购内扣法', () => {
     expect(r.sharesScaled).toBe(5_000_000); // 500 份
   });
 
-  it('净值为 1.0000 时份额与净申购金额等值（按各自缩放）', () => {
+  it("净值为 1.0000 时份额与净申购金额等值（按各自缩放）", () => {
     const r = calcPurchase({
       amountCents: 100000,
       navScaled: 10000,
@@ -67,7 +67,7 @@ describe('purchase 申购内扣法', () => {
     expect(r.sharesScaled).toBe(10_000_000); // 1000 份
   });
 
-  it('份额保留 4 位小数精度（×10000 取整）', () => {
+  it("份额保留 4 位小数精度（×10000 取整）", () => {
     const r = calcPurchase({
       amountCents: 100000,
       navScaled: 12345, // 1.2345，除不尽
@@ -78,7 +78,7 @@ describe('purchase 申购内扣法', () => {
     expect(Number.isInteger(r.sharesScaled)).toBe(true);
   });
 
-  it('金额非正数时抛错', () => {
+  it("金额非正数时抛错", () => {
     expect(() =>
       calcPurchase({ amountCents: 0, navScaled: 10000, purchaseRate: 0 }),
     ).toThrow();
@@ -87,7 +87,7 @@ describe('purchase 申购内扣法', () => {
     ).toThrow();
   });
 
-  it('净值非正数时抛错（防止除零）', () => {
+  it("净值非正数时抛错（防止除零）", () => {
     expect(() =>
       calcPurchase({ amountCents: 100000, navScaled: 0, purchaseRate: 0 }),
     ).toThrow();

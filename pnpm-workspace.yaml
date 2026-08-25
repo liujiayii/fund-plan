@@ -1,7 +1,25 @@
 # pnpm 设置
-# 放行这两个依赖的 postinstall 构建脚本：它们需要下载原生二进制，
-# 不放行则 vite（依赖 esbuild）与 wrangler 本地运行时（依赖 workerd）无法启动。
+# 放行这些依赖的 postinstall 构建脚本：
+#   esbuild / workerd —— 需要下载原生二进制，不放行则 vite 与 wrangler 本地运行时起不来
+#   simple-git-hooks —— 需要往 .git/hooks 写入钩子脚本
 # 注意：pnpm 11 起该配置项名为 allowBuilds（早期版本叫 onlyBuiltDependencies，已废弃）。
 allowBuilds:
   esbuild: true
+  simple-git-hooks: true
   workerd: true
+
+shellEmulator: true
+
+# 供应链信任策略：保持严格的 no-downgrade，仅对下面这一个版本开例外。
+trustPolicy: no-downgrade
+
+# semver@6.3.1 的例外说明（已核实为误报，非供应链事件）：
+#   报错原因：pnpm 发现「更早发布的版本有 provenance 签名，而此版本没有」，判为可疑降级。
+#   实际情况：6.3.1 发布于 2022-01-26，而 npm 的 provenance 机制 2023-04 才推出——
+#             它不可能带有当时尚不存在的签名。带签名的是后来发布的 semver@7.x。
+#             pnpm 明确说明「检查仅依据发布日期，不看 semver」，在此场景下产生误判。
+#   包的身份：npm 官方维护（maintainers 含 npm-cli-ops），零依赖，全网下载量最高的包之一。
+#   引入路径：@react-router/dev@8 → @babel/core@7 → semver@6.3.1（传递依赖，无法规避）。
+#   注意：这里精确锁到版本号，将来 semver 出新版本仍会重新走信任检查。
+trustPolicyExclude:
+  - semver@6.3.1

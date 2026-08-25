@@ -1,8 +1,8 @@
-import { desc, eq } from 'drizzle-orm';
-import type { Db } from '~/db/client';
-import { account, checkin, transactions } from '~/db/schema';
-import { calcCheckinReward, calcStreak } from '~/domain/checkin';
-import { toBeijing } from '~/domain/trading-calendar';
+import type { Db } from "~/db/client";
+import { desc, eq } from "drizzle-orm";
+import { account, checkin, transactions } from "~/db/schema";
+import { calcCheckinReward, calcStreak } from "~/domain/checkin";
+import { toBeijing } from "~/domain/trading-calendar";
 
 /**
  * 每日签到领本金。
@@ -52,12 +52,13 @@ export async function doCheckin(
   userId: number,
   now: Date = new Date(),
 ): Promise<CheckinResult> {
-  const today = toBeijing(now).format('YYYY-MM-DD');
+  const today = toBeijing(now).format("YYYY-MM-DD");
 
   const acc = await db.query.account.findFirst({
     where: eq(account.userId, userId),
   });
-  if (!acc) throw new Error('账户不存在');
+  if (!acc)
+    throw new Error("账户不存在");
 
   const last = await lastCheckin(db, userId);
   // calcStreak 会在同日重复签到时抛错
@@ -81,7 +82,7 @@ export async function doCheckin(
       .where(eq(account.userId, userId)),
     db.insert(transactions).values({
       userId,
-      type: 'checkin',
+      type: "checkin",
       amount: reward,
       balance: newBalance,
       note: `第 ${streak} 天连续签到奖励`,
@@ -101,7 +102,7 @@ export async function getCheckinStatus(
   userId: number,
   now: Date = new Date(),
 ): Promise<CheckinStatus> {
-  const today = toBeijing(now).format('YYYY-MM-DD');
+  const today = toBeijing(now).format("YYYY-MM-DD");
 
   const acc = await db.query.account.findFirst({
     where: eq(account.userId, userId),
@@ -116,13 +117,15 @@ export async function getCheckinStatus(
   if (checkedToday) {
     streak = last!.streak;
     nextReward = calcCheckinReward(streak + 1);
-  } else {
+  }
+  else {
     streak = last?.streak ?? 0;
     // 用 calcStreak 推算今天签到后的连签数（会正确处理断签归零）
     let todayStreak: number;
     try {
       todayStreak = calcStreak(last?.checkinDate ?? null, last?.streak ?? 0, today);
-    } catch {
+    }
+    catch {
       // 理论不会到这里（checkedToday 已排除同日），保守取 1
       todayStreak = 1;
     }

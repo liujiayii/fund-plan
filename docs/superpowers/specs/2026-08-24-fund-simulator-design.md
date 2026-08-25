@@ -16,11 +16,11 @@
 
 ### 用户身份与权限矩阵
 
-| 身份 | 看主人组合 | 看自己组合 | 下单 / 定投 / 签到 |
-|---|---|---|---|
-| 游客（未登录） | ✅ 只读（全部公开） | — | ❌ |
-| 普通用户（user） | ✅ 只读 | ✅ 读写 | ✅（仅自己的） |
-| 管理员（admin，主人） | ✅ 读写（即自己的盘） | 同上 | ✅ |
+| 身份                  | 看主人组合            | 看自己组合 | 下单 / 定投 / 签到 |
+| --------------------- | --------------------- | ---------- | ------------------ |
+| 游客（未登录）        | ✅ 只读（全部公开）   | —          | ❌                 |
+| 普通用户（user）      | ✅ 只读               | ✅ 读写    | ✅（仅自己的）     |
+| 管理员（admin，主人） | ✅ 读写（即自己的盘） | 同上       | ✅                 |
 
 > admin 不需要独立后台：主人的 `/me` 就是被公开的那个盘，`/master` 只是它的只读公开镜像。一份代码，两种身份。
 
@@ -30,18 +30,18 @@
 
 均在 Cloudflare 免费版覆盖范围内。
 
-| 层 | 选型 | 理由 |
-|---|---|---|
-| 框架 | **React Router v7**（framework mode，Remix 继任者）+ Vite | 用户指定生态；Cloudflare 一等公民，官方模板齐全 |
-| 运行时 | **Cloudflare Workers** | 免费版 10 万请求/天 |
-| UI | **Ant Design v5** + **@ant-design/charts** | 净值/收益曲线用官方图表，风格统一 |
-| 数据库 | **Cloudflare D1**（SQLite） | 交易/持仓/流水天生关系型；免费 5GB、500 万行读/天、10 万行写/天 |
-| ORM | **Drizzle ORM** | D1 支持最好、类型安全、迁移方便 |
-| 缓存 | **Cloudflare KV** | 缓存基金列表/净值，降低对东财接口的压力 |
-| 定时 | **Cron Triggers** | 免费版支持，跑定投扫描 + 每晚净值同步撮合 |
-| 校验/工具 | **Zod + dayjs + decimal.js** | 金额用 decimal 防浮点，日期算交易日 |
-| 密码哈希 | **PBKDF2（Web Crypto）** | Workers 跑不了 bcrypt/argon2 原生模块；高迭代次数 + 随机盐 |
-| 测试 | **Vitest + @cloudflare/vitest-pool-workers** | 在真实 Workers 运行时里跑，用真的 D1 |
+| 层        | 选型                                                      | 理由                                                            |
+| --------- | --------------------------------------------------------- | --------------------------------------------------------------- |
+| 框架      | **React Router v7**（framework mode，Remix 继任者）+ Vite | 用户指定生态；Cloudflare 一等公民，官方模板齐全                 |
+| 运行时    | **Cloudflare Workers**                                    | 免费版 10 万请求/天                                             |
+| UI        | **Ant Design v5** + **@ant-design/charts**                | 净值/收益曲线用官方图表，风格统一                               |
+| 数据库    | **Cloudflare D1**（SQLite）                               | 交易/持仓/流水天生关系型；免费 5GB、500 万行读/天、10 万行写/天 |
+| ORM       | **Drizzle ORM**                                           | D1 支持最好、类型安全、迁移方便                                 |
+| 缓存      | **Cloudflare KV**                                         | 缓存基金列表/净值，降低对东财接口的压力                         |
+| 定时      | **Cron Triggers**                                         | 免费版支持，跑定投扫描 + 每晚净值同步撮合                       |
+| 校验/工具 | **Zod + dayjs + decimal.js**                              | 金额用 decimal 防浮点，日期算交易日                             |
+| 密码哈希  | **PBKDF2（Web Crypto）**                                  | Workers 跑不了 bcrypt/argon2 原生模块；高迭代次数 + 随机盐      |
+| 测试      | **Vitest + @cloudflare/vitest-pool-workers**              | 在真实 Workers 运行时里跑，用真的 D1                            |
 
 ### 关键技术约束（免费版踩坑记录）
 
@@ -85,18 +85,19 @@
 
 ### 精度铁律（金融系统核心）
 
-| 数据 | 存储方式 | 说明 |
-|---|---|---|
-| 金额 | **整数「分」**（×100） | 全程整数入库 |
-| 份额 | **整数**（×10000） | 4 位小数余量 |
-| 净值 | **整数**（×10000） | 真实净值即 4 位小数 |
-| 费率 | **整数「万分之」**（×10000） | 如 1.5% 存 150 |
+| 数据 | 存储方式                     | 说明                |
+| ---- | ---------------------------- | ------------------- |
+| 金额 | **整数「分」**（×100）       | 全程整数入库        |
+| 份额 | **整数**（×10000）           | 4 位小数余量        |
+| 净值 | **整数**（×10000）           | 真实净值即 4 位小数 |
+| 费率 | **整数「万分之」**（×10000） | 如 1.5% 存 150      |
 
 中间运算一律用 `decimal.js`，最后四舍五入回整数入库。彻底杜绝浮点误差。
 
 ### 全局共享表（不属于任何用户，全站复用一份）
 
 **`fund` — 基金档案**
+
 ```
 code           TEXT PRIMARY KEY   -- 基金代码，如 000001
 name           TEXT               -- 名称
@@ -110,6 +111,7 @@ updated_at     INTEGER            -- 元数据更新时间戳
 ```
 
 **`fund_nav` — 历史净值**（撮合与画图的数据底座）
+
 ```
 fund_code   TEXT
 nav_date    TEXT                  -- YYYY-MM-DD
@@ -118,11 +120,13 @@ acc_nav     INTEGER               -- 累计净值 ×10000
 growth_rate INTEGER               -- 日涨跌率 ×10000（万分之）
 PRIMARY KEY (fund_code, nav_date)
 ```
+
 > 💡 划算之处：所有用户共用一份净值，东财接口对每只基金只拉一次。
 
 ### 用户维度表（每人一套）
 
 **`user` — 用户**
+
 ```
 id            INTEGER PRIMARY KEY AUTOINCREMENT
 username      TEXT UNIQUE
@@ -133,6 +137,7 @@ created_at    INTEGER
 ```
 
 **`session` — 会话**
+
 ```
 token      TEXT PRIMARY KEY       -- 随机令牌，存 httpOnly cookie
 user_id    INTEGER
@@ -140,6 +145,7 @@ expires_at INTEGER
 ```
 
 **`account` — 账户（每用户单例）**
+
 ```
 user_id       INTEGER PRIMARY KEY
 cash          INTEGER             -- 现金余额（分）
@@ -149,6 +155,7 @@ created_at    INTEGER
 ```
 
 **`share_lot` — 份额批次** ⭐（真实 T+1 阶梯赎回费的关键）
+
 ```
 id          INTEGER PRIMARY KEY AUTOINCREMENT
 user_id     INTEGER
@@ -158,9 +165,11 @@ cost        INTEGER               -- 该批成本（分，含申购费）
 confirm_date TEXT                 -- 确认日 YYYY-MM-DD（算持有天数）
 order_id    INTEGER               -- 来源订单
 ```
+
 > 每笔确认的申购生成一个批次；赎回时按 confirm_date 升序 **FIFO 逐批消耗**，按持有天数查阶梯费率。
 
 **`holding` — 持仓汇总**（`share_lot` 的物化汇总，读得快）
+
 ```
 user_id     INTEGER
 fund_code   TEXT
@@ -168,9 +177,11 @@ total_shares INTEGER              -- 总份额 ×10000
 total_cost   INTEGER              -- 总成本（分）
 PRIMARY KEY (user_id, fund_code)
 ```
+
 > 由撮合引擎在同一个 D1 batch 内与 `share_lot` 同步维护；配对账函数校验 Σshare_lot == holding（可单测）。
 
 **`order` — 订单**（T+1 状态机）
+
 ```
 id           INTEGER PRIMARY KEY AUTOINCREMENT
 user_id      INTEGER
@@ -191,6 +202,7 @@ created_at   INTEGER
 ```
 
 **`dca_plan` — 定投计划**
+
 ```
 id           INTEGER PRIMARY KEY AUTOINCREMENT
 user_id      INTEGER
@@ -207,6 +219,7 @@ created_at   INTEGER
 ```
 
 **`transaction` — 资金账本**（只增不改，可对账）
+
 ```
 id         INTEGER PRIMARY KEY AUTOINCREMENT
 user_id    INTEGER
@@ -219,6 +232,7 @@ created_at INTEGER
 ```
 
 **`checkin` — 签到记录**
+
 ```
 id           INTEGER PRIMARY KEY AUTOINCREMENT
 user_id      INTEGER
@@ -233,6 +247,7 @@ UNIQUE (user_id, checkin_date)
 ## 5. 撮合引擎（领域层核心，纯函数）
 
 ### 申购（真实「内扣法」）
+
 ```
 净申购金额 = 申购金额 ÷ (1 + 申购费率)
 申购费用   = 申购金额 − 净申购金额
@@ -240,6 +255,7 @@ UNIQUE (user_id, checkin_date)
 ```
 
 ### 赎回（FIFO 逐批算费）
+
 ```
 按 confirm_date 升序逐批消耗 share_lot：
   持有天数 = 确认日 − 该批 confirm_date
@@ -251,18 +267,18 @@ UNIQUE (user_id, checkin_date)
 
 **真实赎回费率阶梯**（默认，随基金档案可覆盖）：
 
-| 持有天数 | 费率 |
-|---|---|
-| < 7 天 | 1.5% |
-| 7 天 ~ < 1 年 | 0.5% |
-| 1 ~ < 2 年 | 0.25% |
-| ≥ 2 年 | 0% |
+| 持有天数      | 费率  |
+| ------------- | ----- |
+| < 7 天        | 1.5%  |
+| 7 天 ~ < 1 年 | 0.5%  |
+| 1 ~ < 2 年    | 0.25% |
+| ≥ 2 年        | 0%    |
 
 ### T+1 时点规则
 
-| 下单时机 | 确认日 |
-|---|---|
-| 交易日 15:00 前 | 当日净值 |
+| 下单时机                        | 确认日         |
+| ------------------------------- | -------------- |
+| 交易日 15:00 前                 | 当日净值       |
 | 交易日 15:00 后 / 周末 / 节假日 | 下一交易日净值 |
 
 ### 交易日历（零维护设计）
@@ -286,6 +302,7 @@ UNIQUE (user_id, checkin_date)
 ## 7. 路由结构
 
 ### 公开（游客可见）
+
 - `/` 首页 —— 主人示范盘总览（总收益、持仓、收益曲线、最近操作）+ 注册引导
 - `/master` 主人组合详情（持仓 / 定投 / 交易流水 三 tab，全部公开）
 - `/funds` 基金搜索
@@ -293,6 +310,7 @@ UNIQUE (user_id, checkin_date)
 - `/login`、`/register`
 
 ### 需登录
+
 - `/me` 我的仪表盘（总资产、浮动盈亏、今日签到）
 - `/me/holdings` 我的持仓（买入/赎回抽屉）
 - `/me/orders` 我的订单（含 pending 状态）
@@ -305,9 +323,9 @@ UNIQUE (user_id, checkin_date)
 
 ## 8. Cron 调度
 
-| 任务 | 北京时间 | UTC 表达式 | 职责 |
-|---|---|---|---|
-| 定投扫描 | 每日 10:00 | `0 2 * * *` | 扫所有用户到期的定投计划 → 生成 pending 申购单、冻结现金 |
+| 任务            | 北京时间   | UTC 表达式    | 职责                                                                         |
+| --------------- | ---------- | ------------- | ---------------------------------------------------------------------------- |
+| 定投扫描        | 每日 10:00 | `0 2 * * *`   | 扫所有用户到期的定投计划 → 生成 pending 申购单、冻结现金                     |
 | 净值同步 + 撮合 | 每日 20:30 | `30 12 * * *` | 拉当日净值入 `fund_nav` → 撮合所有 pending 单 → 转 confirmed、更新持仓与账本 |
 
 **幂等性**：撮合任务对同一订单重复执行需安全（按 status 过滤 pending，已确认的跳过），防 Cron 重试导致重复成交。
@@ -318,12 +336,12 @@ UNIQUE (user_id, checkin_date)
 
 封装东财公开接口，全部走 KV 缓存 + 容错兜底：
 
-| 用途 | 接口 | 缓存 |
-|---|---|---|
-| 基金搜索 | `fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx` | KV 1 天 |
-| 历史净值 | `api.fund.eastmoney.com/f10/lsjz` | 入 `fund_nav` 表 |
-| 基金费率/基本信息 | `fundmobapi.eastmoney.com/FundMNewApi/FundMNNBasicInformation` | 入 `fund` 表 |
-| 全量列表兜底 | `fund.eastmoney.com/js/fundcode_search.js`（3.1MB） | KV，搜索接口挂时兜底 |
+| 用途              | 接口                                                           | 缓存                 |
+| ----------------- | -------------------------------------------------------------- | -------------------- |
+| 基金搜索          | `fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx`  | KV 1 天              |
+| 历史净值          | `api.fund.eastmoney.com/f10/lsjz`                              | 入 `fund_nav` 表     |
+| 基金费率/基本信息 | `fundmobapi.eastmoney.com/FundMNewApi/FundMNNBasicInformation` | 入 `fund` 表         |
+| 全量列表兜底      | `fund.eastmoney.com/js/fundcode_search.js`（3.1MB）            | KV，搜索接口挂时兜底 |
 
 接口失败时：优先用缓存/DB 已有数据，撮合任务若当日净值拉取失败则订单保持 pending 顺延至下个交易日，并记录日志。
 
@@ -356,15 +374,15 @@ UNIQUE (user_id, checkin_date)
 
 ## 12. 关键决策速查
 
-| 决策 | 结论 |
-|---|---|
-| 数据源 | 真实数据（东财公开接口） |
-| 用户体系 | 注册登录；游客/用户可看 admin 公开盘 |
-| admin 认定 | 环境变量 `ADMIN_USERNAME` 指定 |
-| 定投执行 | Cron 定时真实执行 |
-| 撮合规则 | 真实 T+1、内扣申购费、FIFO 阶梯赎回费 |
-| 本金 | 初始 10 万 + 每日签到 |
-| 卖出 | 支持 |
-| 图表 | @ant-design/charts |
-| 精度 | 金额存整数分、份额/净值存整数 ×10000 |
-| 排行榜 | 暂不做 |
+| 决策       | 结论                                  |
+| ---------- | ------------------------------------- |
+| 数据源     | 真实数据（东财公开接口）              |
+| 用户体系   | 注册登录；游客/用户可看 admin 公开盘  |
+| admin 认定 | 环境变量 `ADMIN_USERNAME` 指定        |
+| 定投执行   | Cron 定时真实执行                     |
+| 撮合规则   | 真实 T+1、内扣申购费、FIFO 阶梯赎回费 |
+| 本金       | 初始 10 万 + 每日签到                 |
+| 卖出       | 支持                                  |
+| 图表       | @ant-design/charts                    |
+| 精度       | 金额存整数分、份额/净值存整数 ×10000  |
+| 排行榜     | 暂不做                                |

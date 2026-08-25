@@ -1,5 +1,6 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
-import type { Db } from '~/db/client';
+import type { Db } from "~/db/client";
+import type { HoldingValuation, PortfolioValuation } from "~/domain/portfolio";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   account,
   dcaPlan,
@@ -8,13 +9,12 @@ import {
   holding,
   orders,
   transactions,
-} from '~/db/schema';
+} from "~/db/schema";
 import {
+
   valuateHolding,
   valuatePortfolio,
-  type HoldingValuation,
-  type PortfolioValuation,
-} from '~/domain/portfolio';
+} from "~/domain/portfolio";
 
 /**
  * 组合读取与估值编排。把 D1 数据喂给领域层的纯函数，产出页面要的视图模型。
@@ -40,7 +40,8 @@ async function latestNavMap(
   codes: string[],
 ): Promise<Map<string, { navDate: string; unitNav: number }>> {
   const map = new Map<string, { navDate: string; unitNav: number }>();
-  if (codes.length === 0) return map;
+  if (codes.length === 0)
+    return map;
 
   // 每只基金取 nav_date 最大的那条
   const rows = await db
@@ -85,16 +86,16 @@ export async function getPortfolio(
     .from(holding)
     .where(eq(holding.userId, userId));
   // 过滤掉已清仓的记录（份额为 0）
-  const active = rows.filter((r) => r.totalShares > 0);
+  const active = rows.filter(r => r.totalShares > 0);
 
-  const codes = active.map((r) => r.fundCode);
+  const codes = active.map(r => r.fundCode);
   const navMap = await latestNavMap(db, codes);
 
-  const funds =
-    codes.length > 0
+  const funds
+    = codes.length > 0
       ? await db.select().from(fund).where(inArray(fund.code, codes))
       : [];
-  const fundMap = new Map(funds.map((f) => [f.code, f]));
+  const fundMap = new Map(funds.map(f => [f.code, f]));
 
   const holdings: HoldingView[] = active.map((r) => {
     const navInfo = navMap.get(r.fundCode);
@@ -115,7 +116,7 @@ export async function getPortfolio(
     return {
       ...v,
       fundName: fundMap.get(r.fundCode)?.name ?? r.fundCode,
-      fundType: fundMap.get(r.fundCode)?.type ?? '',
+      fundType: fundMap.get(r.fundCode)?.type ?? "",
       navDate: navInfo?.navDate ?? null,
     };
   });
@@ -131,9 +132,9 @@ export interface OrderView {
   id: number;
   fundCode: string;
   fundName: string;
-  side: 'buy' | 'sell';
-  status: 'pending' | 'confirmed' | 'failed';
-  source: 'manual' | 'dca';
+  side: "buy" | "sell";
+  status: "pending" | "confirmed" | "failed";
+  source: "manual" | "dca";
   amount: number | null;
   shares: number | null;
   placeDate: string;
@@ -159,14 +160,14 @@ export async function getOrders(
     .orderBy(desc(orders.createdAt), desc(orders.id))
     .limit(limit);
 
-  const codes = [...new Set(rows.map((r) => r.fundCode))];
-  const funds =
-    codes.length > 0
+  const codes = [...new Set(rows.map(r => r.fundCode))];
+  const funds
+    = codes.length > 0
       ? await db.select().from(fund).where(inArray(fund.code, codes))
       : [];
-  const nameMap = new Map(funds.map((f) => [f.code, f.name]));
+  const nameMap = new Map(funds.map(f => [f.code, f.name]));
 
-  return rows.map((r) => ({
+  return rows.map(r => ({
     ...r,
     fundName: nameMap.get(r.fundCode) ?? r.fundCode,
   }));
@@ -178,10 +179,10 @@ export interface DcaPlanView {
   fundCode: string;
   fundName: string;
   amount: number;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: "daily" | "weekly" | "monthly";
   dayOfWeek: number | null;
   dayOfMonth: number | null;
-  status: 'active' | 'paused';
+  status: "active" | "paused";
   nextRun: string;
   runCount: number;
   totalInvested: number;
@@ -199,14 +200,14 @@ export async function getDcaPlans(
     .where(eq(dcaPlan.userId, userId))
     .orderBy(desc(dcaPlan.createdAt));
 
-  const codes = [...new Set(rows.map((r) => r.fundCode))];
-  const funds =
-    codes.length > 0
+  const codes = [...new Set(rows.map(r => r.fundCode))];
+  const funds
+    = codes.length > 0
       ? await db.select().from(fund).where(inArray(fund.code, codes))
       : [];
-  const nameMap = new Map(funds.map((f) => [f.code, f.name]));
+  const nameMap = new Map(funds.map(f => [f.code, f.name]));
 
-  return rows.map((r) => ({
+  return rows.map(r => ({
     ...r,
     fundName: nameMap.get(r.fundCode) ?? r.fundCode,
   }));
@@ -215,7 +216,7 @@ export async function getDcaPlans(
 /** 资金流水视图 */
 export interface TransactionView {
   id: number;
-  type: 'checkin' | 'buy' | 'sell' | 'fee' | 'init';
+  type: "checkin" | "buy" | "sell" | "fee" | "init";
   amount: number;
   balance: number;
   orderId: number | null;
@@ -251,6 +252,8 @@ export interface EquityPoint {
 
 /**
  * 取某只基金的净值序列，供详情页画图。
+ * @param db Drizzle 实例
+ * @param fundCode 基金代码
  * @param days 取最近多少天；不传取全部
  */
 export async function getNavSeries(

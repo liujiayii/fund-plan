@@ -1,7 +1,7 @@
-import type { EntryContext, RouterContextProvider } from 'react-router';
-import { ServerRouter } from 'react-router';
-import { renderToReadableStream } from 'react-dom/server';
-import { createCache, extractStyle, StyleProvider } from '@ant-design/cssinjs';
+import type { EntryContext, RouterContextProvider } from "react-router";
+import { createCache, extractStyle, StyleProvider } from "@ant-design/cssinjs";
+import { renderToReadableStream } from "react-dom/server";
+import { ServerRouter } from "react-router";
 
 /**
  * SSR 入口。关键点：用 @ant-design/cssinjs 的 StyleProvider 收集 antd 运行时样式，
@@ -30,7 +30,7 @@ export default async function handleRequest(
       signal: request.signal,
       onError(error: unknown) {
         statusCode = 500;
-        console.error('[ssr] 渲染出错：', error);
+        console.error("[ssr] 渲染出错：", error);
       },
     },
   );
@@ -42,9 +42,9 @@ export default async function handleRequest(
 
   // extractStyle 不传第二参时，返回的是已经带 <style> 标签的完整字符串
   const styleTags = extractStyle(cache);
-  html = html.replace('</head>', `${styleTags}</head>`);
+  html = html.replace("</head>", `${styleTags}</head>`);
 
-  responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
+  responseHeaders.set("Content-Type", "text/html; charset=utf-8");
   return new Response(html, {
     headers: responseHeaders,
     status: statusCode,

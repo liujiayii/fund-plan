@@ -1,63 +1,64 @@
-import { Alert, Button, Card, Form, Input, Typography } from 'antd';
-import { Form as RouterForm, redirect, useActionData, useNavigation } from 'react-router';
-import type { Route } from './+types/login';
-import { loginUser } from '~/services/auth';
-import { getAppContext } from '~/services/context';
-import { getCurrentUser } from '~/services/guard';
-import { createSession, sessionCookie } from '~/services/session';
+import type { Route } from "./+types/login";
+import { Alert, Button, Card, Form, Input, Typography } from "antd";
+import { redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
+import { loginUser } from "~/services/auth";
+import { getAppContext } from "~/services/context";
+import { getCurrentUser } from "~/services/guard";
+import { createSession, sessionCookie } from "~/services/session";
 
 const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: '登录 · 模拟基金' }];
+  return [{ title: "登录 · 模拟基金" }];
 }
 
 /** 已登录的话直接送去仪表盘，别让人重复登录 */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await getCurrentUser(request, db);
-  if (user) throw redirect('/me');
+  if (user)
+    throw redirect("/me");
   return null;
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
   const { db } = getAppContext(context);
   const fd = await request.formData();
-  const username = String(fd.get('username') ?? '');
-  const password = String(fd.get('password') ?? '');
-  const redirectTo = String(fd.get('redirectTo') ?? '/me');
+  const username = String(fd.get("username") ?? "");
+  const password = String(fd.get("password") ?? "");
+  const redirectTo = String(fd.get("redirectTo") ?? "/me");
 
   if (!username || !password) {
-    return { error: '请填写用户名和密码' };
+    return { error: "请填写用户名和密码" };
   }
 
   const user = await loginUser(db, username, password);
   if (!user) {
     // 刻意不区分「用户不存在」与「密码错误」，避免用户名枚举
-    return { error: '用户名或密码不正确' };
+    return { error: "用户名或密码不正确" };
   }
 
   const token = await createSession(db, user.id);
   // 只允许跳回站内路径，防开放重定向
-  const safeTo = redirectTo.startsWith('/') ? redirectTo : '/me';
+  const safeTo = redirectTo.startsWith("/") ? redirectTo : "/me";
   return redirect(safeTo, {
-    headers: { 'Set-Cookie': sessionCookie(token) },
+    headers: { "Set-Cookie": sessionCookie(token) },
   });
 }
 
-export default function Login({ }: Route.ComponentProps) {
+export default function Login() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
-  const submitting = nav.state === 'submitting';
+  const submitting = nav.state === "submitting";
 
   // 从 URL 取登录后要跳回的地址（由 requireUser 附加）
-  const redirectTo =
-    typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('redirectTo') ?? '/me'
-      : '/me';
+  const redirectTo
+    = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("redirectTo") ?? "/me"
+      : "/me";
 
   return (
-    <Card style={{ maxWidth: 420, margin: '48px auto' }}>
+    <Card style={{ maxWidth: 420, margin: "48px auto" }}>
       <Title level={3}>登录</Title>
       <Paragraph type="secondary">登录后即可管理自己的模拟盘、定投与签到。</Paragraph>
 
@@ -88,8 +89,9 @@ export default function Login({ }: Route.ComponentProps) {
         </Button>
       </RouterForm>
 
-      <Paragraph style={{ marginTop: 16, marginBottom: 0, textAlign: 'center' }}>
-        还没有账号？<a href="/register">立即注册，送 10 万模拟本金</a>
+      <Paragraph style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
+        还没有账号？
+        <a href="/register">立即注册，送 10 万模拟本金</a>
       </Paragraph>
     </Card>
   );

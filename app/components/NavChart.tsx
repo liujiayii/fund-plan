@@ -1,7 +1,7 @@
-import { Line } from '@ant-design/charts';
-import { Empty, Radio } from 'antd';
-import { useMemo, useState } from 'react';
-import { NAV_SCALE } from '~/domain/money';
+import { Line } from "@ant-design/charts";
+import { Empty, Radio } from "antd";
+import { useMemo, useState } from "react";
+import { NAV_SCALE } from "~/domain/money";
 
 export interface NavPoint {
   navDate: string;
@@ -11,10 +11,10 @@ export interface NavPoint {
 
 /** 时间范围选项 */
 const RANGES = [
-  { key: '1m', label: '近 1 月', days: 30 },
-  { key: '3m', label: '近 3 月', days: 90 },
-  { key: '1y', label: '近 1 年', days: 365 },
-  { key: 'all', label: '全部', days: Number.MAX_SAFE_INTEGER },
+  { key: "1m", label: "近 1 月", days: 30 },
+  { key: "3m", label: "近 3 月", days: 90 },
+  { key: "1y", label: "近 1 年", days: 365 },
+  { key: "all", label: "全部", days: Number.MAX_SAFE_INTEGER },
 ] as const;
 
 /**
@@ -22,14 +22,14 @@ const RANGES = [
  * 图表只在客户端渲染（antd charts 依赖 canvas），SSR 时先占位。
  */
 export function NavChart({ data }: { data: NavPoint[] }) {
-  const [range, setRange] = useState<string>('3m');
+  const [range, setRange] = useState<string>("3m");
 
   const chartData = useMemo(() => {
-    const cfg = RANGES.find((r) => r.key === range) ?? RANGES[1];
+    const cfg = RANGES.find(r => r.key === range) ?? RANGES[1];
     // data 是正序（旧→新），取最后 N 条即为最近 N 天
-    const sliced =
-      cfg.days === Number.MAX_SAFE_INTEGER ? data : data.slice(-cfg.days);
-    return sliced.map((d) => ({
+    const sliced
+      = cfg.days === Number.MAX_SAFE_INTEGER ? data : data.slice(-cfg.days);
+    return sliced.map(d => ({
       date: d.navDate,
       nav: Number((d.unitNav / NAV_SCALE).toFixed(4)),
     }));
@@ -43,12 +43,12 @@ export function NavChart({ data }: { data: NavPoint[] }) {
     <div>
       <Radio.Group
         value={range}
-        onChange={(e) => setRange(e.target.value)}
+        onChange={e => setRange(e.target.value)}
         optionType="button"
         buttonStyle="solid"
         size="small"
         style={{ marginBottom: 16 }}
-        options={RANGES.map((r) => ({ label: r.label, value: r.key }))}
+        options={RANGES.map(r => ({ label: r.label, value: r.key }))}
       />
       <Line
         data={chartData}
@@ -64,7 +64,7 @@ export function NavChart({ data }: { data: NavPoint[] }) {
           y: { labelFormatter: (v: number) => v.toFixed(4) },
         }}
         tooltip={{
-          items: [{ channel: 'y', name: '单位净值', valueFormatter: (v: number) => v.toFixed(4) }],
+          items: [{ channel: "y", name: "单位净值", valueFormatter: (v: number) => v.toFixed(4) }],
         }}
         style={{ lineWidth: 2 }}
       />

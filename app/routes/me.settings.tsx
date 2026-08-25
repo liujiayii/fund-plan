@@ -1,3 +1,4 @@
+import type { Route } from "./+types/me.settings";
 import {
   Alert,
   Button,
@@ -10,10 +11,9 @@ import {
   Statistic,
   Tag,
   Typography,
-} from 'antd';
-import { eq } from 'drizzle-orm';
-import { useFetcher } from 'react-router';
-import type { Route } from './+types/me.settings';
+} from "antd";
+import { eq } from "drizzle-orm";
+import { useFetcher } from "react-router";
 import {
   account,
   checkin,
@@ -23,16 +23,16 @@ import {
   shareLot,
   transactions,
   user as userTable,
-} from '~/db/schema';
-import { centsToYuan } from '~/domain/money';
-import { changePassword } from '~/services/auth';
-import { getAppContext } from '~/services/context';
-import { requireUser } from '~/services/guard';
+} from "~/db/schema";
+import { centsToYuan } from "~/domain/money";
+import { changePassword } from "~/services/auth";
+import { getAppContext } from "~/services/context";
+import { requireUser } from "~/services/guard";
 
 const { Title, Text, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: '设置 · 模拟基金' }];
+  return [{ title: "设置 · 模拟基金" }];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -62,23 +62,25 @@ export async function action({ request, context }: Route.ActionArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
   const fd = await request.formData();
-  const intent = String(fd.get('intent') ?? '');
+  const intent = String(fd.get("intent") ?? "");
 
   try {
-    if (intent === 'changePassword') {
-      const oldPwd = String(fd.get('oldPassword') ?? '');
-      const newPwd = String(fd.get('newPassword') ?? '');
-      const newPwd2 = String(fd.get('newPassword2') ?? '');
-      if (newPwd !== newPwd2) return { error: '两次输入的新密码不一致' };
+    if (intent === "changePassword") {
+      const oldPwd = String(fd.get("oldPassword") ?? "");
+      const newPwd = String(fd.get("newPassword") ?? "");
+      const newPwd2 = String(fd.get("newPassword2") ?? "");
+      if (newPwd !== newPwd2)
+        return { error: "两次输入的新密码不一致" };
       await changePassword(db, user.id, oldPwd, newPwd);
-      return { ok: true, message: '密码已修改，下次登录请用新密码' };
+      return { ok: true, message: "密码已修改，下次登录请用新密码" };
     }
 
-    if (intent === 'reset') {
+    if (intent === "reset") {
       const acc = await db.query.account.findFirst({
         where: eq(account.userId, user.id),
       });
-      if (!acc) return { error: '账户不存在' };
+      if (!acc)
+        return { error: "账户不存在" };
 
       // 清空该用户的交易痕迹，现金恢复初始本金。
       // 注意 totalCheckin 一并归零，否则「累计签到」与流水对不上账。
@@ -95,33 +97,34 @@ export async function action({ request, context }: Route.ActionArgs) {
           .where(eq(account.userId, user.id)),
         db.insert(transactions).values({
           userId: user.id,
-          type: 'init',
+          type: "init",
           amount: acc.initialCash,
           balance: acc.initialCash,
-          note: '重置模拟盘，恢复初始本金',
+          note: "重置模拟盘，恢复初始本金",
           createdAt: Date.now(),
         }),
       ]);
 
-      return { ok: true, message: '模拟盘已重置，现金恢复初始本金' };
+      return { ok: true, message: "模拟盘已重置，现金恢复初始本金" };
     }
 
-    return { error: '未知操作' };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : '操作失败' };
+    return { error: "未知操作" };
+  }
+  catch (err) {
+    return { error: err instanceof Error ? err.message : "操作失败" };
   }
 }
 
 export default function MeSettings({ loaderData }: Route.ComponentProps) {
   const { user, account: acc, registeredAt } = loaderData;
   const fetcher = useFetcher<typeof action>();
-  const submitting = fetcher.state === 'submitting';
+  const submitting = fetcher.state === "submitting";
 
   const fmtTime = (ts: number) =>
-    ts ? new Date(ts).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '—';
+    ts ? new Date(ts).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }) : "—";
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <Title level={3} style={{ marginBottom: 0 }}>
         设置
       </Title>
@@ -138,31 +141,33 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
           bordered
           column={{ xs: 1, md: 2 }}
           items={[
-            { key: 'name', label: '用户名', children: user.username },
+            { key: "name", label: "用户名", children: user.username },
             {
-              key: 'role',
-              label: '角色',
+              key: "role",
+              label: "角色",
               children:
-                user.role === 'admin' ? (
-                  <Tag color="red">管理员（组合公开）</Tag>
-                ) : (
-                  <Tag>普通用户</Tag>
-                ),
+                user.role === "admin"
+                  ? (
+                      <Tag color="red">管理员（组合公开）</Tag>
+                    )
+                  : (
+                      <Tag>普通用户</Tag>
+                    ),
             },
-            { key: 'reg', label: '注册时间', children: fmtTime(registeredAt) },
+            { key: "reg", label: "注册时间", children: fmtTime(registeredAt) },
             {
-              key: 'init',
-              label: '初始本金',
+              key: "init",
+              label: "初始本金",
               children: `${centsToYuan(acc.initialCash)} 元`,
             },
             {
-              key: 'cash',
-              label: '当前现金',
+              key: "cash",
+              label: "当前现金",
               children: `${centsToYuan(acc.cash)} 元`,
             },
             {
-              key: 'checkin',
-              label: '累计签到入金',
+              key: "checkin",
+              label: "累计签到入金",
               children: `${centsToYuan(acc.totalCheckin)} 元`,
             },
           ]}
@@ -191,20 +196,28 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
       </Card>
 
       <Card title="重置模拟盘">
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space direction="vertical" style={{ width: "100%" }}>
           <Alert
             type="warning"
             showIcon
             message="这是不可逆操作"
-            description={
+            description={(
               <div>
-                将<Text strong>清空</Text>你的全部持仓、份额批次、订单、定投计划、
-                资金流水与签到记录，现金恢复为初始本金{' '}
-                <Text strong>{centsToYuan(acc.initialCash)} 元</Text>。
+                将
+                <Text strong>清空</Text>
+                你的全部持仓、份额批次、订单、定投计划、
+                资金流水与签到记录，现金恢复为初始本金
+                {" "}
+                <Text strong>
+                  {centsToYuan(acc.initialCash)}
+                  {" "}
+                  元
+                </Text>
+                。
                 <br />
                 想从头再来的时候用它，练手练废了不用重新注册。
               </div>
-            }
+            )}
           />
           <Statistic
             title="重置后现金"
@@ -218,8 +231,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
             okButtonProps={{ danger: true }}
             cancelText="算了"
             onConfirm={() =>
-              fetcher.submit({ intent: 'reset' }, { method: 'post' })
-            }
+              fetcher.submit({ intent: "reset" }, { method: "post" })}
           >
             <Button danger loading={submitting}>
               重置模拟盘

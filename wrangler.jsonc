@@ -14,18 +14,17 @@
   },
   "d1_databases": [
     {
+      // binding 必须叫 DB —— 代码里全程用 env.DB 访问
       "binding": "DB",
       "database_name": "fund-plan-db",
-      // 部署前用 `wrangler d1 create fund-plan-db` 创建后，把返回的 id 填到这里
-      "database_id": "REPLACE_WITH_REAL_D1_ID",
+      "database_id": "c38b2d5f-1174-468c-9e23-c6721b860a01",
       "migrations_dir": "drizzle"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "KV",
-      // 部署前用 `wrangler kv namespace create KV` 创建后，把返回的 id 填到这里
-      "id": "REPLACE_WITH_REAL_KV_ID"
+      "id": "3745d67cb9ce41138809df7a9d3a7d1a"
     }
   ],
   "triggers": {

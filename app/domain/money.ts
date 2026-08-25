@@ -1,4 +1,4 @@
-import Decimal from 'decimal.js';
+import Decimal from "decimal.js";
 
 /**
  * 精度换算工具。设计文档「精度铁律」的落地实现。

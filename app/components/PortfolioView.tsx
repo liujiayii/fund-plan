@@ -1,13 +1,15 @@
-import { Card, Col, Empty, Row, Statistic, Table, Tag, Typography } from 'antd';
-import { centsToYuan, navToDisplay, sharesToDisplay } from '~/domain/money';
-import type { HoldingView, PortfolioView } from '~/services/portfolio-service';
+import type { HoldingView, PortfolioView } from "~/services/portfolio-service";
+import { Card, Col, Empty, Row, Statistic, Table, Tag, Typography } from "antd";
+import { centsToYuan, navToDisplay, sharesToDisplay } from "~/domain/money";
 
 const { Text, Paragraph } = Typography;
 
 /** 涨红跌绿（国内习惯） */
 export function pnlColor(v: number): string | undefined {
-  if (v > 0) return '#c62828';
-  if (v < 0) return '#2e7d32';
+  if (v > 0)
+    return "#c62828";
+  if (v < 0)
+    return "#2e7d32";
   return undefined;
 }
 
@@ -60,10 +62,13 @@ export function PortfolioSummary({
           value={centsToYuan(summary.totalPnlCents)}
           suffix="元"
           valueStyle={{ color: pnlColor(summary.totalPnlCents) }}
-          prefix={summary.totalPnlCents > 0 ? '+' : ''}
+          prefix={summary.totalPnlCents > 0 ? "+" : ""}
         />
         <Text type="secondary" style={{ fontSize: 12 }}>
-          收益率 {(summary.totalPnlRate * 100).toFixed(2)}%
+          收益率
+          {" "}
+          {(summary.totalPnlRate * 100).toFixed(2)}
+          %
         </Text>
       </Col>
     </Row>
@@ -84,9 +89,9 @@ export function HoldingTableReadonly({ holdings }: { holdings: HoldingView[] }) 
       scroll={{ x: 760 }}
       columns={[
         {
-          title: '基金',
-          dataIndex: 'fundName',
-          fixed: 'left',
+          title: "基金",
+          dataIndex: "fundName",
+          fixed: "left",
           width: 200,
           render: (name: string, r) => (
             <a href={`/funds/${r.fundCode}`}>
@@ -94,21 +99,21 @@ export function HoldingTableReadonly({ holdings }: { holdings: HoldingView[] }) 
               <br />
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {r.fundCode}
-                {r.fundType ? ` · ${r.fundType}` : ''}
+                {r.fundType ? ` · ${r.fundType}` : ""}
               </Text>
             </a>
           ),
         },
         {
-          title: '持有份额',
-          dataIndex: 'sharesScaled',
-          align: 'right',
+          title: "持有份额",
+          dataIndex: "sharesScaled",
+          align: "right",
           render: (v: number) => sharesToDisplay(v),
         },
         {
-          title: '净值',
-          dataIndex: 'navScaled',
-          align: 'right',
+          title: "净值",
+          dataIndex: "navScaled",
+          align: "right",
           render: (v: number, r) => (
             <span>
               {navToDisplay(v)}
@@ -124,22 +129,23 @@ export function HoldingTableReadonly({ holdings }: { holdings: HoldingView[] }) 
           ),
         },
         {
-          title: '市值',
-          dataIndex: 'marketValueCents',
-          align: 'right',
+          title: "市值",
+          dataIndex: "marketValueCents",
+          align: "right",
           render: (v: number) => `${centsToYuan(v)} 元`,
         },
         {
-          title: '盈亏',
-          dataIndex: 'pnlCents',
-          align: 'right',
+          title: "盈亏",
+          dataIndex: "pnlCents",
+          align: "right",
           render: (v: number, r) => (
             <span style={{ color: pnlColor(v) }}>
-              {v > 0 ? '+' : ''}
+              {v > 0 ? "+" : ""}
               {centsToYuan(v)}
               <br />
               <Text style={{ color: pnlColor(v), fontSize: 12 }}>
-                {(r.pnlRate * 100).toFixed(2)}%
+                {(r.pnlRate * 100).toFixed(2)}
+                %
               </Text>
             </span>
           ),
@@ -154,16 +160,20 @@ export function AdminNotReady({ adminName }: { adminName: string }) {
   return (
     <Card>
       <Empty
-        description={
+        description={(
           <div>
             <Paragraph>
-              管理员账号 <Tag>{adminName}</Tag> 还没注册，公开示范盘暂时为空。
+              管理员账号
+              {" "}
+              <Tag>{adminName}</Tag>
+              {" "}
+              还没注册，公开示范盘暂时为空。
             </Paragraph>
             <Paragraph type="secondary" style={{ marginBottom: 0 }}>
               用该用户名注册即成为主人，其组合会自动对所有访客公开。
             </Paragraph>
           </div>
-        }
+        )}
       />
     </Card>
   );

@@ -1,5 +1,5 @@
-import Decimal from 'decimal.js';
-import { roundInt, yuanToCents } from '~/domain/money';
+import Decimal from "decimal.js";
+import { roundInt, yuanToCents } from "~/domain/money";
 
 /**
  * 东方财富公开接口封装：搜索、档案、历史净值、全量列表兜底。
@@ -69,12 +69,12 @@ const CACHE_TTL = {
 
 /** 网页端接口用：带 Referer 过防盗链 */
 const EM_WEB_HEADERS = {
-  Referer: 'https://fundf10.eastmoney.com/',
+  Referer: "https://fundf10.eastmoney.com/",
 };
 
 /** 移动端接口用：只给 Referer，绝不带浏览器 UA */
 const EM_MOBILE_HEADERS = {
-  Referer: 'https://fundf10.eastmoney.com/',
+  Referer: "https://fundf10.eastmoney.com/",
 };
 
 /** 带超时的 fetch，避免 Worker 被慢接口拖死 */
@@ -87,7 +87,8 @@ async function fetchWithTimeout(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
+  }
+  finally {
     clearTimeout(timer);
   }
 }
@@ -97,22 +98,28 @@ async function fetchWithTimeout(
  * 支持 "1.50%"、"1.5"、"--"（异常回退 0）。
  */
 export function percentToRate(pct: string | number | null | undefined): number {
-  if (pct === null || pct === undefined) return 0;
-  const s = String(pct).replace('%', '').trim();
-  if (s === '' || s === '--') return 0;
+  if (pct === null || pct === undefined)
+    return 0;
+  const s = String(pct).replace("%", "").trim();
+  if (s === "" || s === "--")
+    return 0;
   const n = Number(s);
-  if (!Number.isFinite(n)) return 0;
+  if (!Number.isFinite(n))
+    return 0;
   // 百分比 → 小数 → 万分之：1.5% = 0.015 = 万分之 150
   return roundInt(new Decimal(n).div(100).mul(10000));
 }
 
 /** 净值字符串 → ×10000 整数；非法返回 null */
 function navToScaled(v: string | number | null | undefined): number | null {
-  if (v === null || v === undefined) return null;
+  if (v === null || v === undefined)
+    return null;
   const s = String(v).trim();
-  if (s === '' || s === '--') return null;
+  if (s === "" || s === "--")
+    return null;
   const n = Number(s);
-  if (!Number.isFinite(n) || n <= 0) return null;
+  if (!Number.isFinite(n) || n <= 0)
+    return null;
   return roundInt(new Decimal(n).mul(10000));
 }
 
@@ -125,14 +132,16 @@ export async function searchFunds(
   keyword: string,
 ): Promise<FundSearchItem[]> {
   const key = keyword.trim();
-  if (key === '') return [];
+  if (key === "")
+    return [];
 
   const cacheKey = `fund:search:${key}`;
   const cached = await env.KV.get(cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundSearchItem[];
-    } catch {
+    }
+    catch {
       // 缓存损坏就当没有，继续走网络
     }
   }
@@ -149,24 +158,26 @@ export async function searchFunds(
     };
 
     const items: FundSearchItem[] = (json.Datas ?? [])
-      .filter((d) => d.CODE && d.NAME)
-      .map((d) => ({
+      .filter(d => d.CODE && d.NAME)
+      .map(d => ({
         code: d.CODE!,
         name: d.NAME!,
-        type: d.FundBaseInfo?.FTYPE ?? '',
+        type: d.FundBaseInfo?.FTYPE ?? "",
       }));
 
     await env.KV.put(cacheKey, JSON.stringify(items), {
       expirationTtl: CACHE_TTL.search,
     });
     return items;
-  } catch (err) {
+  }
+  catch (err) {
     console.error(`[fund-data] 搜索「${key}」失败：`, err);
     // 网络挂了但缓存还在（上面 JSON.parse 失败的情况），兜底再试一次
     if (cached) {
       try {
         return JSON.parse(cached) as FundSearchItem[];
-      } catch {
+      }
+      catch {
         /* 忽略 */
       }
     }
@@ -187,21 +198,23 @@ export async function fetchFundBasic(
   if (cached) {
     try {
       return JSON.parse(cached) as FundBasic;
-    } catch {
+    }
+    catch {
       /* 缓存损坏，继续走网络 */
     }
   }
 
   try {
-    const url =
-      `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNNBasicInformation` +
-      `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
+    const url
+      = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNNBasicInformation`
+        + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
     const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
     const json = (await resp.json()) as {
       Datas?: Record<string, string> | null;
     };
     const d = json.Datas;
-    if (!d || !d.FCODE) return null;
+    if (!d || !d.FCODE)
+      return null;
 
     // RATE 是优惠后费率（如 0.15%），SOURCERATE 是原价（如 1.50%）。
     // 优先用优惠价——真实购买就是按这个收。
@@ -211,19 +224,20 @@ export async function fetchFundBasic(
     const basic: FundBasic = {
       code: d.FCODE,
       name: d.SHORTNAME ?? code,
-      type: d.FTYPE ?? '',
+      type: d.FTYPE ?? "",
       purchaseRate,
       // MINSG 单位是元，转成分
       minPurchaseCents: yuanToCents(Number(d.MINSG) || 10),
       riskLevel: Number(d.RISKLEVEL) || 3,
-      status: d.SGZT ?? '开放申购',
+      status: d.SGZT ?? "开放申购",
     };
 
     await env.KV.put(cacheKey, JSON.stringify(basic), {
       expirationTtl: CACHE_TTL.basic,
     });
     return basic;
-  } catch (err) {
+  }
+  catch (err) {
     console.error(`[fund-data] 拉取基金 ${code} 档案失败：`, err);
     return null;
   }
@@ -241,9 +255,9 @@ export async function fetchNavHistory(
   pageSize = 60,
 ): Promise<NavRow[]> {
   try {
-    const url =
-      `https://api.fund.eastmoney.com/f10/lsjz` +
-      `?fundCode=${encodeURIComponent(code)}&pageIndex=1&pageSize=${pageSize}`;
+    const url
+      = `https://api.fund.eastmoney.com/f10/lsjz`
+        + `?fundCode=${encodeURIComponent(code)}&pageIndex=1&pageSize=${pageSize}`;
     const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS });
     const json = (await resp.json()) as {
       Data?: {
@@ -261,7 +275,8 @@ export async function fetchNavHistory(
     for (const item of list) {
       const unitNav = navToScaled(item.DWJZ);
       // 净值缺失的行直接跳过——宁可少一天数据，也不能写脏数据进撮合底座
-      if (!item.FSRQ || unitNav === null) continue;
+      if (!item.FSRQ || unitNav === null)
+        continue;
       rows.push({
         navDate: item.FSRQ,
         unitNav,
@@ -270,7 +285,8 @@ export async function fetchNavHistory(
       });
     }
     return rows;
-  } catch (err) {
+  }
+  catch (err) {
     console.error(`[fund-data] 拉取基金 ${code} 净值失败：`, err);
     return [];
   }
@@ -282,15 +298,17 @@ export async function fetchNavHistory(
  */
 export function parseFundListJs(js: string): FundSearchItem[] {
   try {
-    const start = js.indexOf('[');
-    const end = js.lastIndexOf(']');
-    if (start === -1 || end === -1 || end <= start) return [];
+    const start = js.indexOf("[");
+    const end = js.lastIndexOf("]");
+    if (start === -1 || end === -1 || end <= start)
+      return [];
     const arr = JSON.parse(js.slice(start, end + 1)) as string[][];
     return arr
-      .filter((row) => Array.isArray(row) && row.length >= 4)
-      .map((row) => ({ code: row[0], name: row[2], type: row[3] }));
-  } catch (err) {
-    console.error('[fund-data] 解析全量基金列表失败：', err);
+      .filter(row => Array.isArray(row) && row.length >= 4)
+      .map(row => ({ code: row[0], name: row[2], type: row[3] }));
+  }
+  catch (err) {
+    console.error("[fund-data] 解析全量基金列表失败：", err);
     return [];
   }
 }
@@ -299,19 +317,20 @@ export function parseFundListJs(js: string): FundSearchItem[] {
  * 全量基金列表（3MB 左右，缓存 7 天）。搜索接口不可用时的兜底数据源。
  */
 export async function fetchAllFunds(env: Env): Promise<FundSearchItem[]> {
-  const cacheKey = 'fund:list:all';
+  const cacheKey = "fund:list:all";
   const cached = await env.KV.get(cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundSearchItem[];
-    } catch {
+    }
+    catch {
       /* 继续走网络 */
     }
   }
 
   try {
     const resp = await fetchWithTimeout(
-      'https://fund.eastmoney.com/js/fundcode_search.js',
+      "https://fund.eastmoney.com/js/fundcode_search.js",
       { headers: EM_WEB_HEADERS },
       20000,
     );
@@ -323,8 +342,9 @@ export async function fetchAllFunds(env: Env): Promise<FundSearchItem[]> {
       });
     }
     return list;
-  } catch (err) {
-    console.error('[fund-data] 拉取全量基金列表失败：', err);
+  }
+  catch (err) {
+    console.error("[fund-data] 拉取全量基金列表失败：", err);
     return [];
   }
 }

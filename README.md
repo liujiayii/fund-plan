@@ -41,11 +41,11 @@
 
 ## 权限矩阵
 
-| 身份 | 看主人组合 | 看自己组合 | 下单 / 定投 / 签到 |
-|---|---|---|---|
-| 游客（未登录） | ✅ 只读（全部公开） | — | ❌ |
-| 普通用户 | ✅ 只读 | ✅ 读写 | ✅（仅自己的） |
-| 管理员（主人） | ✅ 读写（即自己的盘） | 同上 | ✅ |
+| 身份           | 看主人组合            | 看自己组合 | 下单 / 定投 / 签到 |
+| -------------- | --------------------- | ---------- | ------------------ |
+| 游客（未登录） | ✅ 只读（全部公开）   | —          | ❌                 |
+| 普通用户       | ✅ 只读               | ✅ 读写    | ✅（仅自己的）     |
+| 管理员（主人） | ✅ 读写（即自己的盘） | 同上       | ✅                 |
 
 管理员由环境变量 `ADMIN_USERNAME` 指定，没有独立后台——
 主人的 `/me` 就是那个被公开的盘，`/master` 只是它的只读镜像。一份代码，两种身份。
@@ -64,18 +64,18 @@
 
 ## 技术栈
 
-| 层 | 选型 |
-|---|---|
-| 框架 | React Router v8（framework mode）+ Vite 8 |
-| 运行时 | Cloudflare Workers |
-| UI | Ant Design v6 + @ant-design/charts |
-| 数据库 | Cloudflare D1（SQLite）+ Drizzle ORM |
-| 缓存 | Cloudflare KV |
-| 定时 | Cloudflare Cron Triggers |
-| 密码 | PBKDF2（Web Crypto，Workers 跑不了 bcrypt） |
-| 工具 | Zod + dayjs + decimal.js |
-| 测试 | Vitest + @cloudflare/vitest-pool-workers（真实 workerd + 真实 D1） |
-| 包管理 | **pnpm** |
+| 层     | 选型                                                               |
+| ------ | ------------------------------------------------------------------ |
+| 框架   | React Router v8（framework mode）+ Vite 8                          |
+| 运行时 | Cloudflare Workers                                                 |
+| UI     | Ant Design v6 + @ant-design/charts                                 |
+| 数据库 | Cloudflare D1（SQLite）+ Drizzle ORM                               |
+| 缓存   | Cloudflare KV                                                      |
+| 定时   | Cloudflare Cron Triggers                                           |
+| 密码   | PBKDF2（Web Crypto，Workers 跑不了 bcrypt）                        |
+| 工具   | Zod + dayjs + decimal.js                                           |
+| 测试   | Vitest + @cloudflare/vitest-pool-workers（真实 workerd + 真实 D1） |
+| 包管理 | **pnpm**                                                           |
 
 ## 快速开始
 

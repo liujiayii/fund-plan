@@ -1,31 +1,31 @@
 {
+  "compilerOptions": {
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    // React Router 自动生成的路由类型放在 .react-router/types 下
+    "rootDirs": [".", "./.react-router/types"],
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    // TypeScript 7 已移除 baseUrl，paths 直接写相对当前 tsconfig 的路径
+    "paths": {
+      "~/*": ["./app/*"]
+    },
+    "resolveJsonModule": true,
+    "types": ["vite/client", "node"],
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noUnusedLocals": false,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
+  },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     "worker-configuration.d.ts",
     ".react-router/types/**/*"
-  ],
-  "compilerOptions": {
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "types": ["vite/client", "node"],
-    // React Router 自动生成的路由类型放在 .react-router/types 下
-    "rootDirs": [".", "./.react-router/types"],
-    // TypeScript 7 已移除 baseUrl，paths 直接写相对当前 tsconfig 的路径
-    "paths": {
-      "~/*": ["./app/*"]
-    },
-    "esModuleInterop": true,
-    "verbatimModuleSyntax": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "noUnusedLocals": false,
-    "allowImportingTsExtensions": true
-  }
+  ]
 }

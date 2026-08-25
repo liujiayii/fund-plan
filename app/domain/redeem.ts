@@ -1,6 +1,6 @@
-import Decimal from 'decimal.js';
-import { navToDecimal, rateToRatio, roundInt, sharesToDecimal, YUAN } from './money';
-import { countDays } from './trading-calendar';
+import Decimal from "decimal.js";
+import { navToDecimal, rateToRatio, roundInt, sharesToDecimal, YUAN } from "./money";
+import { countDays } from "./trading-calendar";
 
 /** 份额批次（来自 share_lot 表） */
 export interface ShareLotInput {
@@ -82,10 +82,11 @@ export function findRedeemRate(tiers: RedeemTier[], holdDays: number): number {
   for (const t of tiers) {
     const hitLower = holdDays >= t.minDays;
     const hitUpper = t.maxDays === null || holdDays < t.maxDays;
-    if (hitLower && hitUpper) return t.rate;
+    if (hitLower && hitUpper)
+      return t.rate;
   }
   // 没命中任何档（阶梯配置有洞），保守按最高档收费
-  return Math.max(...tiers.map((t) => t.rate));
+  return Math.max(...tiers.map(t => t.rate));
 }
 
 /**
@@ -107,7 +108,7 @@ export function calcRedeem(input: RedeemInput): RedeemResult {
     throw new Error(`确认日净值必须为正数，收到 ${navScaled}`);
   }
   if (lots.length === 0) {
-    throw new Error('没有可赎回的份额批次');
+    throw new Error("没有可赎回的份额批次");
   }
 
   const totalAvailable = lots.reduce((s, l) => s + l.sharesScaled, 0);
@@ -130,7 +131,8 @@ export function calcRedeem(input: RedeemInput): RedeemResult {
   let remaining = redeemSharesScaled;
 
   for (const lot of sorted) {
-    if (remaining <= 0) break;
+    if (remaining <= 0)
+      break;
 
     // 本批消耗份额：要么把这批吃光，要么只吃剩余需求
     const consumed = Math.min(lot.sharesScaled, remaining);
@@ -147,8 +149,8 @@ export function calcRedeem(input: RedeemInput): RedeemResult {
     const netCents = grossCents - feeCents;
 
     // 成本按份额比例摊；整批吃光时直接取剩余全部成本，避免除法误差留碎渣
-    const costCents =
-      consumed === lot.sharesScaled
+    const costCents
+      = consumed === lot.sharesScaled
         ? lot.costCents
         : roundInt(
             new Decimal(lot.costCents)

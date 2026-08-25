@@ -1,5 +1,5 @@
-import { applyD1Migrations, env } from 'cloudflare:test';
-import { beforeAll } from 'vitest';
+import { applyD1Migrations, env } from "cloudflare:test";
+import { beforeAll } from "vitest";
 
 /**
  * 每个测试 worker 启动前，把 drizzle 生成的迁移应用到内存 D1，

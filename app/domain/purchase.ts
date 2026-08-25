@@ -1,5 +1,5 @@
-import Decimal from 'decimal.js';
-import { decimalToShares, navToDecimal, rateToRatio, roundInt, YUAN } from './money';
+import Decimal from "decimal.js";
+import { decimalToShares, navToDecimal, rateToRatio, roundInt, YUAN } from "./money";
 
 /** 申购入参 */
 export interface PurchaseInput {

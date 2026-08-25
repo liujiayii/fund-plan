@@ -1,19 +1,21 @@
-import { and, asc, eq, inArray, lte } from 'drizzle-orm';
-import type { Db } from '~/db/client';
+import type { Db } from "~/db/client";
+import type { OrderRow } from "~/db/schema";
+import type { RedeemTier } from "~/domain/redeem";
+import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import {
   account,
   fund,
   fundNav,
   holding,
+
   orders,
   shareLot,
   transactions,
-  type OrderRow,
-} from '~/db/schema';
-import { calcPurchase } from '~/domain/purchase';
-import { calcRedeem, DEFAULT_REDEEM_TIERS, type RedeemTier } from '~/domain/redeem';
-import { toBeijing } from '~/domain/trading-calendar';
-import { fetchNavHistory } from './fund-data';
+} from "~/db/schema";
+import { calcPurchase } from "~/domain/purchase";
+import { calcRedeem, DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
+import { toBeijing } from "~/domain/trading-calendar";
+import { fetchNavHistory } from "./fund-data";
 
 /**
  * 撮合引擎：净值同步 + T+1 确认。
@@ -36,19 +38,22 @@ export interface SettleResult {
 }
 
 /** db.batch 要求「至少一条」的元组类型 */
-type BatchWrites = Parameters<Db['batch']>[0];
+type BatchWrites = Parameters<Db["batch"]>[0];
 
 /**
  * 安全地执行一组写操作：空数组直接跳过，
  * 非空时收窄成 batch 需要的非空元组类型。
  */
 async function runBatch(db: Db, writes: unknown[]): Promise<void> {
-  if (writes.length === 0) return;
+  if (writes.length === 0)
+    return;
   await db.batch(writes as unknown as BatchWrites);
 }
 
 /**
  * 同步基金净值到 fund_nav 表。
+ * @param db Drizzle 实例
+ * @param env Worker 环境（取 KV 与网络）
  * @param fundCodes 指定基金；不传则同步所有「有持仓或有待确认订单」的基金
  */
 export async function syncNav(
@@ -63,14 +68,14 @@ export async function syncNav(
     const fromOrders = await db
       .selectDistinct({ code: orders.fundCode })
       .from(orders)
-      .where(eq(orders.status, 'pending'));
+      .where(eq(orders.status, "pending"));
     const fromHoldings = await db
       .selectDistinct({ code: holding.fundCode })
       .from(holding);
     codes = [
       ...new Set([
-        ...fromOrders.map((r) => r.code),
-        ...fromHoldings.map((r) => r.code),
+        ...fromOrders.map(r => r.code),
+        ...fromHoldings.map(r => r.code),
       ]),
     ];
   }
@@ -111,6 +116,8 @@ export async function syncNav(
 /**
  * 撮合所有到期的待确认订单。
  *
+ * @param db Drizzle 实例
+ * @param _env Worker 环境（当前未用到，保留以便后续扩展）
  * @param now 当前时刻（测试可注入）
  */
 export async function settlePendingOrders(
@@ -118,13 +125,13 @@ export async function settlePendingOrders(
   _env: Env,
   now: Date = new Date(),
 ): Promise<SettleResult> {
-  const today = toBeijing(now).format('YYYY-MM-DD');
+  const today = toBeijing(now).format("YYYY-MM-DD");
 
   // 只捞确认日已到、且仍处于 pending 的订单——这是幂等的关键
   const pending = await db
     .select()
     .from(orders)
-    .where(and(eq(orders.status, 'pending'), lte(orders.confirmDate, today)))
+    .where(and(eq(orders.status, "pending"), lte(orders.confirmDate, today)))
     .orderBy(asc(orders.confirmDate), asc(orders.id));
 
   const result: SettleResult = { confirmed: 0, skipped: 0, failed: 0 };
@@ -143,16 +150,18 @@ export async function settlePendingOrders(
         continue;
       }
 
-      if (order.side === 'buy') {
+      if (order.side === "buy") {
         await settleBuyOrder(db, order, nav.unitNav, now);
-      } else {
+      }
+      else {
         await settleSellOrder(db, order, nav.unitNav, now);
       }
       result.confirmed++;
-    } catch (err) {
+    }
+    catch (err) {
       console.error(`[settle] 订单 ${order.id} 撮合失败：`, err);
       // 业务性失败：标记 failed 并退还冻结的现金（买单）
-      await failOrder(db, order, err instanceof Error ? err.message : '撮合失败', now);
+      await failOrder(db, order, err instanceof Error ? err.message : "撮合失败", now);
       result.failed++;
     }
   }
@@ -168,7 +177,7 @@ async function settleBuyOrder(
   now: Date,
 ): Promise<void> {
   if (order.amount === null) {
-    throw new Error('买单缺少申购金额');
+    throw new Error("买单缺少申购金额");
   }
 
   const f = await db.query.fund.findFirst({
@@ -197,7 +206,7 @@ async function settleBuyOrder(
     db
       .update(orders)
       .set({
-        status: 'confirmed',
+        status: "confirmed",
         dealNav: navScaled,
         dealShares: calc.sharesScaled,
         dealAmount: calc.netAmountCents,
@@ -247,14 +256,14 @@ async function settleSellOrder(
   now: Date,
 ): Promise<void> {
   if (order.shares === null) {
-    throw new Error('卖单缺少赎回份额');
+    throw new Error("卖单缺少赎回份额");
   }
 
   const f = await db.query.fund.findFirst({
     where: eq(fund.code, order.fundCode),
   });
-  const tiers: RedeemTier[] =
-    (f?.redeemTiers as RedeemTier[] | undefined) ?? DEFAULT_REDEEM_TIERS;
+  const tiers: RedeemTier[]
+    = (f?.redeemTiers as RedeemTier[] | undefined) ?? DEFAULT_REDEEM_TIERS;
 
   // 取该基金的全部批次，按 FIFO 顺序
   const lots = await db
@@ -269,7 +278,7 @@ async function settleSellOrder(
     .orderBy(asc(shareLot.confirmDate), asc(shareLot.id));
 
   const calc = calcRedeem({
-    lots: lots.map((l) => ({
+    lots: lots.map(l => ({
       id: l.id,
       sharesScaled: l.shares,
       costCents: l.cost,
@@ -284,7 +293,8 @@ async function settleSellOrder(
   const acc = await db.query.account.findFirst({
     where: eq(account.userId, order.userId),
   });
-  if (!acc) throw new Error('账户不存在');
+  if (!acc)
+    throw new Error("账户不存在");
 
   const newCash = acc.cash + calc.totalNetCents;
 
@@ -294,18 +304,20 @@ async function settleSellOrder(
       eq(holding.fundCode, order.fundCode),
     ),
   });
-  if (!h) throw new Error('持仓不存在');
+  if (!h)
+    throw new Error("持仓不存在");
 
   // 计算每个批次消耗后的剩余；耗尽的批次删除
   const exhaustedIds: number[] = [];
   const updates: unknown[] = [];
   for (const lr of calc.lotResults) {
-    const lot = lots.find((l) => l.id === lr.lotId)!;
+    const lot = lots.find(l => l.id === lr.lotId)!;
     const remainShares = lot.shares - lr.consumedSharesScaled;
     const remainCost = lot.cost - lr.costCents;
     if (remainShares <= 0) {
       exhaustedIds.push(lot.id);
-    } else {
+    }
+    else {
       updates.push(
         db
           .update(shareLot)
@@ -321,7 +333,7 @@ async function settleSellOrder(
     db
       .update(orders)
       .set({
-        status: 'confirmed',
+        status: "confirmed",
         dealNav: navScaled,
         dealShares: order.shares,
         dealAmount: calc.totalNetCents,
@@ -348,7 +360,7 @@ async function settleSellOrder(
     // 5. 到账流水
     db.insert(transactions).values({
       userId: order.userId,
-      type: 'sell',
+      type: "sell",
       amount: calc.totalNetCents,
       balance: newCash,
       orderId: order.id,
@@ -362,7 +374,7 @@ async function settleSellOrder(
     writes.push(
       db.insert(transactions).values({
         userId: order.userId,
-        type: 'fee',
+        type: "fee",
         amount: -calc.totalFeeCents,
         balance: newCash,
         orderId: order.id,
@@ -392,11 +404,11 @@ async function failOrder(
   const writes: unknown[] = [
     db
       .update(orders)
-      .set({ status: 'failed', failReason: reason })
+      .set({ status: "failed", failReason: reason })
       .where(eq(orders.id, order.id)),
   ];
 
-  if (order.side === 'buy' && order.amount !== null) {
+  if (order.side === "buy" && order.amount !== null) {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, order.userId),
     });
@@ -409,7 +421,7 @@ async function failOrder(
           .where(eq(account.userId, order.userId)),
         db.insert(transactions).values({
           userId: order.userId,
-          type: 'buy',
+          type: "buy",
           amount: order.amount, // 退款为正
           balance: refunded,
           orderId: order.id,

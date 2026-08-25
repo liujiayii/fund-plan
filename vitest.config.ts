@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
 /**
  * 领域层纯函数测试用普通 node 环境即可，跑得快。
@@ -13,7 +13,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
-    environment: 'node',
-    include: ['tests/domain/**/*.test.ts', 'tests/smoke.test.ts'],
+    environment: "node",
+    include: ["tests/domain/**/*.test.ts", "tests/smoke.test.ts"],
   },
 });

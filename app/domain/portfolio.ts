@@ -1,5 +1,5 @@
-import Decimal from 'decimal.js';
-import { navToDecimal, roundInt, sharesToDecimal, YUAN } from './money';
+import Decimal from "decimal.js";
+import { navToDecimal, roundInt, sharesToDecimal, YUAN } from "./money";
 
 /** 单只持仓的估值结果 */
 export interface HoldingValuation {
@@ -48,8 +48,8 @@ export function valuateHolding(i: {
     sharesToDecimal(i.totalSharesScaled).mul(navToDecimal(i.navScaled)).mul(YUAN),
   );
   const pnlCents = marketValueCents - i.totalCostCents;
-  const pnlRate =
-    i.totalCostCents === 0
+  const pnlRate
+    = i.totalCostCents === 0
       ? 0
       : new Decimal(pnlCents).div(i.totalCostCents).toNumber();
 
@@ -75,8 +75,8 @@ export function valuatePortfolio(
   const marketValueCents = holdings.reduce((s, h) => s + h.marketValueCents, 0);
   const totalCostCents = holdings.reduce((s, h) => s + h.costCents, 0);
   const totalPnlCents = marketValueCents - totalCostCents;
-  const totalPnlRate =
-    totalCostCents === 0
+  const totalPnlRate
+    = totalCostCents === 0
       ? 0
       : new Decimal(totalPnlCents).div(totalCostCents).toNumber();
 

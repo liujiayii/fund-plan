@@ -1,5 +1,5 @@
-import { drizzle } from 'drizzle-orm/d1';
-import { schema } from './schema';
+import { drizzle } from "drizzle-orm/d1";
+import { schema } from "./schema";
 
 /**
  * 由 D1 绑定构造 Drizzle 实例。

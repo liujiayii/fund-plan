@@ -1,3 +1,4 @@
+import type { RedeemTier, ShareLotInput } from "~/domain/redeem";
 import {
   Alert,
   Button,
@@ -8,17 +9,17 @@ import {
   Space,
   Table,
   Typography,
-} from 'antd';
-import { useMemo, useState } from 'react';
-import { useFetcher } from 'react-router';
+} from "antd";
+import { useMemo, useState } from "react";
+import { useFetcher } from "react-router";
 import {
   centsToYuan,
   navToDisplay,
   rateToPercent,
-  sharesToDisplay,
   SHARE_SCALE,
-} from '~/domain/money';
-import { calcRedeem, type RedeemTier, type ShareLotInput } from '~/domain/redeem';
+  sharesToDisplay,
+} from "~/domain/money";
+import { calcRedeem } from "~/domain/redeem";
 
 const { Text, Paragraph } = Typography;
 
@@ -47,17 +48,27 @@ export interface SellDrawerProps {
  */
 export function SellDrawer(props: SellDrawerProps) {
   const {
-    open, onClose, fundCode, fundName, availableSharesScaled,
-    navScaled, navDate, lots, tiers, confirmDate, action,
+    open,
+    onClose,
+    fundCode,
+    fundName,
+    availableSharesScaled,
+    navScaled,
+    navDate,
+    lots,
+    tiers,
+    confirmDate,
+    action,
   } = props;
 
-  const [sharesInput, setSharesInput] = useState('');
+  const [sharesInput, setSharesInput] = useState("");
   const fetcher = useFetcher();
-  const submitting = fetcher.state === 'submitting';
+  const submitting = fetcher.state === "submitting";
 
   const sharesScaled = useMemo(() => {
     const n = Number(sharesInput);
-    if (!Number.isFinite(n) || n <= 0) return 0;
+    if (!Number.isFinite(n) || n <= 0)
+      return 0;
     return Math.round(n * SHARE_SCALE);
   }, [sharesInput]);
 
@@ -76,7 +87,8 @@ export function SellDrawer(props: SellDrawerProps) {
         confirmDate,
         tiers,
       });
-    } catch {
+    }
+    catch {
       return null;
     }
   }, [sharesScaled, overLimit, navScaled, lots, confirmDate, tiers]);
@@ -101,18 +113,18 @@ export function SellDrawer(props: SellDrawerProps) {
           bordered
           style={{ marginBottom: 16 }}
           items={[
-            { key: 'code', label: '基金代码', children: fundCode },
+            { key: "code", label: "基金代码", children: fundCode },
             {
-              key: 'nav',
-              label: '最新净值',
-              children: `${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ''}`,
+              key: "nav",
+              label: "最新净值",
+              children: `${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`,
             },
             {
-              key: 'avail',
-              label: '可赎份额',
+              key: "avail",
+              label: "可赎份额",
               children: `${sharesToDisplay(availableSharesScaled)} 份`,
             },
-            { key: 'confirm', label: '预计确认日', children: confirmDate },
+            { key: "confirm", label: "预计确认日", children: confirmDate },
           ]}
         />
 
@@ -123,18 +135,18 @@ export function SellDrawer(props: SellDrawerProps) {
             inputMode="decimal"
             placeholder={`最多 ${sharesToDisplay(availableSharesScaled)} 份`}
             value={sharesInput}
-            onChange={(e) => setSharesInput(e.target.value)}
+            onChange={e => setSharesInput(e.target.value)}
             suffix="份"
           />
         </Form.Item>
 
         <Space wrap style={{ marginBottom: 16 }}>
           {[
-            { label: '25%', ratio: 0.25 },
-            { label: '50%', ratio: 0.5 },
-            { label: '75%', ratio: 0.75 },
-            { label: '全部', ratio: 1 },
-          ].map((b) => (
+            { label: "25%", ratio: 0.25 },
+            { label: "50%", ratio: 0.5 },
+            { label: "75%", ratio: 0.75 },
+            { label: "全部", ratio: 1 },
+          ].map(b => (
             <Button
               key={b.label}
               size="small"
@@ -143,8 +155,7 @@ export function SellDrawer(props: SellDrawerProps) {
                   (
                     Math.floor(availableSharesScaled * b.ratio) / SHARE_SCALE
                   ).toFixed(4),
-                )
-              }
+                )}
             >
               {b.label}
             </Button>
@@ -166,7 +177,7 @@ export function SellDrawer(props: SellDrawerProps) {
             type="info"
             style={{ marginBottom: 16 }}
             message="赎回费用预估（先进先出，逐批计费）"
-            description={
+            description={(
               <div>
                 <Table
                   size="small"
@@ -176,44 +187,53 @@ export function SellDrawer(props: SellDrawerProps) {
                   dataSource={estimate.lotResults}
                   columns={[
                     {
-                      title: '批次份额',
-                      dataIndex: 'consumedSharesScaled',
-                      align: 'right',
+                      title: "批次份额",
+                      dataIndex: "consumedSharesScaled",
+                      align: "right",
                       render: (v: number) => sharesToDisplay(v),
                     },
                     {
-                      title: '持有天数',
-                      dataIndex: 'holdDays',
-                      align: 'right',
+                      title: "持有天数",
+                      dataIndex: "holdDays",
+                      align: "right",
                       render: (v: number) => `${v} 天`,
                     },
                     {
-                      title: '费率',
-                      dataIndex: 'rate',
-                      align: 'right',
+                      title: "费率",
+                      dataIndex: "rate",
+                      align: "right",
                       render: (v: number) => rateToPercent(v),
                     },
                     {
-                      title: '赎回费',
-                      dataIndex: 'feeCents',
-                      align: 'right',
+                      title: "赎回费",
+                      dataIndex: "feeCents",
+                      align: "right",
                       render: (v: number) => `${centsToYuan(v)} 元`,
                     },
                   ]}
                 />
                 <div>
-                  赎回总额：<Text strong>{centsToYuan(estimate.totalGrossCents)} 元</Text>
+                  赎回总额：
+                  <Text strong>
+                    {centsToYuan(estimate.totalGrossCents)}
+                    {" "}
+                    元
+                  </Text>
                 </div>
                 <div>
                   赎回费合计：
                   <Text strong type="danger">
-                    {centsToYuan(estimate.totalFeeCents)} 元
+                    {centsToYuan(estimate.totalFeeCents)}
+                    {" "}
+                    元
                   </Text>
                 </div>
                 <div>
                   预计到账：
-                  <Text strong style={{ color: '#c62828' }}>
-                    {centsToYuan(estimate.totalNetCents)} 元
+                  <Text strong style={{ color: "#c62828" }}>
+                    {centsToYuan(estimate.totalNetCents)}
+                    {" "}
+                    元
                   </Text>
                 </div>
                 <div>
@@ -221,19 +241,23 @@ export function SellDrawer(props: SellDrawerProps) {
                   <Text
                     strong
                     style={{
-                      color: estimate.realizedPnlCents >= 0 ? '#c62828' : '#2e7d32',
+                      color: estimate.realizedPnlCents >= 0 ? "#c62828" : "#2e7d32",
                     }}
                   >
-                    {estimate.realizedPnlCents > 0 ? '+' : ''}
-                    {centsToYuan(estimate.realizedPnlCents)} 元
+                    {estimate.realizedPnlCents > 0 ? "+" : ""}
+                    {centsToYuan(estimate.realizedPnlCents)}
+                    {" "}
+                    元
                   </Text>
                 </div>
                 <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-                  按最新净值试算，实际<Text strong>以确认日净值为准</Text>。
+                  按最新净值试算，实际
+                  <Text strong>以确认日净值为准</Text>
+                  。
                   持有不满 7 天的批次赎回费高达 1.5%，可考虑再等等。
                 </Paragraph>
               </div>
-            }
+            )}
           />
         )}
 

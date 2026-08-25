@@ -1,0 +1,15 @@
+/* layer: theme */
+:root, :host { --spacing: 0.25rem; }
+/* layer: default */
+.m\[s\]{margin:s;}
+.\!me{margin-inline-end:calc(var(--spacing) * 4) !important;}
+.mb-0{margin-bottom:calc(var(--spacing) * 0);}
+.me{margin-inline-end:calc(var(--spacing) * 4);}
+.mt-0{margin-top:calc(var(--spacing) * 0);}
+.text-center{text-align:center;}
+.flex{display:flex;}
+.h-full{height:100%;}
+.inline{display:inline;}
+.block{display:block;}
+.hidden{display:none;}
+.fixed{position:fixed;}
