@@ -13,7 +13,13 @@ export interface FundListItemProps {
   primary?: ReactNode;
   /** 右侧副值（如盈亏、成交明细） */
   secondary?: ReactNode;
-  /** 最右侧操作区（按钮组） */
+  /**
+   * 最右侧操作区（按钮组）。
+   *
+   * ⚠️ 同一列表内各行的 actions 宽度应保持一致 —— 右侧数值是相对于
+   * 「容器右边 − actions 宽 − gap」右对齐的，若某些行的按钮少一个，
+   * 那些行的数字列会与其他行对不齐。
+   */
   actions?: ReactNode;
   /**
    * 名称链接目标，默认 /funds/{fundCode}。
@@ -30,7 +36,11 @@ export interface FundListItemProps {
  *
  * 存在的理由：重构前「基金」这一列的 render 在 8 个文件里各写了一遍
  * （`<a href={/funds/{code}}>{name}<br/><Text type="secondary">{code}</Text></a>`），
- * 改一处样式要改 8 个地方。所有实体列表统一消费这个骨架。
+ * 改一处样式要改 8 个地方。持仓 / 订单 / 定投三个列表统一消费这个骨架。
+ *
+ * ⚠️ 资金流水（`TxList`）**不用**它 —— 流水的行没有基金主体：
+ * `transactions` 表无 fund 字段，`checkin` / `init` 行天然与基金无关。
+ * 所以 `fundCode` / `fundName` 在这里是必填的。
  */
 export function FundListItem(props: FundListItemProps) {
   const {
