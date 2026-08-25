@@ -37,6 +37,10 @@ export default antfu(
       // 文档里的代码块是讲解用的片段，不是可运行代码，
       // 不该按生产代码的规则检查（会因为「一行多语句」之类报错）
       "docs/**/*.md",
+      // SDD 工作区（.superpowers/sdd/**）是本次重构的计划简报与实施报告，
+      // 已被 git ignore；里面的代码块同样是讲解用片段，不是可运行代码。
+      // 不豁免则 markdown formatter 会报数百个错，把真实的 lint 失败淹没。
+      ".superpowers/**",
       // UnoCSS CLI 生成的产物，改它没意义（下次生成就被覆盖）
       "app/uno.gen.css",
     ],
