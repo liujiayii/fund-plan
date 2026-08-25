@@ -26,7 +26,7 @@ export interface OrderListProps {
 }
 
 /**
- * 订单列表。收敛 3 处 <Table<OrderView>>（me.orders 13 列、me._index、master）。
+ * 订单列表。收敛 3 处 <Table<OrderView>>（me.orders 11 列、me._index、master）。
  *
  * 降噪三条（见设计文档 3.4）：
  *  - 「手动」不贴 Tag，只有定投才贴
@@ -90,6 +90,12 @@ export function OrderList({ orders, detailed }: OrderListProps) {
               detailed && o.dealNav !== null
                 ? (
                     <span style={{ fontSize: 12, color: COLOR.textSecondary }}>
+                      {/* 到账/净申购金额放最前：赎回单里「我到手多少钱」是最该被一眼
+                          看到的数字，而 primary 位显示的是委托份额、不是钱。
+                          「净申购」/「到账」这两个词替代了旧表格靠 Tooltip 才能看到的
+                          语义说明（申购=扣申购费后的净额，赎回=扣赎回费后的实际到账）。 */}
+                      {o.dealAmount !== null
+                        && `${o.side === "buy" ? "净申购" : "到账"} ${centsToYuan(o.dealAmount)} 元 · `}
                       {`成交净值 ${navToDisplay(o.dealNav)}`}
                       {o.dealShares !== null && ` · ${sharesToDisplay(o.dealShares)} 份`}
                       {o.fee !== null && ` · 费 ${centsToYuan(o.fee)} 元`}
