@@ -3194,13 +3194,25 @@ style 改为：
 | `app/components/DcaPlanList.tsx` | 每期金额、累计投入 | — |
 | `app/components/TxList.tsx` | 金额、变动后余额 | — |
 | `app/components/PortfolioView.tsx` | 4 个 `StatBig` 的 value | — |
-| `app/routes/me._index.tsx` | 4 个资产 `StatBig` + 3 个签到 `StatBig` | — |
+| `app/routes/me._index.tsx` | 资产总览的 `StatBig`、签到卡片的 `StatBig`、**以及第 54 行签到成功 toast 里的金额** | — |
 | `app/routes/me.holdings.tsx` | 3 个 `StatBig` + `renderNote` 里的成本 | — |
 | `app/routes/me.dca.tsx` | 累计投入 `StatBig` | — |
 | `app/routes/me.settings.tsx` | 3 个金额 `DataRow`（并传 `mono`）+ 重置后现金 `StatBig` + 警告文案里的初始本金 | — |
 | `app/routes/funds.$code.tsx` | 起购金额 `StatBig` | — |
+| `app/routes/_index.tsx` | 头图文案里的初始本金、签到基础额、签到上限（第 97 / 106 / 108 行） | — |
 | `app/components/BuyDrawer.tsx` | 起购金额、可用现金的 `DataRow`（并传 `mono`）、费用预估的三个金额 | **`onClick={() => setAmountYuan(centsToYuan(cashCents))}` 与 `placeholder` 里的起购金额** —— 前者进输入框，后者是给用户照着输的参考值 |
 | `app/components/SellDrawer.tsx` | FIFO 明细表的赎回费、赎回总额、赎回费合计、预计到账、已实现盈亏 | — |
+| `app/services/trade.ts` | **一处都不换** | 第 59、71 行两条下单校验的错误文案 —— 理由见下 |
+
+⚠️ **`app/services/trade.ts` 一个字都不要动。** 它那两处 `centsToYuan` 在用户可见的
+错误文案里，看着像该换，但 `fmtYuan` 住在 `app/components/ui/`，**服务层 import
+组件层是跨层**，那是本项目的硬约束。宁可让这两条错误文案没有千分位，也不能为了
+排版去破坏分层。（真要统一得把 `fmtYuan` 下沉到 `app/domain/`，那是另一个决策，
+本任务不做。）
+
+⚠️ 上表**刻意不写数量**（不写「3 个签到 StatBig」这类）。本阶段已经有三次因为我
+数错数导致返工 —— 一次「13 列」、一次「8 处旧色值」、一次「6 处 Table」。
+按文件逐个 `git grep -n "centsToYuan(" -- <文件>` 看实际输出，不要信任何计数。
 
 `SellDrawer` / `BuyDrawer` / `funds.$code.tsx` / `me.settings.tsx` 的
 数值型 `DataRow` 一律补 `mono`。
@@ -3213,7 +3225,9 @@ git grep -n "centsToYuan" -- app/
 ```
 
 第二条的输出逐行过一遍：每一处残留的 `centsToYuan` 都必须能说出「为什么这里
-不能带千分位」（进输入框 / 进 placeholder / 在 `fmtYuan` 内部）。
+不能带千分位」。合法理由只有三条：**进输入框**（`setAmountYuan`）、
+**进 placeholder**（给用户照着输的参考值）、**在服务层**（`trade.ts`，跨层禁止）。
+外加 `app/domain/money.ts` 里的定义本身与 `fmtYuan` 内部对它的调用。
 说不出理由的就是漏改。
 
 - [ ] **Step 6: Commit**
