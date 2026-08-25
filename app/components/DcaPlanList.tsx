@@ -18,8 +18,12 @@ const WEEKDAY_LABEL = ["", "一", "二", "三", "四", "五", "六", "日"];
 function frequencyText(p: DcaPlanView): string {
   if (p.frequency === "daily")
     return "每个交易日";
+  // ⚠️ 用 `||` 而非 `??`：WEEKDAY_LABEL 的索引 0 是空串占位，
+  // `??` 只接 null/undefined，接不住空串 —— dayOfWeek 为 null 时会渲染成
+  // 光秃秃的「每周」。被替换掉的 me.dca.tsx 版本（WEEKDAYS.find()?.label）
+  // 对 null 是正确回退到「—」的，这里必须保持等价。
   if (p.frequency === "weekly")
-    return `每周${WEEKDAY_LABEL[p.dayOfWeek ?? 0] ?? "—"}`;
+    return `每周${WEEKDAY_LABEL[p.dayOfWeek ?? 0] || "—"}`;
   return `每月 ${p.dayOfMonth} 号`;
 }
 
