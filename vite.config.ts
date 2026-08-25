@@ -5,9 +5,11 @@ import { defineConfig } from "vite";
 /**
  * 注意：UnoCSS 走 PostCSS 模式（见 postcss.config.mjs + app/app.css），
  * 没有用 unocss/vite 插件。
- * 原因：UnoCSS 66 的 Vite 插件依赖 `vite:css-post` 内部插件，
- * 而 Vite 8 换了 Rolldown 内核后该插件不存在，导致样式静默不生成
- * （构建能过、只警告，但产出的 CSS 里只有一个占位符，所有工具类都丢失）。
+ * 原因：**不是 Vite 8 的问题**（裸 Vite 8 + unocss/vite 实测正常），
+ * 而是 UnoCSS 的 Vite 插件与 React Router 8 的 Vite Environment API 不兼容——
+ * RR8 把构建拆成 client/ssr 多环境，UnoCSS 找不到 `vite:css-post` 来注入样式，
+ * 于是产物 CSS 只剩 48 字节占位符，所有工具类静默丢失（构建只报一行警告就"成功"）。
+ * 纯 SPA 项目（单环境构建）不受影响，可正常用 unocss/vite 插件。
  */
 export default defineConfig({
   plugins: [

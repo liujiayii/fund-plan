@@ -152,8 +152,21 @@ admin 由环境变量 `ADMIN_USERNAME` 认定（`wrangler.jsonc` 的 `vars`）�
 
 ### UnoCSS 走 CLI 预生成，不是 Vite 插件
 
-`unocss/vite` 插件依赖 Vite 内部的 `vite:css-post`，而 Vite 8 换 Rolldown 内核后该插件不存在——
-构建只报一行警告就成功，但产物 CSS 只剩占位符，**所有工具类静默丢失**。PostCSS 模式会让构建挂死。
+**不是 UnoCSS 不支持 Vite 8** —— 裸 Vite 8 + `unocss/vite` 完全正常（已实测）。
+真正的原因是 **UnoCSS 的 Vite 插件与 React Router 8 的 Vite Environment API 不兼容**。
+
+React Router 8 framework mode 构建时会输出 `Using Vite Environment API`，把流水线拆成
+`client` / `ssr` 多个环境。UnoCSS 的 `unocss:global:build:generate` 要去当前环境的插件容器里
+找 `vite:css-post` 注入生成的 CSS，多环境下找不到，于是：
+
+```
+[plugin unocss:global:build:generate] [unocss] failed to find vite:css-post plugin
+```
+
+**构建只报这一行警告就"成功"了**，但产物 CSS 只剩 48 字节占位符
+（`#--unocss--{layer:__ALL__}`），所有工具类静默丢失。PostCSS 模式则会让构建挂死。
+
+> 纯 SPA 项目（`@vitejs/plugin-react`，单环境构建）不受此影响，可正常用 `unocss/vite` 插件。
 
 所以 `dev`/`build` 前会跑 `pnpm uno:build` 生成 `app/uno.gen.css`（该文件**入库**，不要手改）。
 改了 class 后样式没生效，先确认这步跑过。
