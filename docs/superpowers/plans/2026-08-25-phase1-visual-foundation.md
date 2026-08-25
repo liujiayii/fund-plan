@@ -1043,8 +1043,30 @@ import type { ReactNode } from "react";
 import type { HoldingView } from "~/services/portfolio-service";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { PnlText } from "~/components/ui/PnlText";
-import { centsToYuan } from "~/domain/money";
+import { centsToYuan, navToDisplay } from "~/domain/money";
 import { COLOR, NUM_FONT } from "~/theme";
+
+/**
+ * 「净值 X.XXXX（日期）」的 note 渲染器。
+ *
+ * 公开盘（`HoldingListReadonly`）与仪表盘速览（`me._index`）共用 ——
+ * 两处都只需要露出**估值时点**，不需要份额/成本/批次那些明细。
+ *
+ * 为什么必须露出日期：净值可能合法滞后数天（拉不到净值时订单顺延），
+ * 不标估值时点，用户就分不清今天的估值与上周五的估值。
+ * `portfolio-service.ts` 里该字段的注释原文即「便于页面标注「截至 X 日」」。
+ *
+ * ⚠️ 无 `navDate` 时返回 **`undefined`** 而非 `null`：`FundListItem` 的 `note`
+ * 判空是 `!== undefined`，返回 `null` 会通过守卫并渲染出一个带 `marginTop: 4`
+ * 的空 div。这个约束刻意收敛在这一个函数里 —— 让它在两个消费者之间不会走偏。
+ *
+ * 另有一层正确性收益：`portfolio-service` 在拉不到净值时用**成本价兜底**填
+ * `navScaled`（同时 `navDate` 为 `null`），所以「有 navDate 才显示净值」
+ * 顺带避免了把成本价冒充成净值展示。
+ */
+export function navDateNote(h: HoldingView): ReactNode {
+  return h.navDate ? `净值 ${navToDisplay(h.navScaled)}（${h.navDate}）` : undefined;
+}
 
 export interface HoldingListProps {
   holdings: HoldingView[];
@@ -1185,7 +1207,8 @@ export function HoldingListReadonly({ holdings }: { holdings: HoldingView[] }) {
   if (holdings.length === 0) {
     return <EmptyState description="暂无持仓" />;
   }
-  return <HoldingList holdings={holdings} />;
+  // 估值时点必须露出，理由与 undefined-not-null 的约束都在 navDateNote 里
+  return <HoldingList holdings={holdings} renderNote={navDateNote} />;
 }
 
 /** 主人还没注册时的引导提示 */
@@ -2047,6 +2070,12 @@ function pnlColor(v: number): string {
               size="small"
               showInfo={false}
               style={{ marginTop: 8 }}
+              // ⚠️ strokeColor 必须显式传，不能删。
+              // antd 在 percent >= 100 且未显式传 status 时会自动切成
+              // status="success"（antd/lib/progress/progress.js:66-68），
+              // 进度条变**绿** —— 而绿色在本项目专属「跌」。
+              // 连签封顶正是 percent === 100，会渲染出一条绿色进度条，读作亏损。
+              strokeColor={COLOR.primary}
             />
             <Text type="secondary" style={{ fontSize: 12 }}>
               连签递增，每天 +50 元，封顶 500 元
@@ -2076,7 +2105,13 @@ function pnlColor(v: number): string {
       </SectionCard>
 ```
 
-`Progress` 去掉了 `strokeColor="#c62828"` —— 不传就用主色蓝，正是我们要的。
+⚠️ **`Progress` 的 `strokeColor` 必须保留（改为 `COLOR.primary`），不能删。**
+我最初写的是「去掉 `strokeColor` —— 不传就用主色蓝，正是我们要的」，**那句是错的**：
+antd 的 `Progress` 在 `percent >= 100` 且未显式传 `status` 时会自动切成
+`status="success"`（见 `antd/lib/progress/progress.js:66-68` 的
+`!ProgressStatuses.includes(status) && percentNumber >= 100` 分支），进度条变**绿**。
+连签封顶正是 `percent === 100` —— 在红涨绿跌的体系里，一条绿色进度条读作亏损。
+旧代码用 `strokeColor` 压住了这个行为，删掉它就是引入回归。
 
 - [ ] **Step 5: 换持仓速览与最近订单**
 
@@ -2094,7 +2129,9 @@ function pnlColor(v: number): string {
               </EmptyState>
             )
           : (
-              <HoldingList holdings={holdings} />
+              // 与公开盘用同一个 note 渲染器：速览也必须标注估值时点，
+              // 否则「总资产/持仓市值/浮动盈亏」三个大数字不知是哪天的估值。
+              <HoldingList holdings={holdings} renderNote={navDateNote} />
             )}
       </SectionCard>
 
