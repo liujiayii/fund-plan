@@ -74,7 +74,7 @@
 | `app/routes/me.settings.tsx` | `Descriptions` → `DataRow`；`Statistic` → `StatBig` |
 | `app/routes/funds._index.tsx` | 搜索结果 `Table` → `FundListItem` |
 | `app/components/PortfolioView.tsx` | `HoldingTableReadonly` → `HoldingList`；`pnlColor` 改为从 `~/theme` 导入 |
-| `app/routes/me.orders.tsx` | 13 列 `Table` → `OrderList` |
+| `app/routes/me.orders.tsx` | 11 列 `Table` → `OrderList` |
 | `app/routes/me.dca.tsx` | `Table` → `DcaPlanList` |
 | `app/routes/me.holdings.tsx` | `Table` → `HoldingList`；删本地 `pnlColor` |
 | `app/routes/me._index.tsx` | 两处 `Table` → `HoldingList` / `OrderList`；删本地 `pnlColor` |
@@ -1265,7 +1265,7 @@ HoldingTableReadonly 改名 HoldingListReadonly，
 
 ## Task 5: 订单列表组件 + 订单页卡片化
 
-`me.orders.tsx` 现在是 **13 列**表格靠 `scroll={{ x: 1100 }}` 撑着，
+`me.orders.tsx` 现在是 **11 列**表格靠 `scroll={{ x: 1100 }}` 撑着，
 是全站体验最差的一处。这个任务收益最明显。
 
 **Files:**
@@ -1307,7 +1307,7 @@ export interface OrderListProps {
 }
 
 /**
- * 订单列表。收敛 3 处 <Table<OrderView>>（me.orders 13 列、me._index、master）。
+ * 订单列表。收敛 3 处 <Table<OrderView>>（me.orders 11 列、me._index、master）。
  *
  * 降噪三条（见设计文档 3.4）：
  *  - 「手动」不贴 Tag，只有定投才贴
@@ -1371,6 +1371,12 @@ export function OrderList({ orders, detailed }: OrderListProps) {
               detailed && o.dealNav !== null
                 ? (
                     <span style={{ fontSize: 12, color: COLOR.textSecondary }}>
+                      {/* 到账/净申购金额放最前：赎回单里「我到手多少钱」是最该被一眼
+                          看到的数字，而 primary 位显示的是委托份额、不是钱。
+                          「净申购」/「到账」这两个词替代了旧表格靠 Tooltip 才能看到的
+                          语义说明（申购=扣申购费后的净额，赎回=扣赎回费后的实际到账）。 */}
+                      {o.dealAmount !== null
+                        && `${o.side === "buy" ? "净申购" : "到账"} ${centsToYuan(o.dealAmount)} 元 · `}
                       {`成交净值 ${navToDisplay(o.dealNav)}`}
                       {o.dealShares !== null && ` · ${sharesToDisplay(o.dealShares)} 份`}
                       {o.fee !== null && ` · 费 ${centsToYuan(o.fee)} 元`}
@@ -1456,9 +1462,9 @@ pnpm lint
 
 ```bash
 git add app/components/OrderList.tsx app/routes/me.orders.tsx
-git commit -m "feat(ui): 新增 OrderList，订单页从 13 列表格改卡片
+git commit -m "feat(ui): 新增 OrderList，订单页从 11 列表格改卡片
 
-me.orders.tsx 原本是 13 列表格靠 scroll x=1100 撑着，是全站体验最差的一处。
+me.orders.tsx 原本是 11 列表格靠 scroll x=1100 撑着，是全站体验最差的一处。
 
 顺手降噪（设计文档 3.4）：
 - 「手动」不再贴 Tag，只有定投才贴
