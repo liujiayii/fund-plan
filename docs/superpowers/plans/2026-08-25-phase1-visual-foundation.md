@@ -1043,29 +1043,35 @@ import type { ReactNode } from "react";
 import type { HoldingView } from "~/services/portfolio-service";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { PnlText } from "~/components/ui/PnlText";
-import { centsToYuan, navToDisplay } from "~/domain/money";
+import { centsToYuan, navToDisplay, sharesToDisplay } from "~/domain/money";
 import { COLOR, NUM_FONT } from "~/theme";
 
 /**
- * 「净值 X.XXXX（日期）」的 note 渲染器。
+ * 只读持仓行的 note：「X 份 · 净值 Y（日期）」。
  *
  * 公开盘（`HoldingListReadonly`）与仪表盘速览（`me._index`）共用 ——
- * 两处都只需要露出**估值时点**，不需要份额/成本/批次那些明细。
+ * 两处的旧表格列完全一致（基金 / 持有份额 / 净值 / 市值 / 盈亏），
+ * 所以 note 也该一致。份额与成本/批次不同：它是核验市值的唯一依据，
+ * 不能只留给持仓管理页。
  *
  * 为什么必须露出日期：净值可能合法滞后数天（拉不到净值时订单顺延），
  * 不标估值时点，用户就分不清今天的估值与上周五的估值。
  * `portfolio-service.ts` 里该字段的注释原文即「便于页面标注「截至 X 日」」。
  *
- * ⚠️ 无 `navDate` 时返回 **`undefined`** 而非 `null`：`FundListItem` 的 `note`
- * 判空是 `!== undefined`，返回 `null` 会通过守卫并渲染出一个带 `marginTop: 4`
- * 的空 div。这个约束刻意收敛在这一个函数里 —— 让它在两个消费者之间不会走偏。
+ * ⚠️ 「份」必须显式写。旧表格的 `持有份额` 列渲染的是裸 `sharesToDisplay(v)`，
+ * 单位由**列头**承载；卡片里没有列头，去掉后缀就是丢单位。
  *
- * 另有一层正确性收益：`portfolio-service` 在拉不到净值时用**成本价兜底**填
- * `navScaled`（同时 `navDate` 为 `null`），所以「有 navDate 才显示净值」
- * 顺带避免了把成本价冒充成净值展示。
+ * ⚠️ 无 `navDate` 时**只返回份额、不渲染净值**，这是刻意偏离旧表格的一处：
+ * 旧列无条件渲染 `navToDisplay(navScaled)`，只有日期是条件的。而
+ * `portfolio-service` 在拉不到净值时用**成本价兜底**填 `navScaled`
+ * （同时 `navDate` 置 `null`）—— 旧列等于把成本价当净值给用户看，
+ * 那是错的，不继承。份额恒存在，所以 note 恒非空，藏掉净值不会留下空白。
  */
-export function navDateNote(h: HoldingView): ReactNode {
-  return h.navDate ? `净值 ${navToDisplay(h.navScaled)}（${h.navDate}）` : undefined;
+export function sharesAndNavNote(h: HoldingView): ReactNode {
+  const shares = `${sharesToDisplay(h.sharesScaled)} 份`;
+  return h.navDate
+    ? `${shares} · 净值 ${navToDisplay(h.navScaled)}（${h.navDate}）`
+    : shares;
 }
 
 export interface HoldingListProps {
@@ -1134,7 +1140,7 @@ import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { centsToYuan } from "~/domain/money";
 import { pnlColor } from "~/theme";
-import { HoldingList } from "./HoldingList";
+import { HoldingList, sharesAndNavNote } from "./HoldingList";
 
 const { Paragraph } = Typography;
 
@@ -1207,8 +1213,8 @@ export function HoldingListReadonly({ holdings }: { holdings: HoldingView[] }) {
   if (holdings.length === 0) {
     return <EmptyState description="暂无持仓" />;
   }
-  // 估值时点必须露出，理由与 undefined-not-null 的约束都在 navDateNote 里
-  return <HoldingList holdings={holdings} renderNote={navDateNote} />;
+  // 份额与估值时点必须露出，理由与条件渲染的取舍都在 sharesAndNavNote 里
+  return <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />;
 }
 
 /** 主人还没注册时的引导提示 */
@@ -1968,7 +1974,7 @@ import {
 在第 23 行 `import { getOrders, getPortfolio } from "~/services/portfolio-service";` 之后插入：
 
 ```tsx
-import { HoldingList } from "~/components/HoldingList";
+import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
@@ -2131,7 +2137,7 @@ antd 的 `Progress` 在 `percent >= 100` 且未显式传 `status` 时会自动�
           : (
               // 与公开盘用同一个 note 渲染器：速览也必须标注估值时点，
               // 否则「总资产/持仓市值/浮动盈亏」三个大数字不知是哪天的估值。
-              <HoldingList holdings={holdings} renderNote={navDateNote} />
+              <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />
             )}
       </SectionCard>
 
