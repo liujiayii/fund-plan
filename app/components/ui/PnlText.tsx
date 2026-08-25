@@ -8,6 +8,7 @@ export interface PnlTextProps {
   rate?: number;
   /** 字号，默认 14 */
   size?: number;
+  /** 加粗，用于主位盈亏（如总览的大数字） */
   strong?: boolean;
   /** 显式指定判色依据；不传则用 cents，没有 cents 再用 rate */
   colorBy?: number;
@@ -24,22 +25,27 @@ export interface PnlTextProps {
 export function PnlText({ cents, rate, size = 14, strong, colorBy }: PnlTextProps) {
   const basis = colorBy ?? cents ?? rate ?? 0;
 
-  const parts: string[] = [];
-  if (cents !== undefined)
-    parts.push(`${cents > 0 ? "+" : ""}${centsToYuan(cents)}`);
-  if (rate !== undefined)
-    parts.push(`${rate > 0 ? "+" : ""}${(rate * 100).toFixed(2)}%`);
+  const amountText
+    = cents === undefined ? null : `${cents > 0 ? "+" : ""}${centsToYuan(cents)}`;
+  const rateText
+    = rate === undefined ? null : `${rate > 0 ? "+" : ""}${(rate * 100).toFixed(2)}%`;
 
   return (
     <span
       style={{
+        // 用 inline-flex + gap 分隔两段，而不是往文本里塞空格——
+        // HTML 会把连续空白折叠成一个，塞空格达不到分隔效果
+        display: "inline-flex",
+        alignItems: "baseline",
+        gap: 8,
         color: pnlColor(basis),
         fontFamily: NUM_FONT,
         fontSize: size,
         fontWeight: strong ? 600 : 400,
       }}
     >
-      {parts.join("  ")}
+      {amountText !== null && <span>{amountText}</span>}
+      {rateText !== null && <span>{rateText}</span>}
     </span>
   );
 }
