@@ -2215,10 +2215,28 @@ git commit -m "feat(ui): 我的仪表盘卡片化，清掉 8 处旧色值
 - Create: `app/components/TxList.tsx`
 - Modify: `app/routes/master.tsx:1-299`
 - Modify: `app/routes/_index.tsx:1-222`
+- Modify: `app/components/OrderList.tsx:21-25`（只改 `detailed` 的 props 注释，见 Step 2）
 
 **Interfaces:**
 - Consumes: `OrderList`（Task 5）、`DcaPlanList`（Task 6）、`HoldingListReadonly`（Task 4）、`~/theme`（Task 1）
 - Produces: `TxList(props: { txs: TransactionView[] })`
+
+**⚠️ 行为等价性：本任务替换掉 4 个手写渲染块，逐字段核对过的结论**
+
+替换列表组件时，基准是**被替换掉的旧实现**，不是新代码看起来是否合理。
+以下是我预先核对出的、光看新代码发现不了的差异，Step 2/3 已按此写好：
+
+| # | 旧实现 | 风险 | 处置 |
+| - | ------ | ---- | ---- |
+| 1 | 订单表第 6 列「成交金额」 | `OrderList` 不传 `detailed` 就没有这个字段，赎回行主值还从「元」变「份」 | Step 2 传 `detailed` |
+| 2 | 流水表金额/余额两列都带「元」 | 卡片里没有列头能承载单位 | `TxList` 显式写「元」 |
+| 3 | `TX_TYPE_MAP` 是 `Record<string, …>` + `?? default` | 收窄成联合类型键后直接 `m.color`，遇到表外的 type 会 TypeError 炸掉整个公开页 | `TxList` 保留 `?? { color: "default", text: t.type }` |
+| 4 | 定投表「状态」列 `active` 是**绿色** Tag | 绿色在本项目专属「跌」 | `DcaPlanList`（Task 6）已改蓝，无需再动 |
+| 5 | 首页最近操作 `o.amount !== null` 才显示金额 | `OrderList` 用 `centsToYuan(o.amount ?? 0)`，null 显示「0.00 元」而非不显示 | **接受**：`side === "buy"` 时 `amount` 恒非 null（`trade.ts` 下单即写入），旧代码那个判空是防御性的死分支 |
+| 6 | 首页最近操作没有确认日 | `OrderList` 的 note 会多出「确认日 X」 | **接受**：信息增加、不是丢失，且与 `/me` 订单页一致 |
+
+Step 4 的校验命令只能查颜色和死符号，查不出上面这 6 条 —— 它们要靠读旧代码。
+不要在校验里新增 `grep -c` 计数断言：本阶段已有两次因我数错数导致的返工。
 
 - [ ] **Step 1: 写 `app/components/TxList.tsx`**
 
@@ -2251,7 +2269,15 @@ export function TxList({ txs }: TxListProps) {
   return (
     <div>
       {txs.map((t, i) => {
-        const m = TX_TYPE_MAP[t.type];
+        // ⚠️ 显式标注 `| undefined` 再兜底，这个 `??` 不是多余的。
+        // `type` 来自 D1 的 text 列，Drizzle 的 `text({ enum })` 只是**类型层**
+        // 约束、不生成 CHECK 约束，所以库里物理上可能出现表外的值
+        // （手工 d1 execute、或将来加了新类型但漏改这张表）。
+        // 被取代的旧代码是 `Record<string, …>` + `?? { color: "default", text: t }`，
+        // 遇到未知类型优雅降级成显示原始串；直接 `m.color` 会 TypeError
+        // 把**整个公开页**炸给游客看。Record 的键仍用联合类型以保证穷尽性。
+        const known: { color: string; text: string } | undefined = TX_TYPE_MAP[t.type];
+        const m = known ?? { color: "default", text: t.type };
         return (
           <div
             key={t.id}
@@ -2287,9 +2313,11 @@ export function TxList({ txs }: TxListProps) {
               >
                 {t.amount > 0 ? "+" : ""}
                 {centsToYuan(t.amount)}
+                {/* 「元」必须留。旧表格两列都带「元」，靠列头是撑不起单位的 */}
+                <span style={{ fontSize: 12 }}> 元</span>
               </div>
               <div style={{ fontSize: 12, color: COLOR.textSecondary, marginTop: 2 }}>
-                {`余额 ${centsToYuan(t.balance)}`}
+                {`余额 ${centsToYuan(t.balance)} 元`}
               </div>
             </div>
           </div>
@@ -2299,6 +2327,11 @@ export function TxList({ txs }: TxListProps) {
   );
 }
 ```
+
+⚠️ 一处**已知且接受**的行为差异：旧代码判色是 `v >= 0 ? 红 : 绿`，
+**0 算红**；`pnlColor(0)` 返回 `COLOR.neutral` 灰。五种流水类型的金额
+实际都不会为 0（`init`/`checkin` 恒正，`buy`/`sell`/`fee` 恒非零），
+且「0 显示灰」本身比「0 显示红」更正确。不要为它加特例。
 
 - [ ] **Step 2: 改造 `app/routes/master.tsx`**
 
@@ -2369,7 +2402,7 @@ const { Title, Paragraph } = Typography;
               children:
                 orders.length === 0
                   ? <EmptyState description="暂无交易记录" />
-                  : <OrderList orders={orders} />,
+                  : <OrderList orders={orders} detailed />,
             },
             {
               key: "txs",
@@ -2382,6 +2415,35 @@ const { Title, Paragraph } = Typography;
           ]}
         />
       </SectionCard>
+```
+
+⚠️ **这里必须传 `detailed`**，且要顺手改掉 `OrderList` 的 docstring。
+
+`OrderList` 的 props 注释现在写的是「订单页传 true；首页「最近订单」与公开盘传
+false（只要方向和金额）」—— **「公开盘传 false」那半句是我写错的**。旧
+master 订单表的第 6 列是**成交金额**（`dealAmount`，null 显示「—」），而
+`detailed` 为假时 `OrderList` 的 `secondary` 直接返回 `undefined`，
+`primary` 位显示的是**委托**金额/份额：
+
+| | 旧 master 表 | `detailed` 为假 | `detailed` 为真 |
+| --- | --- | --- | --- |
+| 申购 | 成交金额（扣费后净额） | 委托金额（扣费前） | 「净申购 X 元」✅ |
+| 赎回 | 成交金额（到账元） | 委托**份额**（份，单位都变了） | 「到账 X 元」✅ |
+
+所以不传 `detailed` 是**丢字段**，而且赎回行的数字连量纲都换了。传 `detailed`
+是旧列的超集（多出成交净值/份额/手续费）—— 这页自己的文案就写着「持仓、定投与
+交易流水**全部公开**」，多露这几个数正是它承诺的东西。
+
+把 `app/components/OrderList.tsx` 那段 props 注释改成：
+
+```tsx
+  /**
+   * true 时右侧副值展示完整成交信息（净申购/到账金额 · 成交净值 · 份额 · 手续费）。
+   * 订单页与公开盘传 true —— 公开盘的旧表格有「成交金额」列，不传就丢了这个字段，
+   * 且赎回行的主值会从「元」变成「份」，量纲都不对。
+   * 只有首页「最近操作」传 false：那里是五行概览，要的是方向和委托金额。
+   */
+  detailed?: boolean;
 ```
 
 ⚠️ 三处 `pagination={{ pageSize: 15 }}` 随表格一起没了。loader 上限是
@@ -2451,6 +2513,15 @@ git grep -n "HoldingTableReadonly" -- app/
 ```
 
 后两条必须**均无输出**。
+
+⚠️ 另外必须确认一件事：`master.tsx:62-68` 那份 `frequencyText` 带着已知 bug ——
+`WEEKDAY_LABEL[p.dayOfWeek ?? 0] ?? "—"` 用的是 `??`，而索引 0 是**空串**，
+`??` 接不住空串，所以 `dayOfWeek` 为 null 时它渲染成光秃秃的「每周」。
+`DcaPlanList` 里已改用 `||` 修对了（`4ffc83e`）。
+
+本步骤删掉 master 的整份副本 —— **不要把旧写法搬进任何地方**。
+删完确认公开盘的周定投行在 `dayOfWeek` 为 null 时渲染「每周—」，
+而不是「每周」。
 
 - [ ] **Step 5: 视觉验收**
 
