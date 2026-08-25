@@ -54,11 +54,27 @@ const CACHE_TTL = {
   fundList: 604800,
 } as const;
 
-/** 东财接口要求带 Referer，否则防盗链会挡 */
-const EM_HEADERS = {
+/**
+ * 各接口所需的请求头——实测结论，别乱改：
+ *
+ * | 接口                | Referer | User-Agent           |
+ * |---------------------|---------|----------------------|
+ * | 历史净值 lsjz       | 必须    | 无所谓               |
+ * | 基本信息 fundmobapi | 可选    | 绝不能带浏览器 UA ⚠️ |
+ * | 搜索 fundsuggest    | 无所谓  | 无所谓               |
+ *
+ * ⚠️ fundmobapi 是移动端接口，它按 UA 判断调用方：
+ * 带上 Chrome UA 会返回 200 但 Datas 为空（静默失败，极难排查）。
+ */
+
+/** 网页端接口用：带 Referer 过防盗链 */
+const EM_WEB_HEADERS = {
   Referer: 'https://fundf10.eastmoney.com/',
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+};
+
+/** 移动端接口用：只给 Referer，绝不带浏览器 UA */
+const EM_MOBILE_HEADERS = {
+  Referer: 'https://fundf10.eastmoney.com/',
 };
 
 /** 带超时的 fetch，避免 Worker 被慢接口拖死 */
@@ -123,7 +139,7 @@ export async function searchFunds(
 
   try {
     const url = `https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=${encodeURIComponent(key)}`;
-    const resp = await fetchWithTimeout(url, { headers: EM_HEADERS });
+    const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS });
     const json = (await resp.json()) as {
       Datas?: {
         CODE?: string;
@@ -180,7 +196,7 @@ export async function fetchFundBasic(
     const url =
       `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNNBasicInformation` +
       `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
-    const resp = await fetchWithTimeout(url, { headers: EM_HEADERS });
+    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
     const json = (await resp.json()) as {
       Datas?: Record<string, string> | null;
     };
@@ -228,7 +244,7 @@ export async function fetchNavHistory(
     const url =
       `https://api.fund.eastmoney.com/f10/lsjz` +
       `?fundCode=${encodeURIComponent(code)}&pageIndex=1&pageSize=${pageSize}`;
-    const resp = await fetchWithTimeout(url, { headers: EM_HEADERS });
+    const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS });
     const json = (await resp.json()) as {
       Data?: {
         LSJZList?: {
@@ -296,7 +312,7 @@ export async function fetchAllFunds(env: Env): Promise<FundSearchItem[]> {
   try {
     const resp = await fetchWithTimeout(
       'https://fund.eastmoney.com/js/fundcode_search.js',
-      { headers: EM_HEADERS },
+      { headers: EM_WEB_HEADERS },
       20000,
     );
     const text = await resp.text();
