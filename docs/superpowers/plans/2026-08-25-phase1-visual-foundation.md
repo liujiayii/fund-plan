@@ -2908,12 +2908,197 @@ pnlColor / frequencyText / TX_TYPE_MAP 三个重复实现各收敛为唯一定�
 
 ---
 
+## Task 12: 金额显示扫尾（修回归）
+
+> 本任务是 Task 2 的 review 发现后追加的。**它修的是期一自己制造的回归，不是润色。**
+
+**背景**：antd 的 `Statistic` 自带 `groupSeparator`，会把 `10000.00` 渲染成
+`10,000.00`。期一把 22 处 `Statistic` 换成 `StatBig` 之后，这个能力全部丢失 ——
+总资产、持仓市值、可用现金、初始本金全变成难读的长串数字。
+用户当初批准的效果图上写的是 `128,450.66`，实际会渲染成 `128450.66`。
+
+同源的第二个问题：`DataRow` 的 `value` 用比例字体渲染，而它的多数用途是数字
+（设置页 3 个金额、`BuyDrawer` 5 行、`SellDrawer` 4 行、赎回费率阶梯）。
+一列堆叠的金额纵向对不齐 —— 正是 `NUM_FONT` 存在的理由。
+
+**⚠️ 绝不能把千分位加进 `centsToYuan`。** `app/components/BuyDrawer.tsx` 的
+「全部」快捷按钮把 `centsToYuan(cashCents)` 的结果直接塞进金额 `Input` 的 value，
+该值随后走 `Number()` / `yuanToCents()`。一旦变成 `"100,000.00"`，
+`Number()` 得到 `NaN`，action 判「请输入正确的金额」——**买入功能当场坏掉**。
+千分位只能做在展示层。
+
+**Files:**
+- Create: `app/components/ui/format.ts`
+- Modify: `app/components/ui/DataRow.tsx`（加 `mono` prop）
+- Modify: 所有把金额喂给 `StatBig` / 列表组件的调用点（见 Step 3 清单）
+
+**Interfaces:**
+- Consumes: `centsToYuan`（`~/domain/money`）、`NUM_FONT`（`~/theme`）
+- Produces:
+  - `fmtYuan(cents: number): string` —— 带千分位的金额展示字符串
+  - `DataRow` 新增 `mono?: boolean`
+
+- [ ] **Step 1: 写 `app/components/ui/format.ts`**
+
+```ts
+import { centsToYuan } from "~/domain/money";
+
+/**
+ * 金额（分）→ 带千分位的展示字符串，如 12845066 → "128,450.66"。
+ *
+ * ⚠️ 为什么不直接改 `centsToYuan`：它的返回值会被塞进输入框
+ * （`BuyDrawer` 的「全部」快捷按钮 → `Input` 的 value → `Number()` / `yuanToCents()`），
+ * 带逗号会让 `Number()` 得到 NaN，下单直接失败。
+ * 所以 `centsToYuan` 保持机器可读，千分位只在展示层加。
+ *
+ * 这个函数纯字符串处理，不参与任何金额运算 ——
+ * 精度铁律不受影响（运算仍在 domain 层用 decimal.js 完成）。
+ */
+export function fmtYuan(cents: number): string {
+  const plain = centsToYuan(cents);
+  const negative = plain.startsWith("-");
+  const body = negative ? plain.slice(1) : plain;
+  const [intPart, decPart] = body.split(".");
+  // 从右往左每 3 位插一个逗号
+  const grouped = intPart.replace(/\B(?=(\d{3})+$)/g, ",");
+  return `${negative ? "-" : ""}${grouped}.${decPart}`;
+}
+```
+
+- [ ] **Step 2: 写单测（本任务有真实逻辑，走 TDD）**
+
+新建 `tests/domain/format.test.ts`（放 `tests/domain/` 是因为
+`vitest.config.ts` 只 include `tests/domain/**` 与 `tests/smoke.test.ts`；
+该文件不依赖 DOM，node 环境即可跑）：
+
+```ts
+import { describe, expect, it } from "vitest";
+import { fmtYuan } from "~/components/ui/format";
+
+describe("fmtYuan 千分位", () => {
+  it("四位数以上插逗号", () => {
+    expect(fmtYuan(1000000)).toBe("10,000.00");
+    expect(fmtYuan(12845066)).toBe("128,450.66");
+    expect(fmtYuan(100000000)).toBe("1,000,000.00");
+  });
+
+  it("三位数及以下不插", () => {
+    expect(fmtYuan(0)).toBe("0.00");
+    expect(fmtYuan(99999)).toBe("999.99");
+  });
+
+  it("负数的逗号插在数字里而不是符号后", () => {
+    expect(fmtYuan(-12845066)).toBe("-128,450.66");
+    expect(fmtYuan(-100)).toBe("-1.00");
+  });
+
+  it("恰好千位边界", () => {
+    expect(fmtYuan(99999 + 1)).toBe("1,000.00");
+  });
+});
+```
+
+先跑 `pnpm test tests/domain/format.test.ts` 确认 RED（模块不存在或断言失败），
+再写实现，再跑确认 GREEN。两次输出记进报告。
+
+- [ ] **Step 3: 给 `DataRow` 加 `mono` prop**
+
+`app/components/ui/DataRow.tsx` 的 `DataRowProps` 追加：
+
+```ts
+  /**
+   * 数值用等宽字体渲染。金额/净值/份额/费率一律传 true ——
+   * 比例字体下 "1" 比 "8" 窄，一列堆叠的数字会纵向对不齐，
+   * 这正是 NUM_FONT 存在的理由。
+   */
+  mono?: boolean;
+```
+
+函数签名改为 `{ label, value, last, mono }`，并把 value 那个 `<span>` 的
+style 改为：
+
+```tsx
+      <span
+        style={{
+          fontSize: 14,
+          color: COLOR.textPrimary,
+          textAlign: "right",
+          fontFamily: mono ? NUM_FONT : undefined,
+        }}
+      >
+        {value}
+      </span>
+```
+
+顶部 import 改为 `import { COLOR, NUM_FONT } from "~/theme";`。
+
+- [ ] **Step 4: 把展示层的 `centsToYuan` 换成 `fmtYuan`**
+
+⚠️ **只换展示位置。** 凡是结果会进入 `Input` value、`fetcher.submit` 载荷、
+或任何后续要 `Number()` / `yuanToCents()` 的地方，**必须保持 `centsToYuan`**。
+
+逐文件执行，每个文件改完立刻 `pnpm typecheck`：
+
+| 文件 | 换成 `fmtYuan` 的位置 | 必须保留 `centsToYuan` 的位置 |
+| ---- | -------------------- | ---------------------------- |
+| `app/components/ui/PnlText.tsx` | 内部格式化金额那处 | — |
+| `app/components/HoldingList.tsx` | 市值 `primary` | — |
+| `app/components/OrderList.tsx` | 委托金额、成交金额、手续费 | — |
+| `app/components/DcaPlanList.tsx` | 每期金额、累计投入 | — |
+| `app/components/TxList.tsx` | 金额、变动后余额 | — |
+| `app/components/PortfolioView.tsx` | 4 个 `StatBig` 的 value | — |
+| `app/routes/me._index.tsx` | 4 个资产 `StatBig` + 3 个签到 `StatBig` | — |
+| `app/routes/me.holdings.tsx` | 3 个 `StatBig` + `renderNote` 里的成本 | — |
+| `app/routes/me.dca.tsx` | 累计投入 `StatBig` | — |
+| `app/routes/me.settings.tsx` | 3 个金额 `DataRow`（并传 `mono`）+ 重置后现金 `StatBig` + 警告文案里的初始本金 | — |
+| `app/routes/funds.$code.tsx` | 起购金额 `StatBig` | — |
+| `app/components/BuyDrawer.tsx` | 起购金额、可用现金的 `DataRow`（并传 `mono`）、费用预估的三个金额 | **`onClick={() => setAmountYuan(centsToYuan(cashCents))}` 与 `placeholder` 里的起购金额** —— 前者进输入框，后者是给用户照着输的参考值 |
+| `app/components/SellDrawer.tsx` | FIFO 明细表的赎回费、赎回总额、赎回费合计、预计到账、已实现盈亏 | — |
+
+`SellDrawer` / `BuyDrawer` / `funds.$code.tsx` / `me.settings.tsx` 的
+数值型 `DataRow` 一律补 `mono`。
+
+- [ ] **Step 5: 全量校验**
+
+```bash
+pnpm verify
+git grep -n "centsToYuan" -- app/
+```
+
+第二条的输出逐行过一遍：每一处残留的 `centsToYuan` 都必须能说出「为什么这里
+不能带千分位」（进输入框 / 进 placeholder / 在 `fmtYuan` 内部）。
+说不出理由的就是漏改。
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add app/components/ui/format.ts tests/domain/format.test.ts app/components app/routes
+git commit -m "fix(ui): 恢复金额千分位，DataRow 数值改等宽
+
+期一把 22 处 antd Statistic 换成 StatBig 时，顺带丢掉了 Statistic
+自带的 groupSeparator——总资产/持仓市值/可用现金全变成难读的长串。
+这是期一自己制造的回归，不是缺少润色。
+
+千分位刻意不进 centsToYuan：BuyDrawer 的「全部」按钮把它的结果塞进
+金额 Input，加逗号会让 Number() 得到 NaN，买入当场失败。
+故新增展示层的 fmtYuan，机器可读的 centsToYuan 保持原样。
+
+同源问题一并修：DataRow 的 value 此前用比例字体，而它多数用途是数字
+（设置页 3 个金额、两个抽屉共 9 行），一列堆叠对不齐——加 mono prop。
+
+fmtYuan 有真实字符串逻辑，配 TDD 单测覆盖千位边界与负数符号位置。"
+```
+
+---
+
 ## 期一完成后的状态
 
 - 主色蓝、涨跌红绿分离，颜色有唯一出处 `app/theme.ts`
-- `app/components/ui/` 7 个展示组件就位，期二至期四直接消费
+- `app/components/ui/` 8 个展示组件就位（7 个原定 + `format.ts`），期二至期四直接消费
 - 4 个列表组件收敛掉 10 处重复的 `columns` 定义
 - 三个重复实现（`pnlColor` ×3、`frequencyText` ×2、`TX_TYPE_MAP` ×1）各归一处
+- 金额带千分位、数值列等宽对齐（Task 12 修掉了 `Statistic` → `StatBig` 丢失
+  `groupSeparator` 造成的回归）
 - **功能零变化**，纯观感与代码结构改善
 
 **下一步**：期二「我的资产」——`app/domain/asset-timeline.ts` 的账本重放
