@@ -2200,8 +2200,8 @@ git commit -m "feat(ui): 我的仪表盘卡片化，清掉 8 处旧色值
 删掉本文件第三份 pnlColor 副本。
 
 签到金额从红色改主色蓝：那是「领本金」的操作引导，不是投资收益，
-用红色会让人误以为赚了钱。Progress 去掉 strokeColor，
-默认吃主色即可。「主人」Tag 从红改蓝。"
+用红色会让人误以为赚了钱。Progress 的 strokeColor 改成 COLOR.primary
+（不能删，percent 满 100 时 antd 会自动变绿）。「主人」Tag 从红改蓝。"
 ```
 
 ---
