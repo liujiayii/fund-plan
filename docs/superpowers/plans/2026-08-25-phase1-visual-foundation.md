@@ -2923,6 +2923,11 @@ FIFO 逐批费用明细表按设计文档 4.0 保留表格结构。"
 
 ## Task 11: 收尾验收
 
+> ⚠️ **执行顺序改了：本任务放在 Task 12 之后跑，是全阶段的最后一道闸门。**
+> 原来排在 12 前面，但 Task 12 要改 50 多处金额展示 —— 在它之前跑
+> `pnpm verify` 与各项清零检查，等于验完又失效、还得再验一遍。
+> 编号保持不变（改号会让台账与已生成的简报全部对不上），只调执行次序。
+
 **Files:**
 - Modify: `app/uno.gen.css`（由 `pnpm uno:build` 生成，不手改）
 - Modify: `docs/superpowers/specs/2026-08-25-alipay-style-refactor-design.md`（勾掉期一）
@@ -2987,16 +2992,25 @@ pnpm verify
 - [ ] **Step 4: 旧色值清零检查**
 
 ```bash
-git grep -n "c62828" ; git grep -n "2e7d32"
+git grep -n "c62828\|2e7d32" -- app/ uno.config.ts
 ```
 
-**两条都必须无输出。** 若 `uno.config.ts` 还有残留，说明 Task 1 Step 4 没做完。
+**必须无输出。**
+
+⚠️ **必须带 pathspec。** 不带的话会命中 `docs/` 下的设计文档与本计划 ——
+它们正当地引用了「被删掉的旧色值是 `#c62828` / `#2e7d32`」，那不是残留。
+不带 pathspec 会看到一堆输出，误判成没清干净。
+
+⚠️ 另一个反向陷阱：**空输出既可能是「真的没有」，也可能是命令写错了**。
+`git grep` 不认 ripgrep 的 `\x3c` 之类转义（本阶段真踩过一次，
+`git grep -- '\x3c Table'` 返回空，差点当成「Table 已清零」上报）。
+先故意搜一个你知道存在的字符串验证命令本身是通的，再信空输出。
 
 - [ ] **Step 5: 死代码检查**
 
 ```bash
-git grep -n "HoldingTableReadonly"
-git grep -n -- '<Table' -- app/
+git grep -n "HoldingTableReadonly" -- app/
+git grep -n '<Table' -- app/
 ```
 
 第一条必须**无输出**。第二条必须**只有 1 行**，且是
@@ -3005,9 +3019,9 @@ git grep -n -- '<Table' -- app/
 顺便确认这三个已收敛的符号不再有重复定义：
 
 ```bash
-git grep -n "function pnlColor"        # 应只剩 app/theme.ts 一处
-git grep -n "function frequencyText"   # 应只剩 app/components/DcaPlanList.tsx 一处
-git grep -n "TX_TYPE_MAP"             # 应只剩 app/components/TxList.tsx 一处
+git grep -n "function pnlColor" -- app/        # 应只剩 app/theme.ts 一处
+git grep -n "function frequencyText" -- app/   # 应只剩 app/components/DcaPlanList.tsx 一处
+git grep -n "TX_TYPE_MAP" -- app/             # 应只剩 app/components/TxList.tsx 一处
 ```
 
 - [ ] **Step 6: 逐页回归**
@@ -3188,7 +3202,7 @@ style 改为：
 
 | 文件 | 换成 `fmtYuan` 的位置 | 必须保留 `centsToYuan` 的位置 |
 | ---- | -------------------- | ---------------------------- |
-| `app/components/ui/PnlText.tsx` | 内部格式化金额那处 | — |
+| `app/components/ui/PnlText.tsx` | 内部格式化金额那处，**并补回「元」后缀**（见下） | — |
 | `app/components/HoldingList.tsx` | 市值 `primary` | — |
 | `app/components/OrderList.tsx` | 委托金额、成交金额、手续费 | — |
 | `app/components/DcaPlanList.tsx` | 每期金额、累计投入 | — |
@@ -3203,6 +3217,21 @@ style 改为：
 | `app/components/BuyDrawer.tsx` | 起购金额、可用现金的 `DataRow`（并传 `mono`）、费用预估的三个金额 | **`onClick={() => setAmountYuan(centsToYuan(cashCents))}` 与 `placeholder` 里的起购金额** —— 前者进输入框，后者是给用户照着输的参考值 |
 | `app/components/SellDrawer.tsx` | FIFO 明细表的赎回费、赎回总额、赎回费合计、预计到账、已实现盈亏 | — |
 | `app/services/trade.ts` | **一处都不换** | 第 59、71 行两条下单校验的错误文案 —— 理由见下 |
+
+⚠️ **`PnlText` 还要补回「元」后缀**（期八 review 查出的真回归，波及 5 个消费者）。
+旧的三张盈亏列都是 `{v > 0 ? "+" : ""}{centsToYuan(v)} 元`，`PnlText` 收敛时
+把「元」漏了 —— 这是本阶段命中最多的那一类（单位由列头承载，卡片里没有列头）。
+一处改、5 个消费者一起修好：
+
+```tsx
+  const amountText
+    = cents === undefined ? null : `${cents > 0 ? "+" : ""}${fmtYuan(cents)} 元`;
+```
+
+只在渲染 `cents` 时补，`rate` 那段仍然只带 `%`。
+
+顺带把该文件第 22 行的 docstring 改对 —— 它现在写着「渲染成「+1,203.55  +2.31%」」，
+那个千分位在换成 `fmtYuan` 之前是**假的**，换完才成真。
 
 ⚠️ **`app/services/trade.ts` 一个字都不要动。** 它那两处 `centsToYuan` 在用户可见的
 错误文案里，看着像该换，但 `fmtYuan` 住在 `app/components/ui/`，**服务层 import
