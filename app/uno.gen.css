@@ -1,5 +1,8 @@
+/* layer: properties */
+@supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))){*, ::before, ::after, ::backdrop{--un-ease:initial;}}
+@property --un-ease{syntax:"*";inherits:false;}
 /* layer: theme */
-:root, :host { --spacing: 0.25rem; }
+:root, :host { --spacing: 0.25rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); }
 /* layer: default */
 .m\[s\]{margin:s;}
 .\!me{margin-inline-end:calc(var(--spacing) * 4) !important;}
@@ -12,4 +15,5 @@
 .inline{display:inline;}
 .block{display:block;}
 .hidden{display:none;}
+.ease{--un-ease:var(--ease-DEFAULT);transition-timing-function:var(--ease-DEFAULT);}
 .fixed{position:fixed;}
