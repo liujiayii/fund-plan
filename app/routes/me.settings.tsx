@@ -2,18 +2,18 @@ import type { Route } from "./+types/me.settings";
 import {
   Alert,
   Button,
-  Card,
-  Descriptions,
   Form,
   Input,
   Popconfirm,
   Space,
-  Statistic,
   Tag,
   Typography,
 } from "antd";
 import { eq } from "drizzle-orm";
 import { useFetcher } from "react-router";
+import { DataRow } from "~/components/ui/DataRow";
+import { SectionCard } from "~/components/ui/SectionCard";
+import { StatBig } from "~/components/ui/StatBig";
 import {
   account,
   checkin,
@@ -136,45 +136,27 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
         <Alert type="error" showIcon message={fetcher.data.error} closable />
       )}
 
-      <Card title="账户信息">
-        <Descriptions
-          bordered
-          column={{ xs: 1, md: 2 }}
-          items={[
-            { key: "name", label: "用户名", children: user.username },
-            {
-              key: "role",
-              label: "角色",
-              children:
-                user.role === "admin"
-                  ? (
-                      <Tag color="red">管理员（组合公开）</Tag>
-                    )
-                  : (
-                      <Tag>普通用户</Tag>
-                    ),
-            },
-            { key: "reg", label: "注册时间", children: fmtTime(registeredAt) },
-            {
-              key: "init",
-              label: "初始本金",
-              children: `${centsToYuan(acc.initialCash)} 元`,
-            },
-            {
-              key: "cash",
-              label: "当前现金",
-              children: `${centsToYuan(acc.cash)} 元`,
-            },
-            {
-              key: "checkin",
-              label: "累计签到入金",
-              children: `${centsToYuan(acc.totalCheckin)} 元`,
-            },
-          ]}
+      <SectionCard title="账户信息">
+        <DataRow label="用户名" value={user.username} />
+        <DataRow
+          label="角色"
+          value={
+            user.role === "admin"
+              ? <Tag color="blue">管理员（组合公开）</Tag>
+              : <Tag>普通用户</Tag>
+          }
         />
-      </Card>
+        <DataRow label="注册时间" value={fmtTime(registeredAt)} />
+        <DataRow label="初始本金" value={`${centsToYuan(acc.initialCash)} 元`} />
+        <DataRow label="当前现金" value={`${centsToYuan(acc.cash)} 元`} />
+        <DataRow
+          label="累计签到入金"
+          value={`${centsToYuan(acc.totalCheckin)} 元`}
+          last
+        />
+      </SectionCard>
 
-      <Card title="修改密码">
+      <SectionCard title="修改密码">
         <fetcher.Form method="post" style={{ maxWidth: 420 }}>
           <input type="hidden" name="intent" value="changePassword" />
           <Form.Item label="当前密码" layout="vertical">
@@ -193,9 +175,9 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
         <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
           本站不发邮件，忘记密码需联系管理员手动重置，请务必记好。
         </Paragraph>
-      </Card>
+      </SectionCard>
 
-      <Card title="重置模拟盘">
+      <SectionCard title="重置模拟盘">
         <Space direction="vertical" style={{ width: "100%" }}>
           <Alert
             type="warning"
@@ -219,10 +201,11 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
               </div>
             )}
           />
-          <Statistic
-            title="重置后现金"
+          <StatBig
+            label="重置后现金"
             value={centsToYuan(acc.initialCash)}
             suffix="元"
+            size={24}
           />
           <Popconfirm
             title="确定要重置模拟盘？"
@@ -238,7 +221,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
             </Button>
           </Popconfirm>
         </Space>
-      </Card>
+      </SectionCard>
     </Space>
   );
 }
