@@ -76,20 +76,36 @@ export function pnlColor(v: number): string;
 theme={{
   token: {
     colorPrimary: COLOR.primary,
-    colorSuccess: COLOR.up,   // 语义反转：金融语境「成功」= 涨
-    colorError: COLOR.down,
+    colorInfo: COLOR.primary,
     borderRadius: 8,
     colorBgLayout: COLOR.bg,
     colorTextSecondary: COLOR.textSecondary,
   },
   components: {
     Card: { borderRadiusLG: 12 },
+    Layout: { headerBg: COLOR.card, bodyBg: COLOR.bg, footerBg: "transparent" },
+    Menu: { itemBg: "transparent" },
   },
 }}
 ```
 
+**⚠️ 绝不要把 `colorSuccess` 映射成涨红、`colorError` 映射成跌绿。**
+那会反向污染所有非金融语义：错误 `Alert` 变绿、成功 `Alert` 变红、
+`<Tag color="success">` 变红。antd 的语义色保持原样（成功绿、错误红），
+**涨跌只通过我们自己的 `COLOR.up` / `COLOR.down` / `pnlColor()` 表达**。
+两套色系各管一摊，互不干涉。
+
 数字排版用等宽字体栈，保证金额纵向对齐：
 `"DIN Alternate", "SF Mono", ui-monospace, "Menlo", monospace`。
+
+### 3.4 顺手降噪：少贴 Tag
+
+现在订单行每条都贴「方向 + 来源 + 状态」三个 Tag，其中「手动」和「已确认」
+都是**常态**，贴了等于没信息，只是噪音。重构后：
+
+- 来源：只在 `dca` 时贴「定投」，手动不贴
+- 状态：只在 `pending` / `failed` 时贴，已成交不贴
+- 方向：申购用 `color="blue"`，赎回用默认色 —— 不占用红绿（红绿是涨跌的）
 
 ### 3.3 不变的约定
 
@@ -111,16 +127,30 @@ app/components/ui/        ← 设计系统层：零业务依赖，只吃 props�
   EmptyState.tsx          统一空态（文案 + CTA 按钮）
 
 app/components/           ← 业务组件：知道领域概念，可依赖 services 的类型
+  HoldingList.tsx         持仓列表（收敛 4 处重复的 columns：PortfolioView / me._index / me.holdings）
+  OrderList.tsx           订单列表（收敛 3 处：me.orders / me._index / master）
+  DcaPlanList.tsx         定投计划列表（收敛 2 处：me.dca / master）
+  TxList.tsx              资金流水列表（master）
   AssetTrendChart.tsx     资产走势曲线（lazy 范式，见 4.1）
   ProfitCalendar.tsx      收益日历（纯 div 格子，见 4.2）
   OrderTimeline.tsx       订单确认进度（下单 → 确认中 → 已成交）
-  HoldingCard.tsx         持仓卡片（取代持仓 Table）
   PeriodReturnTable.tsx   阶段涨幅表
   NavChart.tsx            保留，改为消费 ui/PeriodTabs
   BuyPanel.tsx            由 BuyDrawer 重构：大数字输入 + 费用预估
   SellPanel.tsx           由 SellDrawer 重构：份额滑块 + FIFO 分档费用明细
   PortfolioView.tsx       保留（公开盘与自己的盘共用），内部换成 ui/ 组件
 ```
+
+**期一交付的是前 4 个列表组件 + `ui/` 全部 7 个**；后面那些属于期二至期四。
+
+### 4.0 哪些 Table 该留
+
+11 处 `Table` 里有 **1 处应当保留**：`SellDrawer.tsx:182` 的 FIFO 逐批费用明细。
+它是真正的表格数据 —— 同维度（份额 / 天数 / 费率 / 费用）多行横向对比，
+换成卡片反而更难读。只把它的字面色值换成 token，不改结构。
+
+其余 10 处都是「实体列表」（持仓、订单、定投计划、流水、搜索结果），
+横向 7~13 列靠 `scroll={{ x: 1100 }}` 撑着，是当前体验最差的地方，全部换卡片列表。
 
 ### 4.1 依赖 canvas 的图表一律照 NavChart 范式办
 
@@ -365,14 +395,17 @@ export const watchlist = sqliteTable(
 
 ### 期一 · 视觉地基（不加功能，纯改观感）
 
-- `app/theme.ts`：`COLOR` + `pnlColor`，收敛 3 处重复定义与 25 处硬编码色值
+- `app/theme.ts`：`COLOR` + `pnlColor` + `ANTD_TOKEN`，收敛 3 处重复定义与 25 处硬编码色值
+- `uno.config.ts`：`shortcuts` 与 `theme.colors` 里也埋着 3 处旧色值，一并换
 - `app/components/ui/*` 全部 7 个组件
-- `root.tsx`：主色换蓝、浅灰底、内容容器、导航重排
-- 全站 **11 处** `Table` → 卡片列表（`FundListItem` / `HoldingCard` / `DataRow`）
+- `app/components/` 4 个列表组件：`HoldingList` / `OrderList` / `DcaPlanList` / `TxList`
+- `root.tsx`：主色换蓝、Header 由深色改白底、浅灰底、内容容器、导航重排
+- **10 处** `Table` → 卡片列表（`SellDrawer` 的 FIFO 明细表保留，见 4.0）
+- 顺手降噪：订单行不再给「手动」「已确认」贴 Tag（见 3.4）
 - `pnpm uno:build` 重新生成样式
 
 **验收**：所有既有页面功能不变、观感全面更新、`pnpm verify` 全绿、
-全仓搜索不到任何 `#c62828` / `#2e7d32` 字面量。
+**全仓**（含 `uno.config.ts`）搜索不到任何 `#c62828` / `#2e7d32` 字面量。
 
 ### 期二 · 我的资产（重放）
 
