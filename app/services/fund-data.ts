@@ -1,5 +1,10 @@
+import type { Db } from "~/db/client";
+import type { FundRow } from "~/db/schema";
 import Decimal from "decimal.js";
+import { eq } from "drizzle-orm";
+import { fund } from "~/db/schema";
 import { roundInt, yuanToCents } from "~/domain/money";
+import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 
 /**
  * 东方财富公开接口封装：搜索、档案、历史净值、全量列表兜底。
@@ -347,4 +352,56 @@ export async function fetchAllFunds(env: Env): Promise<FundSearchItem[]> {
     console.error("[fund-data] 拉取全量基金列表失败：", err);
     return [];
   }
+}
+
+/**
+ * 确保基金档案在库里且不过期：没有或超过 1 天就拉东财 `fetchFundBasic` 落库。
+ *
+ * 抽自 `funds.$code` loader 此前的内联逻辑，供详情页与自选两处复用——
+ * 自选时用户可能没访问过详情页，`fund` 表里还没这只基金，需先落档案。
+ *
+ * 拉不到（接口挂）且库里也没有 → 返回 null，调用方自行决定（详情页 404、自选报错）。
+ * 拉不到但库里有过期档案 → 保留旧档案返回（与原 loader 行为一致，不因接口抖动丢档案）。
+ */
+export async function ensureFund(
+  db: Db,
+  env: Env,
+  code: string,
+): Promise<FundRow | null> {
+  let f = await db.query.fund.findFirst({ where: eq(fund.code, code) });
+  const stale = !f || Date.now() - f.updatedAt > 86_400_000;
+
+  if (stale) {
+    const basic = await fetchFundBasic(env, code);
+    if (basic) {
+      await db
+        .insert(fund)
+        .values({
+          code: basic.code,
+          name: basic.name,
+          type: basic.type,
+          purchaseRate: basic.purchaseRate,
+          redeemTiers: DEFAULT_REDEEM_TIERS,
+          minPurchase: basic.minPurchaseCents,
+          riskLevel: basic.riskLevel,
+          status: basic.status,
+          updatedAt: Date.now(),
+        })
+        .onConflictDoUpdate({
+          target: fund.code,
+          set: {
+            name: basic.name,
+            type: basic.type,
+            purchaseRate: basic.purchaseRate,
+            minPurchase: basic.minPurchaseCents,
+            riskLevel: basic.riskLevel,
+            status: basic.status,
+            updatedAt: Date.now(),
+          },
+        });
+      f = await db.query.fund.findFirst({ where: eq(fund.code, code) });
+    }
+  }
+
+  return f ?? null;
 }

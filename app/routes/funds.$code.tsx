@@ -8,11 +8,11 @@ import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
-import { account, fund, fundNav } from "~/db/schema";
+import { account, fundNav } from "~/db/schema";
 import { navToDisplay, rateToPercent } from "~/domain/money";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { getAppContext } from "~/services/context";
-import { fetchFundBasic, fetchNavHistory } from "~/services/fund-data";
+import { ensureFund, fetchNavHistory } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
 import { getNavSeries } from "~/services/portfolio-service";
 import { placeBuyOrder } from "~/services/trade";
@@ -33,42 +33,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const { db, env } = getAppContext(context);
   const code = params.code;
 
-  // 先看库里有没有档案；没有或超过 1 天就去东财拉一次
-  let f = await db.query.fund.findFirst({ where: eq(fund.code, code) });
-  const stale = !f || Date.now() - f.updatedAt > 86_400_000;
-
-  if (stale) {
-    const basic = await fetchFundBasic(env, code);
-    if (basic) {
-      await db
-        .insert(fund)
-        .values({
-          code: basic.code,
-          name: basic.name,
-          type: basic.type,
-          purchaseRate: basic.purchaseRate,
-          redeemTiers: DEFAULT_REDEEM_TIERS,
-          minPurchase: basic.minPurchaseCents,
-          riskLevel: basic.riskLevel,
-          status: basic.status,
-          updatedAt: Date.now(),
-        })
-        .onConflictDoUpdate({
-          target: fund.code,
-          set: {
-            name: basic.name,
-            type: basic.type,
-            purchaseRate: basic.purchaseRate,
-            minPurchase: basic.minPurchaseCents,
-            riskLevel: basic.riskLevel,
-            status: basic.status,
-            updatedAt: Date.now(),
-          },
-        });
-      f = await db.query.fund.findFirst({ where: eq(fund.code, code) });
-    }
-  }
-
+  // 基金档案：没有或过期就拉东财落库（抽到 ensureFund，自选也复用它）
+  const f = await ensureFund(db, env, code);
   if (!f) {
     throw new Response(`没找到基金 ${code}`, { status: 404 });
   }
