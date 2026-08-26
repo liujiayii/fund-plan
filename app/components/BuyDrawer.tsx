@@ -125,6 +125,16 @@ export function BuyDrawer(props: BuyDrawerProps) {
 
         {/* 快捷金额 */}
         <Space wrap style={{ marginBottom: 16 }}>
+          {/*
+            这里的「10000 元」刻意不加千分位，尽管上方「可用现金」那行已经是
+            「100,000.00 元」。两个理由：
+            1. fmtYuan 不是即插即用 —— 它强制两位小数，按钮会变成「10,000.00 元」，
+               对一个巴掌大的快捷按钮反而更难读；
+            2. String(v) 的产物同时也是 setAmountYuan 的入参，会进 Input 再走
+               Number()，格式必须保持机器可读（同下方「全部」按钮那条注释）。
+            要统一得再写一个「整数元」格式化器，为一处调用点新增第三个格式化函数
+            不划算。所以这是个决定，不是漏改。
+          */}
           {[100, 500, 1000, 5000, 10000].map(v => (
             <Button key={v} size="small" onClick={() => setAmountYuan(String(v))}>
               {v}

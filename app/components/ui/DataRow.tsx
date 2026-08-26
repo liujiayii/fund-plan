@@ -29,6 +29,10 @@ export function DataRow({ label, value, last, mono }: DataRowProps) {
     // 渲染的是真 <table> + <th>，屏幕阅读器靠它把 label 与 value 配对。
     // 换成无语义的 div+span 会丢掉这层关联。
     // dl 的默认 margin 必须清掉，否则每行之间会多出浏览器默认间距。
+    //
+    // ⚠️ 但别记成「可访问性已彻底解决」：给列表元素改 display（这里是 flex）
+    // 属于已知会在某些 Safari + VoiceOver 组合下丢掉列表语义的那类改动。
+    // dt/dd 的配对关系仍严格优于 div+span，所以不回退；只是别过度声明。
     <dl
       style={{
         display: "flex",
