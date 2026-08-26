@@ -6,10 +6,11 @@ import { useState } from "react";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { NavChart } from "~/components/NavChart";
 import { DataRow } from "~/components/ui/DataRow";
+import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { account, fund, fundNav } from "~/db/schema";
-import { centsToYuan, navToDisplay, rateToPercent } from "~/domain/money";
+import { navToDisplay, rateToPercent } from "~/domain/money";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { getAppContext } from "~/services/context";
 import { fetchFundBasic, fetchNavHistory } from "~/services/fund-data";
@@ -205,7 +206,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             />
             <StatBig
               label="起购金额"
-              value={centsToYuan(f.minPurchase)}
+              value={fmtYuan(f.minPurchase)}
               suffix="元"
               size={24}
             />
@@ -258,6 +259,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
                 : `持有 ${t.minDays} ~ 不满 ${t.maxDays} 天`
             }
             value={rateToPercent(t.rate)}
+            mono
             last={i === f.redeemTiers.length - 1}
           />
         ))}

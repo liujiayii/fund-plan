@@ -4,7 +4,7 @@ import { COLOR, NUM_FONT } from "~/theme";
 export interface StatBigProps {
   /** 标签，如「总资产」 */
   label: ReactNode;
-  /** 主数值，传已格式化好的字符串（如 centsToYuan 的产物） */
+  /** 主数值，传已格式化好的字符串（金额一律传 fmtYuan 的产物，带千分位） */
   value: ReactNode;
   /** 数值颜色，默认正文色；盈亏类传 pnlColor(v) */
   color?: string;

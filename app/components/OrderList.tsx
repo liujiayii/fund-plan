@@ -1,7 +1,8 @@
 import type { OrderView } from "~/services/portfolio-service";
 import { Tag, Tooltip } from "antd";
+import { fmtYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
-import { centsToYuan, navToDisplay, sharesToDisplay } from "~/domain/money";
+import { navToDisplay, sharesToDisplay } from "~/domain/money";
 import { COLOR, NUM_FONT } from "~/theme";
 
 /**
@@ -45,7 +46,7 @@ export function OrderList({ orders, detailed }: OrderListProps) {
         // 委托：申购看金额、赎回看份额
         const commissioned
           = o.side === "buy"
-            ? `${centsToYuan(o.amount ?? 0)} 元`
+            ? `${fmtYuan(o.amount ?? 0)} 元`
             : `${sharesToDisplay(o.shares ?? 0)} 份`;
 
         return (
@@ -98,10 +99,10 @@ export function OrderList({ orders, detailed }: OrderListProps) {
                           「净申购」/「到账」这两个词替代了旧表格靠 Tooltip 才能看到的
                           语义说明（申购=扣申购费后的净额，赎回=扣赎回费后的实际到账）。 */}
                       {o.dealAmount !== null
-                        && `${o.side === "buy" ? "净申购" : "到账"} ${centsToYuan(o.dealAmount)} 元 · `}
+                        && `${o.side === "buy" ? "净申购" : "到账"} ${fmtYuan(o.dealAmount)} 元 · `}
                       {`成交净值 ${navToDisplay(o.dealNav)}`}
                       {o.dealShares !== null && ` · ${sharesToDisplay(o.dealShares)} 份`}
-                      {o.fee !== null && ` · 费 ${centsToYuan(o.fee)} 元`}
+                      {o.fee !== null && ` · 费 ${fmtYuan(o.fee)} 元`}
                     </span>
                   )
                 : undefined

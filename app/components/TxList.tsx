@@ -1,6 +1,6 @@
 import type { TransactionView } from "~/services/portfolio-service";
 import { Tag } from "antd";
-import { centsToYuan } from "~/domain/money";
+import { fmtYuan } from "~/components/ui/format";
 import { COLOR, NUM_FONT, pnlColor } from "~/theme";
 
 /** 流水类型的中文与配色。⚠️ 类型 Tag 不用红绿——红绿专属涨跌，这里是资金流向分类 */
@@ -69,7 +69,7 @@ export function TxList({ txs }: TxListProps) {
                 }}
               >
                 {t.amount > 0 ? "+" : ""}
-                {centsToYuan(t.amount)}
+                {fmtYuan(t.amount)}
                 {/* 「元」必须留。旧表格两列都带「元」，靠列头是撑不起单位的 */}
                 <span style={{ fontSize: 12 }}> 元</span>
               </div>
@@ -83,7 +83,7 @@ export function TxList({ txs }: TxListProps) {
                   marginTop: 2,
                 }}
               >
-                {`余额 ${centsToYuan(t.balance)} 元`}
+                {`余额 ${fmtYuan(t.balance)} 元`}
               </div>
             </div>
           </div>

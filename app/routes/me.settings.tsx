@@ -12,6 +12,7 @@ import {
 import { eq } from "drizzle-orm";
 import { useFetcher } from "react-router";
 import { DataRow } from "~/components/ui/DataRow";
+import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import {
@@ -24,7 +25,6 @@ import {
   transactions,
   user as userTable,
 } from "~/db/schema";
-import { centsToYuan } from "~/domain/money";
 import { changePassword } from "~/services/auth";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
@@ -147,11 +147,12 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
           }
         />
         <DataRow label="注册时间" value={fmtTime(registeredAt)} />
-        <DataRow label="初始本金" value={`${centsToYuan(acc.initialCash)} 元`} />
-        <DataRow label="当前现金" value={`${centsToYuan(acc.cash)} 元`} />
+        <DataRow label="初始本金" value={`${fmtYuan(acc.initialCash)} 元`} mono />
+        <DataRow label="当前现金" value={`${fmtYuan(acc.cash)} 元`} mono />
         <DataRow
           label="累计签到入金"
-          value={`${centsToYuan(acc.totalCheckin)} 元`}
+          value={`${fmtYuan(acc.totalCheckin)} 元`}
+          mono
           last
         />
       </SectionCard>
@@ -191,7 +192,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
                 资金流水与签到记录，现金恢复为初始本金
                 {" "}
                 <Text strong>
-                  {centsToYuan(acc.initialCash)}
+                  {fmtYuan(acc.initialCash)}
                   {" "}
                   元
                 </Text>
@@ -203,7 +204,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
           />
           <StatBig
             label="重置后现金"
-            value={centsToYuan(acc.initialCash)}
+            value={fmtYuan(acc.initialCash)}
             suffix="元"
             size={24}
           />

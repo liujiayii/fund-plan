@@ -15,9 +15,10 @@ import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { EmptyState } from "~/components/ui/EmptyState";
+import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
-import { centsToYuan, yuanToCents } from "~/domain/money";
+import { yuanToCents } from "~/domain/money";
 import { getAppContext } from "~/services/context";
 import {
   createDcaPlan,
@@ -169,7 +170,7 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
           <StatBig label="执行中" value={activeCount} suffix="个" size={24} />
           <StatBig
             label="累计投入"
-            value={centsToYuan(totalInvested)}
+            value={fmtYuan(totalInvested)}
             suffix="元"
             size={24}
           />

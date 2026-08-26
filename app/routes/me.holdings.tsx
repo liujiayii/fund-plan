@@ -14,10 +14,11 @@ import { BuyDrawer } from "~/components/BuyDrawer";
 import { HoldingList } from "~/components/HoldingList";
 import { SellDrawer } from "~/components/SellDrawer";
 import { EmptyState } from "~/components/ui/EmptyState";
+import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { account, fund, orders, shareLot } from "~/db/schema";
-import { centsToYuan, navToDisplay, SHARE_SCALE, sharesToDisplay, yuanToCents } from "~/domain/money";
+import { navToDisplay, SHARE_SCALE, sharesToDisplay, yuanToCents } from "~/domain/money";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { resolveConfirmDate } from "~/domain/trading-calendar";
 import { getAppContext } from "~/services/context";
@@ -166,18 +167,18 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
         <Space size={48} wrap>
           <StatBig
             label="持仓市值"
-            value={centsToYuan(summary.marketValueCents)}
+            value={fmtYuan(summary.marketValueCents)}
             suffix="元"
           />
           <StatBig
             label="可用现金"
-            value={centsToYuan(cash)}
+            value={fmtYuan(cash)}
             suffix="元"
             size={24}
           />
           <StatBig
             label="浮动盈亏"
-            value={`${summary.totalPnlCents > 0 ? "+" : ""}${centsToYuan(summary.totalPnlCents)}`}
+            value={`${summary.totalPnlCents > 0 ? "+" : ""}${fmtYuan(summary.totalPnlCents)}`}
             suffix="元"
             size={24}
             color={pnlColor(summary.totalPnlCents)}
@@ -201,7 +202,7 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
                   const d = detailOf(h.fundCode);
                   return (
                     <>
-                      {`${sharesToDisplay(h.sharesScaled)} 份 · 成本 ${centsToYuan(h.costCents)} 元`}
+                      {`${sharesToDisplay(h.sharesScaled)} 份 · 成本 ${fmtYuan(h.costCents)} 元`}
                       {` · 净值 ${navToDisplay(h.navScaled)}`}
                       {h.navDate ? `（${h.navDate}）` : ""}
                       {` · ${d.lots.length} 批`}

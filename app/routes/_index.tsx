@@ -6,10 +6,10 @@ import {
   HoldingListReadonly,
   PortfolioSummary,
 } from "~/components/PortfolioView";
+import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS } from "~/domain/checkin";
 import { INITIAL_CASH_CENTS } from "~/domain/config";
-import { centsToYuan } from "~/domain/money";
 import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
 import { getOrders, getPortfolio } from "~/services/portfolio-service";
@@ -88,7 +88,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           注册即送
           {" "}
           <Text strong>
-            {centsToYuan(INITIAL_CASH_CENTS)}
+            {fmtYuan(INITIAL_CASH_CENTS)}
             {" "}
             元
           </Text>
@@ -97,9 +97,9 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           每日签到再领
           {" "}
           <Text strong>
-            {centsToYuan(CHECKIN_BASE_CENTS)}
+            {fmtYuan(CHECKIN_BASE_CENTS)}
             ~
-            {centsToYuan(CHECKIN_MAX_CENTS)}
+            {fmtYuan(CHECKIN_MAX_CENTS)}
             {" "}
             元
           </Text>

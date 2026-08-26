@@ -2,6 +2,7 @@ import { Alert, Button, Drawer, Form, Input, Space, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { DataRow } from "~/components/ui/DataRow";
+import { fmtYuan } from "~/components/ui/format";
 import { centsToYuan, navToDisplay, rateToPercent, sharesToDisplay, yuanToCents } from "~/domain/money";
 import { calcPurchase } from "~/domain/purchase";
 
@@ -95,12 +96,14 @@ export function BuyDrawer(props: BuyDrawerProps) {
                 ? `${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`
                 : "暂无"
             }
+            mono
           />
-          <DataRow label="申购费率" value={rateToPercent(purchaseRate)} />
-          <DataRow label="起购金额" value={`${centsToYuan(minPurchaseCents)} 元`} />
+          <DataRow label="申购费率" value={rateToPercent(purchaseRate)} mono />
+          <DataRow label="起购金额" value={`${fmtYuan(minPurchaseCents)} 元`} mono />
           <DataRow
             label="可用现金"
-            value={cashCents === null ? "请先登录" : `${centsToYuan(cashCents)} 元`}
+            value={cashCents === null ? "请先登录" : `${fmtYuan(cashCents)} 元`}
+            mono
             last
           />
         </div>
@@ -110,6 +113,9 @@ export function BuyDrawer(props: BuyDrawerProps) {
             name="amount"
             size="large"
             inputMode="decimal"
+            // ⚠️ 这里与下方「全部」按钮必须保持 centsToYuan（不换 fmtYuan）：
+            // placeholder 是给用户照着输的参考值，带千分位会诱导用户输入
+            // 输入框根本不接受的格式（提交时走 Number()，逗号即 NaN）
             placeholder={`最低 ${centsToYuan(minPurchaseCents)} 元`}
             value={amountYuan}
             onChange={e => setAmountYuan(e.target.value)}
@@ -129,6 +135,8 @@ export function BuyDrawer(props: BuyDrawerProps) {
           {cashCents !== null && (
             <Button
               size="small"
+              // ⚠️ 这个值直接进 Input，绝不能换成 fmtYuan：
+              // Number("100,000.00") 是 NaN，买入会当场判「请输入正确的金额」
               onClick={() => setAmountYuan(centsToYuan(cashCents))}
             >
               全部
@@ -141,7 +149,7 @@ export function BuyDrawer(props: BuyDrawerProps) {
             type="warning"
             showIcon
             style={{ marginBottom: 12 }}
-            message={`低于起购金额 ${centsToYuan(minPurchaseCents)} 元`}
+            message={`低于起购金额 ${fmtYuan(minPurchaseCents)} 元`}
           />
         )}
         {notEnoughCash && (
@@ -149,7 +157,7 @@ export function BuyDrawer(props: BuyDrawerProps) {
             type="error"
             showIcon
             style={{ marginBottom: 12 }}
-            message={`现金不足，可用 ${centsToYuan(cashCents!)} 元`}
+            message={`现金不足，可用 ${fmtYuan(cashCents!)} 元`}
           />
         )}
 
@@ -164,7 +172,7 @@ export function BuyDrawer(props: BuyDrawerProps) {
                 <div>
                   申购费用：
                   <Text strong>
-                    {centsToYuan(estimate.feeCents)}
+                    {fmtYuan(estimate.feeCents)}
                     {" "}
                     元
                   </Text>
@@ -173,7 +181,7 @@ export function BuyDrawer(props: BuyDrawerProps) {
                 <div>
                   净申购金额：
                   <Text strong>
-                    {centsToYuan(estimate.netAmountCents)}
+                    {fmtYuan(estimate.netAmountCents)}
                     {" "}
                     元
                   </Text>

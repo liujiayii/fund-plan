@@ -1,10 +1,10 @@
 import type { HoldingView, PortfolioView } from "~/services/portfolio-service";
 import { Col, Row, Tag, Typography } from "antd";
 import { EmptyState } from "~/components/ui/EmptyState";
+import { fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
-import { centsToYuan } from "~/domain/money";
 import { pnlColor } from "~/theme";
 import { HoldingList, sharesAndNavNote } from "./HoldingList";
 
@@ -32,14 +32,14 @@ export function PortfolioSummary({
       <Col xs={12} md={6}>
         <StatBig
           label="总资产"
-          value={centsToYuan(summary.totalAssetCents)}
+          value={fmtYuan(summary.totalAssetCents)}
           suffix="元"
         />
       </Col>
       <Col xs={12} md={6}>
         <StatBig
           label="持仓市值"
-          value={centsToYuan(summary.marketValueCents)}
+          value={fmtYuan(summary.marketValueCents)}
           suffix="元"
           size={24}
         />
@@ -48,7 +48,7 @@ export function PortfolioSummary({
         <Col xs={12} md={6}>
           <StatBig
             label="可用现金"
-            value={centsToYuan(summary.cashCents)}
+            value={fmtYuan(summary.cashCents)}
             suffix="元"
             size={24}
           />
@@ -57,7 +57,7 @@ export function PortfolioSummary({
       <Col xs={12} md={6}>
         <StatBig
           label="浮动盈亏"
-          value={`${summary.totalPnlCents > 0 ? "+" : ""}${centsToYuan(summary.totalPnlCents)}`}
+          value={`${summary.totalPnlCents > 0 ? "+" : ""}${fmtYuan(summary.totalPnlCents)}`}
           suffix="元"
           size={24}
           color={pnlColor(summary.totalPnlCents)}

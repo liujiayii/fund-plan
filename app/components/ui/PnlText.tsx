@@ -1,5 +1,5 @@
-import { centsToYuan } from "~/domain/money";
 import { NUM_FONT, pnlColor } from "~/theme";
+import { fmtYuan } from "./format";
 
 export interface PnlTextProps {
   /** 盈亏金额（分）。传了就显示金额 */
@@ -16,17 +16,22 @@ export interface PnlTextProps {
 
 /**
  * 涨跌数字。自动带 +/− 号与红绿配色 ——
- * 收敛此前散落在 6 个文件里、每次都手写一遍的
+ * 收敛列表与总览里反复手写的
  * `{v > 0 ? "+" : ""}{centsToYuan(v)}` + `style={{ color: pnlColor(v) }}`。
  *
- * cents 与 rate 都传时渲染成「+1,203.55  +2.31%」两段。
- * 负数由 centsToYuan 自带 "-" 号，所以只在正数时补 "+"。
+ * ⚠️ `SellDrawer` 的「已实现盈亏」刻意仍手写这个模式：只换它一处会让它拿到
+ * NUM_FONT，而同一块里的赎回总额/赎回费合计/预计到账仍是比例字体，
+ * 块内字体反而更不一致。
+ *
+ * cents 与 rate 都传时渲染成「+1,203.55 元  +2.31%」两段 ——
+ * 金额带「元」是因为卡片里没有列头承载单位（旧的三张盈亏列靠列头）。
+ * 负数的 "-" 号由 fmtYuan 自带，所以只在正数时补 "+"。
  */
 export function PnlText({ cents, rate, size = 14, strong, colorBy }: PnlTextProps) {
   const basis = colorBy ?? cents ?? rate ?? 0;
 
   const amountText
-    = cents === undefined ? null : `${cents > 0 ? "+" : ""}${centsToYuan(cents)}`;
+    = cents === undefined ? null : `${cents > 0 ? "+" : ""}${fmtYuan(cents)} 元`;
   const rateText
     = rate === undefined ? null : `${rate > 0 ? "+" : ""}${(rate * 100).toFixed(2)}%`;
 

@@ -12,8 +12,8 @@ import {
 import { useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { DataRow } from "~/components/ui/DataRow";
+import { fmtYuan } from "~/components/ui/format";
 import {
-  centsToYuan,
   navToDisplay,
   rateToPercent,
   SHARE_SCALE,
@@ -113,10 +113,12 @@ export function SellDrawer(props: SellDrawerProps) {
           <DataRow
             label="最新净值"
             value={`${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`}
+            mono
           />
           <DataRow
             label="可赎份额"
             value={`${sharesToDisplay(availableSharesScaled)} 份`}
+            mono
           />
           <DataRow label="预计确认日" value={confirmDate} last />
         </div>
@@ -201,14 +203,14 @@ export function SellDrawer(props: SellDrawerProps) {
                       title: "赎回费",
                       dataIndex: "feeCents",
                       align: "right",
-                      render: (v: number) => `${centsToYuan(v)} 元`,
+                      render: (v: number) => `${fmtYuan(v)} 元`,
                     },
                   ]}
                 />
                 <div>
                   赎回总额：
                   <Text strong>
-                    {centsToYuan(estimate.totalGrossCents)}
+                    {fmtYuan(estimate.totalGrossCents)}
                     {" "}
                     元
                   </Text>
@@ -225,7 +227,7 @@ export function SellDrawer(props: SellDrawerProps) {
                     费率高的警示由下方 Paragraph 的文案承载，不需要颜色再喊一遍。
                   */}
                   <Text strong>
-                    {centsToYuan(estimate.totalFeeCents)}
+                    {fmtYuan(estimate.totalFeeCents)}
                     {" "}
                     元
                   </Text>
@@ -233,7 +235,7 @@ export function SellDrawer(props: SellDrawerProps) {
                 <div>
                   预计到账：
                   <Text strong style={{ color: COLOR.primary }}>
-                    {centsToYuan(estimate.totalNetCents)}
+                    {fmtYuan(estimate.totalNetCents)}
                     {" "}
                     元
                   </Text>
@@ -245,7 +247,7 @@ export function SellDrawer(props: SellDrawerProps) {
                     style={{ color: pnlColor(estimate.realizedPnlCents) }}
                   >
                     {estimate.realizedPnlCents > 0 ? "+" : ""}
-                    {centsToYuan(estimate.realizedPnlCents)}
+                    {fmtYuan(estimate.realizedPnlCents)}
                     {" "}
                     元
                   </Text>

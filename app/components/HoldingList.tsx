@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import type { HoldingView } from "~/services/portfolio-service";
+import { fmtYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { PnlText } from "~/components/ui/PnlText";
-import { centsToYuan, navToDisplay, sharesToDisplay } from "~/domain/money";
+import { navToDisplay, sharesToDisplay } from "~/domain/money";
 import { COLOR, NUM_FONT } from "~/theme";
 
 export interface HoldingListProps {
@@ -71,7 +72,7 @@ export function HoldingList({
                 color: COLOR.textPrimary,
               }}
             >
-              {centsToYuan(h.marketValueCents)}
+              {fmtYuan(h.marketValueCents)}
               <span style={{ fontSize: 12, color: COLOR.textSecondary }}> 元</span>
             </span>
           )}

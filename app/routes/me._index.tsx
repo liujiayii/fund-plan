@@ -13,11 +13,11 @@ import { useFetcher } from "react-router";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
 import { EmptyState } from "~/components/ui/EmptyState";
+import { fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_MAX_CENTS } from "~/domain/checkin";
-import { centsToYuan } from "~/domain/money";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
@@ -52,7 +52,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     const r = await doCheckin(db, user.id);
     return {
       ok: true,
-      message: `签到成功！连签第 ${r.streak} 天，领取 ${centsToYuan(r.reward)} 元`,
+      message: `签到成功！连签第 ${r.streak} 天，领取 ${fmtYuan(r.reward)} 元`,
     };
   }
   catch (err) {
@@ -93,14 +93,14 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
           <Col xs={12} md={6}>
             <StatBig
               label="总资产"
-              value={centsToYuan(summary.totalAssetCents)}
+              value={fmtYuan(summary.totalAssetCents)}
               suffix="元"
             />
           </Col>
           <Col xs={12} md={6}>
             <StatBig
               label="持仓市值"
-              value={centsToYuan(summary.marketValueCents)}
+              value={fmtYuan(summary.marketValueCents)}
               suffix="元"
               size={24}
             />
@@ -108,7 +108,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
           <Col xs={12} md={6}>
             <StatBig
               label="可用现金"
-              value={centsToYuan(summary.cashCents)}
+              value={fmtYuan(summary.cashCents)}
               suffix="元"
               size={24}
             />
@@ -116,7 +116,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
           <Col xs={12} md={6}>
             <StatBig
               label="浮动盈亏"
-              value={`${summary.totalPnlCents > 0 ? "+" : ""}${centsToYuan(summary.totalPnlCents)}`}
+              value={`${summary.totalPnlCents > 0 ? "+" : ""}${fmtYuan(summary.totalPnlCents)}`}
               suffix="元"
               size={24}
               color={pnlColor(summary.totalPnlCents)}
@@ -150,7 +150,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
                 不是投资收益。用红色会让人误以为赚了钱 */}
             <StatBig
               label={checkinStatus.checkedToday ? "明天可领" : "今天可领"}
-              value={centsToYuan(checkinStatus.nextReward)}
+              value={fmtYuan(checkinStatus.nextReward)}
               suffix="元"
               size={24}
               color={COLOR.primary}
@@ -174,7 +174,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
           <Col xs={24} md={8}>
             <StatBig
               label="累计签到入金"
-              value={centsToYuan(checkinStatus.totalCheckin)}
+              value={fmtYuan(checkinStatus.totalCheckin)}
               suffix="元"
               size={24}
             />

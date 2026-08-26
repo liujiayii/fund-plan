@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { DcaPlanView } from "~/services/portfolio-service";
 import { Tag } from "antd";
+import { fmtYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
-import { centsToYuan } from "~/domain/money";
 import { COLOR, NUM_FONT } from "~/theme";
 
 /** 周几的中文（索引 1-7 对应周一到周日，0 位留空占位） */
@@ -68,13 +68,13 @@ export function DcaPlanList({ plans, renderActions }: DcaPlanListProps) {
                 color: COLOR.textPrimary,
               }}
             >
-              {centsToYuan(p.amount)}
+              {fmtYuan(p.amount)}
               <span style={{ fontSize: 12, color: COLOR.textSecondary }}> 元/期</span>
             </span>
           )}
           secondary={(
             <span style={{ fontSize: 12, color: COLOR.textSecondary }}>
-              {`已投 ${p.runCount} 期 · 累计 ${centsToYuan(p.totalInvested)} 元`}
+              {`已投 ${p.runCount} 期 · 累计 ${fmtYuan(p.totalInvested)} 元`}
             </span>
           )}
           actions={renderActions?.(p)}
