@@ -19,6 +19,15 @@ export interface HoldingListProps {
   renderNote: (h: HoldingView) => ReactNode;
   /** 每行最右的操作按钮。只读页不传 */
   renderActions?: (h: HoldingView) => ReactNode;
+  /**
+   * 行内名称链接的目标地址。不传则 `FundListItem` 用默认 `/funds/{code}`。
+   *
+   * 这是期一在 `FundListItem` 上预留的 `href` 口子的兑现：
+   * `/me/holdings` 列表行的语义是「点进单只持仓详情」，应链到 `/me/holdings/{code}`
+   * 而非基金详情页 `/funds/{code}`；只读页（`HoldingListReadonly`、`me._index`）
+   * 不传本 prop，继续走默认基金详情页链接，行为不变。
+   */
+  getHref?: (h: HoldingView) => string;
 }
 
 /**
@@ -53,6 +62,7 @@ export function HoldingList({
   holdings,
   renderNote,
   renderActions,
+  getHref,
 }: HoldingListProps) {
   return (
     <div>
@@ -63,6 +73,8 @@ export function HoldingList({
           fundName={h.fundName}
           fundType={h.fundType || undefined}
           note={renderNote(h)}
+          // 不传 getHref 时落到 FundListItem 默认 /funds/{code}，只读页不受影响
+          href={getHref ? getHref(h) : undefined}
           last={i === holdings.length - 1}
           primary={(
             <span
