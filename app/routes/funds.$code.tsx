@@ -1,21 +1,30 @@
 import type { Route } from "./+types/funds.$code";
 import type { RedeemTier } from "~/domain/redeem";
-import { Alert, Button, Space, Tag, Typography } from "antd";
+import { Alert, Button, Space, Table, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
+import { useFetcher } from "react-router";
 import { BuyPanel } from "~/components/BuyPanel";
 import { NavChart } from "~/components/NavChart";
+import { PeriodReturnTable } from "~/components/PeriodReturnTable";
 import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { account, fundNav } from "~/db/schema";
 import { navToDisplay, rateToPercent } from "~/domain/money";
+import { calcPeriodReturns } from "~/domain/performance";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { getAppContext } from "~/services/context";
-import { ensureFund, fetchNavHistory } from "~/services/fund-data";
+import {
+  ensureFund,
+  fetchFundDetail,
+  fetchFundPosition,
+  fetchNavHistory,
+} from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
 import { getNavSeries } from "~/services/portfolio-service";
 import { placeBuyOrder } from "~/services/trade";
+import { isWatched } from "~/services/watchlist-service";
 import { pnlColor } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
@@ -26,8 +35,9 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 /**
- * 基金详情。首次访问会把档案与近 120 天净值落库——
+ * 基金详情。首次访问会把档案与近 400 天净值落库——
  * 这既是画图的数据源，也是 T+1 撮合的净值底座。
+ * 400 天约 1.6 年，覆盖近 1 年阶段涨幅（spec §6）。
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const { db, env } = getAppContext(context);
@@ -39,10 +49,10 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw new Response(`没找到基金 ${code}`, { status: 404 });
   }
 
-  // 净值：库里没有就拉一批回来
+  // 净值：库里没有就拉一批回来（首访 400 天，覆盖近 1 年阶段涨幅）
   let series = await getNavSeries(db, code);
   if (series.length === 0) {
-    const rows = await fetchNavHistory(env, code, 120);
+    const rows = await fetchNavHistory(env, code, 400);
     for (const r of rows) {
       await db
         .insert(fundNav)
@@ -58,17 +68,29 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     series = await getNavSeries(db, code);
   }
 
-  // 登录用户才需要现金余额（买入抽屉要用）
+  // 登录用户才需要现金余额（买入抽屉要用）与自选态
   const user = await getCurrentUser(request, db);
   let cash: number | null = null;
+  let watched = false;
   if (user) {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, user.id),
     });
     cash = acc?.cash ?? 0;
+    // 静态 import：顶部已 import isWatched，直接调用
+    watched = await isWatched(db, user.id, code);
   }
 
   const latest = series.at(-1) ?? null;
+
+  // 阶段涨幅：本地 fund_nav 计算（不新增接口依赖）
+  const periodReturns = calcPeriodReturns(series);
+
+  // 基金概况与重仓股：东财接口，拉不到为 null/[]（不渲染对应卡片）
+  const [detail, position] = await Promise.all([
+    fetchFundDetail(env, code),
+    fetchFundPosition(env, code),
+  ]);
 
   return {
     fund: {
@@ -85,6 +107,10 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     latest,
     cash,
     isLoggedIn: !!user,
+    watched,
+    periodReturns,
+    detail,
+    position,
   };
 }
 
@@ -132,6 +158,8 @@ const RISK_MAP: Record<number, { color: string; label: string }> = {
 
 export default function FundDetail({ loaderData }: Route.ComponentProps) {
   const { fund: f, series, latest, cash, isLoggedIn } = loaderData;
+  // 加自选表单提交器：post 到 /me/watchlist，靠 fetcher.data 回显成功/失败
+  const fetcher = useFetcher();
 
   const risk = RISK_MAP[f.riskLevel] ?? RISK_MAP[3];
   // 日涨跌率存的是万分之，转成百分比展示
@@ -182,12 +210,38 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             <Button size="large" href="/funds">
               继续搜索
             </Button>
+            {isLoggedIn && (
+              <fetcher.Form method="post" action="/me/watchlist" style={{ display: "inline" }}>
+                {/* intent 随当前态翻转：未自选→add，已自选→remove */}
+                <input type="hidden" name="intent" value={loaderData.watched ? "remove" : "add"} />
+                <input type="hidden" name="fundCode" value={f.code} />
+                <Button
+                  size="large"
+                  htmlType="submit"
+                  // 加自选用主色，已自选用默认色；不占红绿
+                  type={loaderData.watched ? "default" : "primary"}
+                >
+                  {loaderData.watched ? "已自选 ✓" : "加自选"}
+                </Button>
+              </fetcher.Form>
+            )}
           </Space>
+
+          {/* 加自选提交结果：成功/失败均显式提示，不靠 reload 刷新 */}
+          {fetcher.data?.ok && <Alert type="success" showIcon message={fetcher.data.message} closable />}
+          {fetcher.data?.error && <Alert type="error" showIcon message={fetcher.data.error} closable />}
         </Space>
       </SectionCard>
 
       <SectionCard title="净值走势">
         <NavChart data={series} />
+      </SectionCard>
+
+      <SectionCard title="阶段涨幅">
+        <PeriodReturnTable returns={loaderData.periodReturns} />
+        <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
+          基于本地历史净值计算，前向填充非交易日。数据不足的区间显示「—」。
+        </Paragraph>
       </SectionCard>
 
       <SectionCard title="赎回费率阶梯">
@@ -214,6 +268,52 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           />
         ))}
       </SectionCard>
+
+      {loaderData.detail && (
+        <SectionCard title="基金概况">
+          <DataRow label="基金经理" value={loaderData.detail.manager || "—"} />
+          <DataRow label="基金公司" value={loaderData.detail.company || "—"} />
+          <DataRow label="成立日期" value={loaderData.detail.estabDate || "—"} />
+          <DataRow
+            label="最新规模"
+            value={loaderData.detail.scaleYuan !== null
+              ? `${(loaderData.detail.scaleYuan / 1e8).toFixed(2)} 亿元`
+              : "—"}
+            mono
+          />
+          <DataRow label="管理费" value={rateToPercent(loaderData.detail.mgmtFeeRate)} mono />
+          <DataRow label="托管费" value={rateToPercent(loaderData.detail.trustFeeRate)} mono last />
+          {loaderData.detail.benchmark && (
+            <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+              业绩基准：
+              {loaderData.detail.benchmark}
+            </Paragraph>
+          )}
+        </SectionCard>
+      )}
+
+      {loaderData.position.length > 0 && (
+        <SectionCard title="重仓股（前 10）">
+          <Table
+            size="small"
+            pagination={false}
+            rowKey="code"
+            dataSource={loaderData.position.slice(0, 10)}
+            columns={[
+              { title: "代码", dataIndex: "code" },
+              { title: "简称", dataIndex: "name" },
+              {
+                title: "占净值比",
+                dataIndex: "ratio",
+                align: "right",
+                render: (v: number) => rateToPercent(v),
+              },
+              { title: "行业", dataIndex: "industry" },
+              { title: "增减持", dataIndex: "changeType" },
+            ]}
+          />
+        </SectionCard>
+      )}
 
       {!latest && (
         <Alert
@@ -251,6 +351,16 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
                 <Text type="secondary">净值数据就绪后可在此下单</Text>
               )}
       </SectionCard>
+
+      {/* 定投入口：买入 + 定投双入口（spec §9）。每天 10:00 自动扫描到期计划下单 */}
+      {isLoggedIn && (
+        <SectionCard title="定投">
+          <Paragraph type="secondary">
+            设置定期定额买入这只基金，系统每天 10:00 自动扫描到期计划下单。
+          </Paragraph>
+          <Button type="primary" href="/me/dca">去设置定投 →</Button>
+        </SectionCard>
+      )}
     </Space>
   );
 }
