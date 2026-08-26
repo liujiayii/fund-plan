@@ -136,7 +136,8 @@ export function BuyDrawer(props: BuyDrawerProps) {
             <Button
               size="small"
               // ⚠️ 这个值直接进 Input，绝不能换成 fmtYuan：
-              // Number("100,000.00") 是 NaN，买入会当场判「请输入正确的金额」
+              // Number("100,000.00") 是 NaN → amountCents 归 0 → canSubmit 为 false，
+              // 「确认买入」按钮当场置灰点不动（真到了 action 也判「请输入正确的金额」）
               onClick={() => setAmountYuan(centsToYuan(cashCents))}
             >
               全部
