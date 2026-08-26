@@ -19,6 +19,7 @@ import {
   ensureFund,
   fetchFundDetail,
   fetchFundPosition,
+  fetchIndexNav,
   fetchNavHistory,
 } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
@@ -87,9 +88,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const periodReturns = calcPeriodReturns(series);
 
   // 基金概况与重仓股：东财接口，拉不到为 null/[]（不渲染对应卡片）
-  const [detail, position] = await Promise.all([
+  // 沪深300 基准线：拉不到返回空数组，组件内传 undefined 即不画基准线（彩蛋，可砍）
+  const [detail, position, indexNav] = await Promise.all([
     fetchFundDetail(env, code),
     fetchFundPosition(env, code),
+    fetchIndexNav(env, "1.000300", 400),
   ]);
 
   return {
@@ -111,6 +114,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     periodReturns,
     detail,
     position,
+    indexNav,
   };
 }
 
@@ -234,7 +238,10 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
       </SectionCard>
 
       <SectionCard title="净值走势">
-        <NavChart data={series} />
+        <NavChart
+          data={series}
+          benchmark={loaderData.indexNav.length > 0 ? loaderData.indexNav : undefined}
+        />
       </SectionCard>
 
       <SectionCard title="阶段涨幅">
