@@ -13,7 +13,9 @@ import { centsToYuan } from "~/domain/money";
  */
 export function fmtYuan(cents: number): string {
   const plain = centsToYuan(cents);
-  // 负号先摘出来再分组，否则 "-1234.00" 会被当成整数部分 "-1234" 处理
+  // 负号显式摘出再拼回，而不是留给正则一起处理：留着它也能出对结果，
+  // 但那依赖「\B 在 "-" 与首位数字之间恰好不匹配」这个微妙行为，
+  // 下次有人调正则时很容易踩掉。这里让符号位与分组互不影响。
   const negative = plain.startsWith("-");
   const body = negative ? plain.slice(1) : plain;
   const [intPart, decPart] = body.split(".");
