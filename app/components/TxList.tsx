@@ -3,7 +3,7 @@ import { Tag } from "antd";
 import { centsToYuan } from "~/domain/money";
 import { COLOR, NUM_FONT, pnlColor } from "~/theme";
 
-/** 流水类型的中文与配色。⚠️ 不用红绿——红绿专属涨跌，这里是资金流向分类 */
+/** 流水类型的中文与配色。⚠️ 类型 Tag 不用红绿——红绿专属涨跌，这里是资金流向分类 */
 const TX_TYPE_MAP: Record<TransactionView["type"], { color: string; text: string }> = {
   init: { color: "blue", text: "初始本金" },
   checkin: { color: "gold", text: "签到奖励" },
@@ -19,7 +19,7 @@ export interface TxListProps {
 /**
  * 资金流水列表。取代 master.tsx 里 5 列的 <Table<TransactionView>>。
  *
- * 每行：左侧类型 Tag + 时间 + 备注，右侧金额（正入账红、负出账绿）与变动后余额。
+ * 每行：左侧类型 Tag + 备注 + 时间，右侧金额（正入账红、负出账绿）与变动后余额。
  * 这里复用 pnlColor 是合适的 —— 资金的「进」与「出」和涨跌同一套红绿语义。
  */
 export function TxList({ txs }: TxListProps) {
@@ -73,7 +73,16 @@ export function TxList({ txs }: TxListProps) {
                 {/* 「元」必须留。旧表格两列都带「元」，靠列头是撑不起单位的 */}
                 <span style={{ fontSize: 12 }}> 元</span>
               </div>
-              <div style={{ fontSize: 12, color: COLOR.textSecondary, marginTop: 2 }}>
+              {/* 余额也走 NUM_FONT：它和上面的金额同属一个右对齐数值列，
+                  少了等宽字体，行与行之间金额对齐、余额却参差 */}
+              <div
+                style={{
+                  fontFamily: NUM_FONT,
+                  fontSize: 12,
+                  color: COLOR.textSecondary,
+                  marginTop: 2,
+                }}
+              >
                 {`余额 ${centsToYuan(t.balance)} 元`}
               </div>
             </div>
