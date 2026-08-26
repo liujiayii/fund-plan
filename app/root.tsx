@@ -36,6 +36,9 @@ const NAV_ITEMS = [
   { key: "/", label: "首页" },
   { key: "/master", label: "主人的盘" },
   { key: "/funds", label: "基金" },
+  // ⚠️ 必须排在 /me 之前：selectedKey 用 startsWith 取首个命中，
+  // /me/watchlist 若在 /me 之后会被 /me 先吃掉，导致自选页高亮「我的」
+  { key: "/me/watchlist", label: "自选" },
   { key: "/me", label: "我的" },
 ];
 

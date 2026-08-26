@@ -21,6 +21,7 @@ export default [
   route("me", "routes/me._index.tsx"),
   route("me/holdings", "routes/me.holdings.tsx"),
   route("me/holdings/:code", "routes/me.holdings.$code.tsx"),
+  route("me/watchlist", "routes/me.watchlist.tsx"),
   route("me/orders", "routes/me.orders.tsx"),
   route("me/dca", "routes/me.dca.tsx"),
   route("me/settings", "routes/me.settings.tsx"),
