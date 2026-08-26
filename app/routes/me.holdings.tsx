@@ -167,11 +167,16 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
         {/* 三个数都用次位 24：本页没有「总资产」，但「持仓市值」在 /me 与 / 上都是
             24，字号跟着**标签**走而不是跟着「本页第几个」走，同一个词换页不变大小 */}
         <Space size={48} wrap>
+          {/* ⚠️ 这里刻意不传 size，吃 StatBig 的 32px 默认值。
+              StatBig 的规则是「主位 32、次位 24」—— 那是按**角色**定的，不是按标签定的。
+              /me 与 /master 上主位是「总资产」，所以那两页的「持仓市值」是次位 24；
+              本页根本不显示总资产，「持仓市值」就是这一页的主位。
+              全分支 review 曾按「同一标签跨页不该变字号」建议统一成 24，
+              那会让本页三个数字齐平、**一页没有视觉锚点**。不要再统一。 */}
           <StatBig
             label="持仓市值"
             value={fmtYuan(summary.marketValueCents)}
             suffix="元"
-            size={24}
           />
           <StatBig
             label="可用现金"
