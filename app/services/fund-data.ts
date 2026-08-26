@@ -1,5 +1,6 @@
 import type { Db } from "~/db/client";
 import type { FundRow } from "~/db/schema";
+import dayjs from "dayjs";
 import Decimal from "decimal.js";
 import { eq } from "drizzle-orm";
 import { fund } from "~/db/schema";
@@ -57,6 +58,14 @@ const CACHE_TTL = {
   basic: 86400,
   /** 全量列表缓存 7 天 */
   fundList: 604800,
+  /** 排行榜缓存 1 天（按 类型×周期 组合，12 key/天） */
+  rank: 86400,
+  /** 基金详情（经理/规模/成立日）缓存 1 天 */
+  detail: 86400,
+  /** 重仓股缓存 1 天 */
+  position: 86400,
+  /** 指数净值（沪深300）缓存 1 天 */
+  index: 86400,
 } as const;
 
 /**
@@ -404,4 +413,289 @@ export async function ensureFund(
   }
 
   return f ?? null;
+}
+
+/**
+ * 基金排行榜。东财 rankhandler.aspx。
+ *
+ * @param env Worker 环境，提供 KV
+ * @param ft 类型过滤：gp=股票型 / hh=混合型 / zs=指数型 / zq=债券型
+ * @param sc 排序码：1yzf=近1月 / 3yzf=近3月 / 1nzf=近1年（由 rank-service 按 period 映射）
+ * @param periodCol 选中周期收益率在逗号分隔字段里的列索引（1yzf→8, 3yzf→9, 1nzf→11）
+ *
+ * 失败/空 → 返回空数组（rank-service 会走本地降级）。
+ */
+export async function fetchFundRank(
+  env: Env,
+  ft: string,
+  sc: string,
+  periodCol: number,
+): Promise<FundRankItem[]> {
+  const cacheKey = `fund:rank:${ft}:${sc}`;
+  const cached = await env.KV.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as FundRankItem[];
+    }
+    catch {
+      /* 缓存损坏，走网络 */
+    }
+  }
+
+  try {
+    // sd/ed 给一个宽窗口（近 400 天），实际排序由 sc 控制
+    const ed = dayjs().format("YYYY-MM-DD");
+    const sd = dayjs().subtract(400, "day").format("YYYY-MM-DD");
+    const url
+      = `https://fund.eastmoney.com/data/rankhandler.aspx`
+        + `?op=ph&dt=kf&ft=${encodeURIComponent(ft)}&pi=1&pn=20&po=desc`
+        + `&sc=${encodeURIComponent(sc)}&sd=${sd}&ed=${ed}&qd=di&v=${Date.now()}`;
+    const resp = await fetchWithTimeout(url, {
+      // 排行榜页的 Referer，与 EM_WEB_HEADERS 的 fundf10 Referer 不同但不影响防盗链
+      headers: { Referer: "https://fund.eastmoney.com/data/fundranking.html" },
+    });
+    const text = await resp.text();
+    // rankhandler 返回 `var rankData = {datas:["..."],...};`——是 JS 赋值而非 JSON
+    // （键名 datas 无引号），不能整体 JSON.parse。用正则抠出 datas 数组：
+    // 字符串内不含 ]，可放心匹配到第一个 ]。
+    const m = text.match(/datas:\s*(\[[^\]]*\])/);
+    if (!m)
+      return [];
+    const datas = JSON.parse(m[1]) as string[];
+
+    const items: FundRankItem[] = [];
+    for (const d of datas) {
+      const f = d.split(",");
+      // 字段数不足无法读周期列时跳过——保证 periodCol 索引安全
+      if (f.length < 7 || f.length <= periodCol)
+        continue;
+      const unitNav = navToScaled(f[4]);
+      if (!f[0] || !f[1] || unitNav === null)
+        continue;
+      const periodRaw = f[periodCol] ?? "";
+      items.push({
+        code: f[0],
+        name: f[1],
+        navDate: f[3] ?? "",
+        unitNav,
+        growthRate: percentToRate(f[6]),
+        periodRate:
+          periodRaw === "" || periodRaw === "--" ? null : percentToRate(periodRaw),
+      });
+    }
+
+    if (items.length > 0) {
+      await env.KV.put(cacheKey, JSON.stringify(items), {
+        expirationTtl: CACHE_TTL.rank,
+      });
+    }
+    return items;
+  }
+  catch (err) {
+    console.error(`[fund-data] 拉取排行榜 ft=${ft} sc=${sc} 失败：`, err);
+    return [];
+  }
+}
+
+/** 基金排行榜条目 */
+export interface FundRankItem {
+  code: string;
+  name: string;
+  navDate: string;
+  unitNav: number;
+  growthRate: number;
+  periodRate: number | null;
+}
+
+/**
+ * 基金详情（经理/规模/成立日/公司/基准/费率）。东财 FundMNDetailInformation。
+ * 一条接口把详情页要的元数据全给齐，省得分头拉经理/规模。
+ * ⚠️ 用 EM_MOBILE_HEADERS（fundmobapi 移动端，绝不能带浏览器 UA）。
+ * 失败返回 null，详情页不渲染「基金概况」卡片。
+ */
+export interface FundDetail {
+  manager: string;
+  company: string;
+  estabDate: string;
+  scaleYuan: number | null;
+  benchmark: string;
+  mgmtFeeRate: number;
+  trustFeeRate: number;
+}
+
+export async function fetchFundDetail(
+  env: Env,
+  code: string,
+): Promise<FundDetail | null> {
+  const cacheKey = `fund:detail:${code}`;
+  const cached = await env.KV.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as FundDetail;
+    }
+    catch {
+      /* 缓存损坏 */
+    }
+  }
+
+  try {
+    const url
+      = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNDetailInformation`
+        + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
+    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+    const json = (await resp.json()) as { Datas?: Record<string, string> | null };
+    const d = json.Datas;
+    if (!d || !d.FCODE)
+      return null;
+
+    const detail: FundDetail = {
+      manager: d.JJJL ?? "",
+      company: d.JJGS ?? "",
+      estabDate: d.ESTABDATE ?? "",
+      // ENDNAV 是元字符串如 "3938207602.85"，"--" 时无数据
+      scaleYuan: d.ENDNAV && d.ENDNAV !== "--" ? Number(d.ENDNAV) : null,
+      benchmark: d.BENCH ?? "",
+      mgmtFeeRate: percentToRate(d.MGREXP),
+      trustFeeRate: percentToRate(d.TRUSTEXP),
+    };
+
+    await env.KV.put(cacheKey, JSON.stringify(detail), {
+      expirationTtl: CACHE_TTL.detail,
+    });
+    return detail;
+  }
+  catch (err) {
+    console.error(`[fund-data] 拉取基金 ${code} 详情失败：`, err);
+    return null;
+  }
+}
+
+/**
+ * 重仓股。东财 FundMNInverstPosition，返回 Datas.fundStocks[]。
+ * ⚠️ 用 EM_MOBILE_HEADERS。
+ * 失败返回空数组，详情页不渲染「重仓股」卡片。
+ */
+export interface FundStock {
+  code: string;
+  name: string;
+  /** 占净值比 万分之（6.45% → 645） */
+  ratio: number;
+  industry: string;
+  changeType: string;
+}
+
+export async function fetchFundPosition(
+  env: Env,
+  code: string,
+): Promise<FundStock[]> {
+  const cacheKey = `fund:position:${code}`;
+  const cached = await env.KV.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as FundStock[];
+    }
+    catch {
+      /* 缓存损坏 */
+    }
+  }
+
+  try {
+    const url
+      = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition`
+        + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
+    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+    const json = (await resp.json()) as {
+      Datas?: { fundStocks?: {
+        GPDM?: string;
+        GPJC?: string;
+        JZBL?: string;
+        INDEXNAME?: string;
+        PCTNVCHGTYPE?: string;
+      }[]; } | null;
+    };
+    const stocks = json.Datas?.fundStocks ?? [];
+
+    const items: FundStock[] = stocks
+      .filter(s => s.GPDM && s.GPJC)
+      .map(s => ({
+        code: s.GPDM!,
+        name: s.GPJC!,
+        ratio: percentToRate(s.JZBL),
+        industry: s.INDEXNAME ?? "",
+        changeType: s.PCTNVCHGTYPE ?? "",
+      }));
+
+    if (items.length > 0) {
+      await env.KV.put(cacheKey, JSON.stringify(items), {
+        expirationTtl: CACHE_TTL.position,
+      });
+    }
+    return items;
+  }
+  catch (err) {
+    console.error(`[fund-data] 拉取基金 ${code} 重仓股失败：`, err);
+    return [];
+  }
+}
+
+/**
+ * 指数净值（沪深300等）。东财 push2his，新域名。
+ * ⚠️ Referer 用 https://quote.eastmoney.com/（与 fundf10 不同）。
+ * @param env Worker 环境，提供 KV
+ * @param secid 如 "1.000300"（沪深300），"1.000001"（上证综指）
+ * @param days 取最近多少天
+ * 失败返回空数组（基准线不画，不阻塞详情页）。
+ */
+export async function fetchIndexNav(
+  env: Env,
+  secid: string,
+  days: number,
+): Promise<{ date: string; close: number }[]> {
+  const cacheKey = `fund:index:${secid}:${days}`;
+  const cached = await env.KV.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as { date: string; close: number }[];
+    }
+    catch {
+      /* 缓存损坏 */
+    }
+  }
+
+  try {
+    const ed = dayjs().format("YYYYMMDD");
+    const sd = dayjs().subtract(days, "day").format("YYYYMMDD");
+    const url
+      = `https://push2his.eastmoney.com/api/qt/stock/kline/get`
+        + `?secid=${encodeURIComponent(secid)}&fields1=f1,f2,f3`
+        + `&fields2=f51,f52,f53&klt=101&fqt=0&beg=${sd}&end=${ed}`;
+    const resp = await fetchWithTimeout(url, {
+      headers: { Referer: "https://quote.eastmoney.com/" },
+    });
+    const json = (await resp.json()) as {
+      data?: { klines?: string[] } | null;
+    };
+    const klines = json.data?.klines ?? [];
+    // 每条 "日期,开盘,收盘"
+    const rows = klines
+      .map((k) => {
+        const parts = k.split(",");
+        if (parts.length < 3)
+          return null;
+        const close = Number(parts[2]);
+        return Number.isFinite(close) ? { date: parts[0], close } : null;
+      })
+      .filter((r): r is { date: string; close: number } => r !== null);
+
+    if (rows.length > 0) {
+      await env.KV.put(cacheKey, JSON.stringify(rows), {
+        expirationTtl: CACHE_TTL.index,
+      });
+    }
+    return rows;
+  }
+  catch (err) {
+    console.error(`[fund-data] 拉取指数 ${secid} 净值失败：`, err);
+    return [];
+  }
 }
