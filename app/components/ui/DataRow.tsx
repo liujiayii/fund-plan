@@ -21,7 +21,7 @@ export interface DataRowProps {
  *
  * 一个 `<dl>` 里只有一对 `dt`/`dd`（即单项定义列表）在语义上是合法的。
  * 更「正确」的做法是让调用方的容器当 `<dl>`、每行只出 `dt`+`dd`，
- * 但那要改 5 个调用点的容器且本组件会退化成不能独立使用的片段，收益不抵复杂度。
+ * 但那要逐个改调用方的容器，且本组件会退化成不能独立使用的片段，收益不抵复杂度。
  */
 export function DataRow({ label, value, last, mono }: DataRowProps) {
   return (
