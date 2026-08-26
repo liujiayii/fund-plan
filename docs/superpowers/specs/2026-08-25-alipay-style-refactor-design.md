@@ -393,10 +393,14 @@ export const watchlist = sqliteTable(
 
 每期结束都必须 `pnpm verify` 全绿、可 commit、可部署。
 
-### 期一 · 视觉地基（不加功能，纯改观感）
+### 期一 · 视觉地基（不加功能，纯改观感）✅ 已完成
 
 - `app/theme.ts`：`COLOR` + `pnlColor` + `ANTD_TOKEN`，收敛 3 处重复定义与 25 处硬编码色值
 - `uno.config.ts`：`shortcuts` 与 `theme.colors` 里也埋着 3 处旧色值，一并换
+  —— 最终不是「换成新字面量」，而是**直接 `import { COLOR } from "./app/theme"`**。
+  原注释声称配置里不能 import（走不通 `~/` 别名），实测那个「不能」不成立：
+  本文件在仓库根，`"./app/theme"` 是普通相对路径，且 `app/theme.ts` 刻意零 import。
+  改完漂移在结构上不可能发生 —— 单一出处优于漂移检测器。
 - `app/components/ui/*` 全部 7 个组件
 - `app/components/` 4 个列表组件：`HoldingList` / `OrderList` / `DcaPlanList` / `TxList`
 - `root.tsx`：主色换蓝、Header 由深色改白底、浅灰底、内容容器、导航重排
@@ -406,6 +410,37 @@ export const watchlist = sqliteTable(
 
 **验收**：所有既有页面功能不变、观感全面更新、`pnpm verify` 全绿、
 **全仓**（含 `uno.config.ts`）搜索不到任何 `#c62828` / `#2e7d32` 字面量。
+
+**验收结果**（12 个任务，全部过独立 review）：
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm verify` | ✅ lint 0 error / 0 warning、typecheck 干净、**133 个领域测试通过**，输出无噪音 |
+| `pnpm test:workers`（真 workerd + 真 D1） | ✅ **84 个应用层测试通过** —— 这是「功能一行不改」的硬证据 |
+| 旧色值 `#c62828` / `#2e7d32` | ✅ 全仓（含 `uno.config.ts`）清零 |
+| 全仓十六进制色值 | ✅ 只剩 `app/theme.ts` 的定义本身（另有一处在注释里引用被对比的色值） |
+| `<Table>` | ✅ 只剩 `SellDrawer` 的 FIFO 逐批费用明细（按 4.0 刻意保留） |
+| `antd Descriptions` / `Statistic` / `Radio.Group` | ✅ 全部退场，只剩替代组件 docstring 里的提及 |
+| `pnlColor` / `frequencyText` / `TX_TYPE_MAP` | ✅ 各收敛为唯一定义 |
+| 分层 | ✅ `domain` / `services` / `db` 无任何上行引用 |
+| 死代码 | ✅ `HoldingTableReadonly` 已清零 |
+
+**期一自己制造并已修掉的三个回归**（记下来，因为它们都不是「原有缺陷」而是重构副作用）：
+
+1. **千分位全丢**：antd `Statistic` 自带 `groupSeparator`，换成自建 `StatBig` 后
+   全站金额都变成 `128450.66`。新增 `fmtYuan`（展示层，带 TDD 单测）修回。
+   ⚠️ **`centsToYuan` 必须保持机器可读** —— `BuyDrawer` 的「全部」按钮把它的产物
+   塞进 `<Input>`，带逗号 `Number()` 得 `NaN` → 提交按钮置灰，买不了。
+2. **持仓「持有份额」丢失**：公开盘与仪表盘各丢一处，只有持仓管理页还在。
+   提取共享的 `sharesAndNavNote` 修回。
+3. **`DataRow` 可访问性回归**：被取代的 `Descriptions bordered` 渲染真
+   `<table>` + `<th>`，屏幕阅读器靠它把 label 与 value 配对；换成 `div`+`span`
+   后这层关联没了。改用 `dl`/`dt`/`dd` 修回（9 处调用点一起好）。
+
+**尚未完成的一项**：浏览器逐页验收。子代理没有浏览器，清单见
+`.superpowers/sdd/2026-08-25-phase1-visual-foundation/browser-checklist.md`（40 条），
+须人工执行。其中三条最关键：antd 语义色未被污染（成功仍绿/错误仍红）、
+连签封顶时进度条不能变绿、`BuyDrawer`「全部」按钮填入的数字不能带逗号。
 
 ### 期二 · 我的资产（重放）
 

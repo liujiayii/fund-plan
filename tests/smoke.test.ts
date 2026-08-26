@@ -54,4 +54,9 @@ describe("视觉 token 不变式", () => {
     expect(token.colorSuccess).toBeUndefined();
     expect(token.colorError).toBeUndefined();
   });
+
+  it("antd 的主色必须就是 COLOR.primary（两处分叉会让按钮与强调色不是一个蓝）", () => {
+    const token = ANTD_TOKEN.token as Record<string, unknown>;
+    expect(token.colorPrimary).toBe(COLOR.primary);
+  });
 });

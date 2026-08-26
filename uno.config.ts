@@ -5,6 +5,7 @@ import {
   transformerDirectives,
   transformerVariantGroup,
 } from "unocss";
+import { COLOR } from "./app/theme";
 
 /**
  * UnoCSS 配置。
@@ -46,21 +47,23 @@ export default defineConfig({
   ],
   // 项目里常用的组合，抽成快捷方式
   shortcuts: {
-    // 涨红跌绿（国内习惯）。⚠️ 色值必须与 app/theme.ts 的 COLOR 保持一致，
-    // 但这里不能 import ——UnoCSS 配置在构建期独立求值，走不通 ~/ 别名。
-    // 改色时两处都要改（app/theme.ts 是权威，这里是镜像）。
-    "text-rise": "text-[#F5222D]",
-    "text-fall": "text-[#00A870]",
+    // 涨红跌绿（国内习惯）。色值直接引 app/theme.ts 的 COLOR ——
+    // 这里原先是硬写的镜像字面量 + 一句「不能 import，走不通 ~/ 别名」的注释。
+    // 那个「不能」不成立：~/ 别名确实走不通，但本文件在仓库根，
+    // "./app/theme" 是普通相对路径，且 app/theme.ts 刻意零 import，引它不拖进任何东西。
+    // 换成 import 之后，两处漂移在结构上不可能发生 —— 单一出处优于漂移检测器。
+    "text-rise": `text-[${COLOR.up}]`,
+    "text-fall": `text-[${COLOR.down}]`,
     // 常用布局
     "flex-center": "flex items-center justify-center",
     "flex-between": "flex items-center justify-between",
   },
   theme: {
     colors: {
-      // 与 app/theme.ts 的 COLOR 保持一致（镜像，见上方说明）
-      primary: "#1677FF",
-      rise: "#F5222D",
-      fall: "#00A870",
+      // 同上：唯一出处是 app/theme.ts，这里不再复制字面量
+      primary: COLOR.primary,
+      rise: COLOR.up,
+      fall: COLOR.down,
     },
   },
   /**
