@@ -10,19 +10,22 @@ import {
   Typography,
 } from "antd";
 import { useFetcher } from "react-router";
+import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
 import { PortfolioSummary } from "~/components/PortfolioView";
+import { ProfitCalendar } from "~/components/ProfitCalendar";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_MAX_CENTS } from "~/domain/checkin";
+import { getAssetTimeline } from "~/services/asset-service";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getOrders, getPortfolio } from "~/services/portfolio-service";
-import { COLOR } from "~/theme";
+import { COLOR, pnlColor } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -34,13 +37,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
 
-  const [portfolio, checkinStatus, orders] = await Promise.all([
+  const [portfolio, checkinStatus, orders, timeline] = await Promise.all([
     getPortfolio(db, user.id),
     getCheckinStatus(db, user.id),
     getOrders(db, user.id, 5),
+    getAssetTimeline(db, user.id),
   ]);
 
-  return { user, portfolio, checkinStatus, orders };
+  return { user, portfolio, checkinStatus, orders, timeline };
 }
 
 /** 签到 action */
@@ -61,7 +65,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
-  const { user, portfolio, checkinStatus, orders } = loaderData;
+  const { user, portfolio, checkinStatus, orders, timeline } = loaderData;
   // 总览数字全部交给 PortfolioSummary，这里只需要持仓列表
   const { holdings } = portfolio;
   const fetcher = useFetcher<typeof action>();
@@ -87,10 +91,34 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         )}
       </div>
 
-      {/* 资产总览。⚠️ 期二会在这里加「资产走势曲线」与「收益（截至 X 日）」，
-          本期只做视觉，不动数据来源 */}
+      {/* 资产总览 */}
       <SectionCard>
         <PortfolioSummary portfolio={portfolio} />
+      </SectionCard>
+
+      {/* 资产走势：曲线图 + 收益头条（截至 X 日，不写「昨日」——净值同步有延迟） */}
+      <SectionCard title="资产走势">
+        {timeline.latest && (() => {
+          // 去前导零：Number("08") → 8，显示「8 月 26 日」而非「08 月 26 日」
+          const [m, d] = timeline.latest.date.slice(5).split("-");
+          const monthLabel = String(Number(m));
+          const dayLabel = String(Number(d));
+          return (
+            <StatBig
+              label={`收益（截至 ${monthLabel} 月 ${dayLabel} 日）`}
+              value={`${timeline.latest.dayPnlCents > 0 ? "+" : ""}${fmtYuan(timeline.latest.dayPnlCents)}`}
+              suffix="元"
+              color={pnlColor(timeline.latest.dayPnlCents)}
+              size={24}
+            />
+          );
+        })()}
+        <AssetTrendChart data={timeline.daily} />
+      </SectionCard>
+
+      {/* 收益日历 */}
+      <SectionCard title="收益日历">
+        <ProfitCalendar data={timeline.daily} />
       </SectionCard>
 
       {/* 每日签到 */}

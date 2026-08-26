@@ -1,7 +1,7 @@
 import type { Route } from "./+types/me.orders";
 import { Alert, Pagination, Space, Typography } from "antd";
 import { useState } from "react";
-import { OrderList } from "~/components/OrderList";
+import { OrderTimeline } from "~/components/OrderTimeline";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { getAppContext } from "~/services/context";
@@ -55,9 +55,8 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
             )
           : (
               <>
-                <OrderList
+                <OrderTimeline
                   orders={orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
-                  detailed
                 />
                 {orders.length > PAGE_SIZE && (
                   <Pagination

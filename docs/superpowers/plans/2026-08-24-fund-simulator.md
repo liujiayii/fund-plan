@@ -1,5 +1,16 @@
 # 模拟基金定投系统 实施计划
 
+> ## 状态：已完成 · 2026-08-25
+>
+> 实现区间 `26d645b..7cd59b5` —— Phase 0–6 全 26 个 Task 均已落地。
+>
+> - **下方复选框全部未勾，但工作已完成。** 本计划按 commit 跟踪进度，不靠勾选框。
+>   别把「未勾」读成「未做」，更不要照此重新施工。
+> - ⚠️ **本文是当时的施工图，不是现状描述。** 已知计划外偏离：UnoCSS（CLI 预生成）
+>   在 `019b211` 才引入，本文 Tech Stack 一节没有它。**现状一律以 `CLAUDE.md` 为准。**
+> - 后续演进：[期一 · 视觉地基](2026-08-25-phase1-visual-foundation.md)、
+>   [期二 · 我的资产](2026-08-26-phase2-asset-timeline.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 交付一个部署在 Cloudflare 免费全家桶上的、完整可用的模拟基金购买/定投系统：真实东财数据、真实 T+1 撮合、注册登录、每日签到领本金、管理员公开示范盘。

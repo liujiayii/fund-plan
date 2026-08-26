@@ -1,5 +1,6 @@
 import type { Db } from "~/db/client";
 import type { HoldingValuation, PortfolioValuation } from "~/domain/portfolio";
+import type { RedeemTier, ShareLotInput } from "~/domain/redeem";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   account,
@@ -8,6 +9,7 @@ import {
   fundNav,
   holding,
   orders,
+  shareLot,
   transactions,
 } from "~/db/schema";
 import {
@@ -15,6 +17,7 @@ import {
   valuateHolding,
   valuatePortfolio,
 } from "~/domain/portfolio";
+import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 
 /**
  * 组合读取与估值编排。把 D1 数据喂给领域层的纯函数，产出页面要的视图模型。
@@ -274,4 +277,123 @@ export async function getNavSeries(
 
   // 画图要正序
   return rows.reverse();
+}
+
+/**
+ * 单只持仓详情视图：在 HoldingView 基础上追加批次、待赎回占用、费率档等
+ * 赎回试算所需信息，供 /me/holdings/:code 详情页使用。
+ */
+export interface HoldingDetailView extends HoldingView {
+  /** 份额批次，FIFO 升序：confirmDate 升、id 升 */
+  lots: ShareLotInput[];
+  /** 待确认赎回单占用份额 ×10000 */
+  pendingShares: number;
+  /** 可用于再次赎回的份额 ×10000（= sharesScaled − pendingShares） */
+  availableShares: number;
+  /** 赎回费率阶梯（fund.redeemTiers 覆盖，否则用默认档） */
+  tiers: RedeemTier[];
+  /** 申购费率（万分之） */
+  purchaseRate: number;
+  /** 起购金额（分） */
+  minPurchase: number;
+}
+
+/**
+ * 读取单只持仓详情。
+ *
+ * ⚠️ 同源估值契约：这里复用与 getPortfolio 完全相同的 latestNavMap + valuateHolding
+ * （包括无净值时的成本价兜底公式），是「单只持仓详情页数据与 /me/holdings 汇总
+ * 保持一致」这条验收标准的结构性保证——不要在这里重新实现一遍估值逻辑。
+ */
+export async function getHoldingDetail(
+  db: Db,
+  userId: number,
+  fundCode: string,
+): Promise<HoldingDetailView | null> {
+  const row = await db.query.holding.findFirst({
+    where: and(eq(holding.userId, userId), eq(holding.fundCode, fundCode)),
+  });
+  if (!row)
+    return null;
+
+  const navMap = await latestNavMap(db, [fundCode]);
+  const navInfo = navMap.get(fundCode);
+  const f = await db.query.fund.findFirst({ where: eq(fund.code, fundCode) });
+
+  // 无净值时用成本价兜底，公式与 getPortfolio 逐字一致，保证同源
+  const navScaled = navInfo
+    ? navInfo.unitNav
+    : row.totalShares > 0
+      ? Math.round((row.totalCost / row.totalShares) * 10000 * 100) / 100
+      : 10000;
+
+  const v = valuateHolding({
+    fundCode,
+    totalSharesScaled: row.totalShares,
+    totalCostCents: row.totalCost,
+    navScaled: Math.round(navScaled),
+  });
+
+  // 份额批次，FIFO 升序：确认日升、id 升
+  const lotRows = await db
+    .select()
+    .from(shareLot)
+    .where(and(eq(shareLot.userId, userId), eq(shareLot.fundCode, fundCode)))
+    .orderBy(shareLot.confirmDate, shareLot.id);
+  const lots: ShareLotInput[] = lotRows.map(l => ({
+    id: l.id,
+    sharesScaled: l.shares,
+    costCents: l.cost,
+    confirmDate: l.confirmDate,
+  }));
+
+  // 待确认的赎回单占用份额，不能重复赎回
+  const pend = await db
+    .select({ total: sql<number>`coalesce(sum(${orders.shares}), 0)` })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.userId, userId),
+        eq(orders.fundCode, fundCode),
+        eq(orders.side, "sell"),
+        eq(orders.status, "pending"),
+      ),
+    );
+  const pendingShares = Number(pend[0]?.total ?? 0);
+
+  return {
+    ...v,
+    fundName: f?.name ?? fundCode,
+    fundType: f?.type ?? "",
+    navDate: navInfo?.navDate ?? null,
+    lots,
+    pendingShares,
+    availableShares: row.totalShares - pendingShares,
+    tiers: (f?.redeemTiers as RedeemTier[]) ?? DEFAULT_REDEEM_TIERS,
+    purchaseRate: f?.purchaseRate ?? 0,
+    minPurchase: f?.minPurchase ?? 1000,
+  };
+}
+
+/** 读取用户某只基金的订单（倒序，默认最近 100 条），供单只持仓详情页展示交易流水 */
+export async function getOrdersByFund(
+  db: Db,
+  userId: number,
+  fundCode: string,
+  limit = 100,
+): Promise<OrderView[]> {
+  const rows = await db
+    .select()
+    .from(orders)
+    .where(and(eq(orders.userId, userId), eq(orders.fundCode, fundCode)))
+    .orderBy(desc(orders.createdAt), desc(orders.id))
+    .limit(limit);
+
+  const f = await db.query.fund.findFirst({ where: eq(fund.code, fundCode) });
+  const fundName = f?.name ?? fundCode;
+
+  return rows.map(r => ({
+    ...r,
+    fundName,
+  }));
 }

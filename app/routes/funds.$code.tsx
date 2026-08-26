@@ -2,8 +2,7 @@ import type { Route } from "./+types/funds.$code";
 import type { RedeemTier } from "~/domain/redeem";
 import { Alert, Button, Space, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
-import { useState } from "react";
-import { BuyDrawer } from "~/components/BuyDrawer";
+import { BuyPanel } from "~/components/BuyPanel";
 import { NavChart } from "~/components/NavChart";
 import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
@@ -167,7 +166,6 @@ const RISK_MAP: Record<number, { color: string; label: string }> = {
 
 export default function FundDetail({ loaderData }: Route.ComponentProps) {
   const { fund: f, series, latest, cash, isLoggedIn } = loaderData;
-  const [buyOpen, setBuyOpen] = useState(false);
 
   const risk = RISK_MAP[f.riskLevel] ?? RISK_MAP[3];
   // 日涨跌率存的是万分之，转成百分比展示
@@ -215,22 +213,6 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           </Space>
 
           <Space style={{ marginTop: 8 }}>
-            {isLoggedIn
-              ? (
-                  <Button
-                    type="primary"
-                    size="large"
-                    onClick={() => setBuyOpen(true)}
-                    disabled={!latest}
-                  >
-                    买入
-                  </Button>
-                )
-              : (
-                  <Button type="primary" size="large" href="/register">
-                    注册后即可买入
-                  </Button>
-                )}
             <Button size="large" href="/funds">
               继续搜索
             </Button>
@@ -276,20 +258,33 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         />
       )}
 
-      {latest && (
-        <BuyDrawer
-          open={buyOpen}
-          onClose={() => setBuyOpen(false)}
-          fundCode={f.code}
-          fundName={f.name}
-          purchaseRate={f.purchaseRate}
-          minPurchaseCents={f.minPurchase}
-          navScaled={latest.unitNav}
-          navDate={latest.navDate}
-          cashCents={cash}
-          action={`/funds/${f.code}`}
-        />
-      )}
+      {/* 买入区：登录且有净值时内嵌 BuyPanel；未登录引导注册；登录但暂无净值时提示 */}
+      <SectionCard title="买入">
+        {!isLoggedIn
+          ? (
+              <Button type="primary" size="large" href="/register">
+                注册后即可买入
+              </Button>
+            )
+          : latest
+            ? (
+                <BuyPanel
+                  fundCode={f.code}
+                  fundName={f.name}
+                  purchaseRate={f.purchaseRate}
+                  minPurchaseCents={f.minPurchase}
+                  navScaled={latest.unitNav}
+                  navDate={latest.navDate}
+                  cashCents={cash}
+                  action={`/funds/${f.code}`}
+                />
+              )
+            : (
+                // 既有页面级 !latest Alert 已醒目提示「暂无净值数据…无法下单」，
+                // 卡内不重复同一句，只留柔和占位说明卡位用途，等净值就绪即可下单
+                <Text type="secondary">净值数据就绪后可在此下单</Text>
+              )}
+      </SectionCard>
     </Space>
   );
 }

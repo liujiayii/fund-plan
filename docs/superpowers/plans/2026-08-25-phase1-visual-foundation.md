@@ -1,5 +1,20 @@
 # 期一 · 视觉地基 实施计划
 
+> ## 状态：已完成 · 2026-08-26
+>
+> 实现区间 `669ec88..64fa866` —— Task 1–12 全部落地，Task 11 收尾验收见 `338aedc`，
+> 分支级缺陷清收见 `7bcc760`（14 项）。
+>
+> - **下方复选框全部未勾，但工作已完成。** 本计划按 commit 跟踪进度，不靠勾选框。
+>   别把「未勾」读成「未做」，更不要照此重新施工。
+> - ✅ **本文无作废段落 —— 计划原文是对的。** 期间有一次分支级 review 误判了 Task 7
+>   的字号规格：它建议把 `/me/holdings` 的「持仓市值」从 32px「统一」成 24px，
+>   已在 `64fa866` 撤回。`StatBig` 的字号按**角色**定而非按标签定 —— 本页不显示
+>   「总资产」，「持仓市值」就是这一页的主位、该吃 32px 默认值。
+>   **Task 7 里那组 `<Space size={48} wrap>` 三连 `StatBig` 的原始规格有效
+>   （「持仓市值」不传 `size`，「可用现金」与「浮动盈亏」传 24），
+>   勿依那次 review 的结论修改。**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把主色从喜庆红换成支付宝蓝、让涨跌红绿有唯一出处，并把 10 处横向滚动的 `Table` 换成卡片列表 —— 功能一行不改，观感全面翻新。
