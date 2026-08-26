@@ -2,22 +2,13 @@
 
 > ## 状态：已完成 · 2026-08-26
 >
-> 实现区间 `89075ce..25e3f4b`
->
-> | Task | commit    | 交付                                                  |
-> | ---- | --------- | ----------------------------------------------------- |
-> | 1    | `89075ce` | `getHoldingDetail` + `getOrdersByFund`（service 层）  |
-> | 2    | `ce3e710` | `BuyPanel`（`BuyDrawer` 去壳为内嵌面板）              |
-> | 3    | `247ca7d` | `SellPanel`（份额滑块 + FIFO 分档表）                 |
-> | 4    | `76f3229` | `/me/holdings/:code` 单只持仓详情 + 份额批次展示      |
-> | 5    | `2329f50` | `OrderTimeline` + `/me/orders` 改版                   |
-> | 6    | `db4dd6b` | `funds.$code` `BuyDrawer` → 内嵌 `BuyPanel`           |
-> | 7    | `25e3f4b` | `me.holdings` 瘦身 + 删 `BuyDrawer`/`SellDrawer`       |
+> 实现区间（本地 dev）`89075ce..25e3f4b`；并线 main squash commit `f7badbd`（PR #7）；线上部署 version `a05ff2d6`（CI 自动）
 >
 > - **下方复选框全部未勾，但工作已完成。** 别把「未勾」读成「未做」，勿照此重新施工。
-> - ✅ 本文无作废段落 —— 计划原文是对的，Self-Review 7 项验收逐字落地。
->   验证基线：`pnpm verify`（lint+typecheck+159 领域测试）+ `pnpm test:workers`
->   （10 文件 96 应用层测试）全绿，工作区 clean。
+> - 期三零新 domain 金融逻辑（calcRedeem/calcPurchase 既有测试复用），只做 service/UI 接线 + 路由新增 + 抽屉重构。
+> - 验收①-⑤ 全过（final review opus Approved 零 Critical/Important）；4 处 Minor 全 defer（BuyPanel/SellPanel 的 fundName 声明未用、PnlText/format 注释里旧组件名、HoldingDetailView 字段名不对称、fetcher.data useEffect loader 不刷新是既有行为）。
+> - T7 实现者子代理撞 API 429 挂在半路，controller 接手收尾（me.holdings 瘦身 + git rm 抽屉）；T7 单任务评审也撞 429，跳过单任务评审直接进 final（产出已 controller 验过 + final review 兜底）。
+> - 上线方式：GitHub 直连本机已通（不需代理），推 origin/dev → PR #7 CI 全绿 → squash merge to main → CI deploy.yml 自动部署 Cloudflare。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
