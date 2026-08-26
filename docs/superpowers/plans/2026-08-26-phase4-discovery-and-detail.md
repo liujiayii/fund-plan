@@ -1,5 +1,28 @@
 # 期四·发现与详情 实施计划
 
+> ## 状态：已完成 · 2026-08-26
+>
+> 实现区间 `5f74dcf..2d59b74`
+>
+> | Task | commit    | 交付                                                  |
+> | ---- | --------- | ----------------------------------------------------- |
+> | 1    | `5f74dcf` | `watchlist` 自选表 + 迁移（复合主键防重复关注）        |
+> | 2    | `f5bd73f` | 抽 `ensureFund` 到 `fund-data.ts`，详情页复用         |
+> | 3    | `cf9e1a9` | `watchlist-service` + 导出 `latestNavMap`            |
+> | 4    | `22b02d1` | `calcPeriodReturns` 阶段涨幅纯函数 + TDD 测试         |
+> | 5    | `d815fb0` | 四个东财 fetcher（排行/详情/重仓股/沪深300）+ 测试    |
+> | 6    | `4665846` | `getFundRank` 东财排行 + 本地降级                     |
+> | 7    | `dbb2f1b` | `/me/watchlist` 自选列表 + 导航加「自选」             |
+> | 8    | `afea5be` | `/funds` 升级发现页（搜索 + 类型×周期排行榜）         |
+> | 9    | `ae72a99` | 详情页增强（阶段涨幅/经理/规模/重仓股/加自选/定投）  |
+> | 10   | `2d59b74` | 沪深300 基准叠加（彩蛋，标「可砍」——已落地）          |
+>
+> - **下方复选框全部未勾，但工作已完成。** 别把「未勾」读成「未做」，勿照此重新施工。
+> - ✅ 本文无作废段落 —— 计划原文是对的，Self-Review 5 项验收逐字落地；
+>   T10 彩蛋（沪深300 基准叠加）虽标「可砍」也一并做了。
+>   验证基线：`pnpm verify`（lint+typecheck+159 领域测试）+ `pnpm test:workers`
+>   （10 文件 96 应用层测试）全绿，工作区 clean。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把交易体验的最后一公里补齐——新增自选（唯一新表）、`/funds` 升级为带排行榜的发现页、详情页增强阶段涨幅表/经理/规模/成立日/重仓股/加自选/定投入口，首访净值拉取 120→400 天。
