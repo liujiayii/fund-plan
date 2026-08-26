@@ -1,6 +1,7 @@
 import type { LineConfig } from "@ant-design/charts";
-import { Empty, Radio } from "antd";
+import { Empty } from "antd";
 import { lazy, Suspense, useMemo, useState, useSyncExternalStore } from "react";
+import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { NAV_SCALE } from "~/domain/money";
 
 /**
@@ -114,15 +115,13 @@ export function NavChart({ data }: { data: NavPoint[] }) {
 
   return (
     <div>
-      <Radio.Group
-        value={range}
-        onChange={e => setRange(e.target.value)}
-        optionType="button"
-        buttonStyle="solid"
-        size="small"
-        style={{ marginBottom: 16 }}
-        options={RANGES.map(r => ({ label: r.label, value: r.key }))}
-      />
+      <div style={{ marginBottom: 16 }}>
+        <PeriodTabs
+          options={RANGES.map(r => ({ key: r.key, label: r.label }))}
+          value={range}
+          onChange={setRange}
+        />
+      </div>
       {mounted
         ? (
             <Suspense fallback={<ChartSkeleton />}>

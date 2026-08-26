@@ -1,6 +1,7 @@
-import { Alert, Button, Descriptions, Drawer, Form, Input, Space, Typography } from "antd";
+import { Alert, Button, Drawer, Form, Input, Space, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useFetcher } from "react-router";
+import { DataRow } from "~/components/ui/DataRow";
 import { centsToYuan, navToDisplay, rateToPercent, sharesToDisplay, yuanToCents } from "~/domain/money";
 import { calcPurchase } from "~/domain/purchase";
 
@@ -85,29 +86,24 @@ export function BuyDrawer(props: BuyDrawerProps) {
         <input type="hidden" name="intent" value="buy" />
         <input type="hidden" name="fundCode" value={fundCode} />
 
-        <Descriptions
-          size="small"
-          column={1}
-          bordered
-          style={{ marginBottom: 16 }}
-          items={[
-            { key: "code", label: "基金代码", children: fundCode },
-            {
-              key: "nav",
-              label: "最新净值",
-              children: navScaled > 0
+        <div style={{ marginBottom: 16 }}>
+          <DataRow label="基金代码" value={fundCode} />
+          <DataRow
+            label="最新净值"
+            value={
+              navScaled > 0
                 ? `${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`
-                : "暂无",
-            },
-            { key: "rate", label: "申购费率", children: rateToPercent(purchaseRate) },
-            { key: "min", label: "起购金额", children: `${centsToYuan(minPurchaseCents)} 元` },
-            {
-              key: "cash",
-              label: "可用现金",
-              children: cashCents === null ? "请先登录" : `${centsToYuan(cashCents)} 元`,
-            },
-          ]}
-        />
+                : "暂无"
+            }
+          />
+          <DataRow label="申购费率" value={rateToPercent(purchaseRate)} />
+          <DataRow label="起购金额" value={`${centsToYuan(minPurchaseCents)} 元`} />
+          <DataRow
+            label="可用现金"
+            value={cashCents === null ? "请先登录" : `${centsToYuan(cashCents)} 元`}
+            last
+          />
+        </div>
 
         <Form.Item label="申购金额（元）" layout="vertical" style={{ marginBottom: 12 }}>
           <Input

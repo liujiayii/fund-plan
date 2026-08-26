@@ -2,7 +2,6 @@ import type { RedeemTier, ShareLotInput } from "~/domain/redeem";
 import {
   Alert,
   Button,
-  Descriptions,
   Drawer,
   Form,
   Input,
@@ -12,6 +11,7 @@ import {
 } from "antd";
 import { useMemo, useState } from "react";
 import { useFetcher } from "react-router";
+import { DataRow } from "~/components/ui/DataRow";
 import {
   centsToYuan,
   navToDisplay,
@@ -20,6 +20,7 @@ import {
   sharesToDisplay,
 } from "~/domain/money";
 import { calcRedeem } from "~/domain/redeem";
+import { COLOR, pnlColor } from "~/theme";
 
 const { Text, Paragraph } = Typography;
 
@@ -107,26 +108,18 @@ export function SellDrawer(props: SellDrawerProps) {
         <input type="hidden" name="intent" value="sell" />
         <input type="hidden" name="fundCode" value={fundCode} />
 
-        <Descriptions
-          size="small"
-          column={1}
-          bordered
-          style={{ marginBottom: 16 }}
-          items={[
-            { key: "code", label: "基金代码", children: fundCode },
-            {
-              key: "nav",
-              label: "最新净值",
-              children: `${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`,
-            },
-            {
-              key: "avail",
-              label: "可赎份额",
-              children: `${sharesToDisplay(availableSharesScaled)} 份`,
-            },
-            { key: "confirm", label: "预计确认日", children: confirmDate },
-          ]}
-        />
+        <div style={{ marginBottom: 16 }}>
+          <DataRow label="基金代码" value={fundCode} />
+          <DataRow
+            label="最新净值"
+            value={`${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`}
+          />
+          <DataRow
+            label="可赎份额"
+            value={`${sharesToDisplay(availableSharesScaled)} 份`}
+          />
+          <DataRow label="预计确认日" value={confirmDate} last />
+        </div>
 
         <Form.Item label="赎回份额" layout="vertical" style={{ marginBottom: 12 }}>
           <Input
@@ -230,7 +223,7 @@ export function SellDrawer(props: SellDrawerProps) {
                 </div>
                 <div>
                   预计到账：
-                  <Text strong style={{ color: "#c62828" }}>
+                  <Text strong style={{ color: COLOR.primary }}>
                     {centsToYuan(estimate.totalNetCents)}
                     {" "}
                     元
@@ -240,9 +233,7 @@ export function SellDrawer(props: SellDrawerProps) {
                   已实现盈亏：
                   <Text
                     strong
-                    style={{
-                      color: estimate.realizedPnlCents >= 0 ? "#c62828" : "#2e7d32",
-                    }}
+                    style={{ color: pnlColor(estimate.realizedPnlCents) }}
                   >
                     {estimate.realizedPnlCents > 0 ? "+" : ""}
                     {centsToYuan(estimate.realizedPnlCents)}
