@@ -3090,7 +3090,7 @@ pnlColor / frequencyText / TX_TYPE_MAP 三个重复实现各收敛为唯一定�
 
 **Files:**
 - Create: `app/components/ui/format.ts`
-- Modify: `app/components/ui/DataRow.tsx`（加 `mono` prop）
+- Modify: `app/components/ui/DataRow.tsx`（加 `mono` prop **+ 修可访问性，见 Step 3b**）
 - Modify: 所有把金额喂给 `StatBig` / 列表组件的调用点（见 Step 3 清单）
 
 **Interfaces:**
@@ -3098,6 +3098,64 @@ pnlColor / frequencyText / TX_TYPE_MAP 三个重复实现各收敛为唯一定�
 - Produces:
   - `fmtYuan(cents: number): string` —— 带千分位的金额展示字符串
   - `DataRow` 新增 `mono?: boolean`
+
+**⚠️ 期十 review 转过来的两件事，本任务一并做（它们都落在本任务本来就要改的文件里）**
+
+**一、`DataRow` 的可访问性回归。** 被替换掉的 `Descriptions bordered` 渲染的是真
+`<table>` + `<th>`，屏幕阅读器能把 label 与 value 配成对；现在的 flex `<div>` +
+两个 `<span>` **没有任何关联**。这是本阶段 9 处转换共同引入的真回归，
+且只能在 `DataRow` 这一处修。用 `<dl>` / `<dt>` / `<dd>` ——
+那是 HTML 里专门表达「名值对」的语义元素：
+
+```tsx
+export function DataRow({ label, value, last, mono }: DataRowProps) {
+  return (
+    // ⚠️ 用 dl/dt/dd 而非 div/span/span：被取代的 `Descriptions bordered`
+    // 渲染的是真 <table> + <th>，屏幕阅读器靠它把 label 与 value 配对。
+    // 换成无语义的 div+span 会丢掉这层关联（期十 review 查出的回归）。
+    // dl 的默认 margin 必须清掉，否则每行之间会多出浏览器默认间距。
+    <dl
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        margin: 0,
+        padding: "10px 0",
+        borderBottom: last ? undefined : `1px solid ${COLOR.border}`,
+      }}
+    >
+      <dt style={{ fontSize: 13, color: COLOR.textSecondary, whiteSpace: "nowrap" }}>
+        {label}
+      </dt>
+      <dd
+        style={{
+          margin: 0,
+          fontSize: 14,
+          color: COLOR.textPrimary,
+          textAlign: "right",
+          // 数值行传 mono，让同一组 DataRow 的数字纵向对齐
+          fontFamily: mono ? NUM_FONT : undefined,
+        }}
+      >
+        {value}
+      </dd>
+    </dl>
+  );
+}
+```
+
+`<dl>` 里只有一对 `dt`/`dd` 在语义上是合法的（一个单项定义列表）。
+更「正确」的做法是让**调用方**的容器当 `<dl>`、每行只出 `dt`+`dd`，
+但那要改 5 个调用点的容器 div 且 `DataRow` 会变成不能独立使用的片段 ——
+收益不抵复杂度，不做。
+
+**二、`PnlText` 的 docstring 略微夸大。** 它写着「收敛此前散落在 6 个文件里…」，
+但 `SellDrawer.tsx` 的「已实现盈亏」仍在手写那个模式（`{v > 0 ? "+" : ""}` +
+`pnlColor`）。**不要把 SellDrawer 那处换成 `PnlText`** —— 只换它一处会让它拿到
+`NUM_FONT` 而同块三个兄弟金额仍是比例字体，块内字体反而更不一致。
+改 docstring 措辞即可：把「收敛此前散落在 6 个文件里」改成
+「收敛列表与总览里反复手写的」，并说明抽屉里那处刻意未收敛及原因。
 
 - [ ] **Step 1: 写 `app/components/ui/format.ts`**
 
