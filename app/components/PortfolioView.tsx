@@ -1,30 +1,34 @@
 import type { HoldingView, PortfolioView } from "~/services/portfolio-service";
-import { Card, Col, Empty, Row, Statistic, Table, Tag, Typography } from "antd";
-import { centsToYuan, navToDisplay, sharesToDisplay } from "~/domain/money";
+import { Col, Row, Tag, Typography } from "antd";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { fmtYuan } from "~/components/ui/format";
+import { PnlText } from "~/components/ui/PnlText";
+import { SectionCard } from "~/components/ui/SectionCard";
+import { StatBig } from "~/components/ui/StatBig";
+import { pnlColor } from "~/theme";
+import { HoldingList, sharesAndNavNote } from "./HoldingList";
 
-const { Text, Paragraph } = Typography;
-
-/** 涨红跌绿（国内习惯） */
-export function pnlColor(v: number): string | undefined {
-  if (v > 0)
-    return "#c62828";
-  if (v < 0)
-    return "#2e7d32";
-  return undefined;
-}
+const { Paragraph } = Typography;
 
 export interface PortfolioViewProps {
   portfolio: PortfolioView;
-  /** 只读模式（公开围观）时不展示金额敏感的现金明细与操作 */
-  readonly?: boolean;
-  /** 是否隐藏现金（公开盘展示总资产即可） */
+  /**
+   * 是否展示「可用现金」这一格，默认展示。
+   * 全站只有首页 `/` 的引流卡片传 false；/me 与 /master 都不传，即都露现金 ——
+   * ⚠️ 别把它读成「公开盘不露现金」：/master 就是公开盘，它页面上写着
+   * 「持仓、定投与交易流水全部公开」，藏现金反而自相矛盾。
+   */
   showCash?: boolean;
-  title?: string;
 }
 
 /**
- * 组合展示组件。被 /me（本人可操作）与 /master、/（公开只读）共用——
+ * 组合总览。被 /me（本人）、/master 与 /（公开只读）三处共用 ——
  * 主人的盘就是那个公开盘，一份代码两种身份。
+ *
+ * ⚠️ me._index 曾逐字复制过一份同样的 Row（期十三收掉），两份独立漂移过。
+ * 要加字段就加在这里，别再复制。
+ *
+ * ⚠️ pnlColor 已迁到 ~/theme，本文件不再导出它。
  */
 export function PortfolioSummary({
   portfolio,
@@ -34,132 +38,64 @@ export function PortfolioSummary({
   return (
     <Row gutter={[24, 16]}>
       <Col xs={12} md={6}>
-        <Statistic
-          title="总资产"
-          value={centsToYuan(summary.totalAssetCents)}
+        <StatBig
+          label="总资产"
+          value={fmtYuan(summary.totalAssetCents)}
           suffix="元"
         />
       </Col>
       <Col xs={12} md={6}>
-        <Statistic
-          title="持仓市值"
-          value={centsToYuan(summary.marketValueCents)}
+        <StatBig
+          label="持仓市值"
+          value={fmtYuan(summary.marketValueCents)}
           suffix="元"
+          size={24}
         />
       </Col>
       {showCash && (
         <Col xs={12} md={6}>
-          <Statistic
-            title="可用现金"
-            value={centsToYuan(summary.cashCents)}
+          <StatBig
+            label="可用现金"
+            value={fmtYuan(summary.cashCents)}
             suffix="元"
+            size={24}
           />
         </Col>
       )}
       <Col xs={12} md={6}>
-        <Statistic
-          title="浮动盈亏"
-          value={centsToYuan(summary.totalPnlCents)}
+        <StatBig
+          label="浮动盈亏"
+          value={`${summary.totalPnlCents > 0 ? "+" : ""}${fmtYuan(summary.totalPnlCents)}`}
           suffix="元"
-          valueStyle={{ color: pnlColor(summary.totalPnlCents) }}
-          prefix={summary.totalPnlCents > 0 ? "+" : ""}
+          size={24}
+          color={pnlColor(summary.totalPnlCents)}
+          extra={(
+            <>
+              收益率
+              {" "}
+              <PnlText rate={summary.totalPnlRate} size={12} />
+            </>
+          )}
         />
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          收益率
-          {" "}
-          {(summary.totalPnlRate * 100).toFixed(2)}
-          %
-        </Text>
       </Col>
     </Row>
   );
 }
 
-/** 持仓表格（只读版，公开页用） */
-export function HoldingTableReadonly({ holdings }: { holdings: HoldingView[] }) {
+/** 持仓列表（只读版，公开页用） */
+export function HoldingListReadonly({ holdings }: { holdings: HoldingView[] }) {
   if (holdings.length === 0) {
-    return <Empty description="暂无持仓" />;
+    return <EmptyState description="暂无持仓" />;
   }
-
-  return (
-    <Table<HoldingView>
-      rowKey="fundCode"
-      dataSource={holdings}
-      pagination={false}
-      scroll={{ x: 760 }}
-      columns={[
-        {
-          title: "基金",
-          dataIndex: "fundName",
-          fixed: "left",
-          width: 200,
-          render: (name: string, r) => (
-            <a href={`/funds/${r.fundCode}`}>
-              {name}
-              <br />
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {r.fundCode}
-                {r.fundType ? ` · ${r.fundType}` : ""}
-              </Text>
-            </a>
-          ),
-        },
-        {
-          title: "持有份额",
-          dataIndex: "sharesScaled",
-          align: "right",
-          render: (v: number) => sharesToDisplay(v),
-        },
-        {
-          title: "净值",
-          dataIndex: "navScaled",
-          align: "right",
-          render: (v: number, r) => (
-            <span>
-              {navToDisplay(v)}
-              {r.navDate && (
-                <>
-                  <br />
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {r.navDate}
-                  </Text>
-                </>
-              )}
-            </span>
-          ),
-        },
-        {
-          title: "市值",
-          dataIndex: "marketValueCents",
-          align: "right",
-          render: (v: number) => `${centsToYuan(v)} 元`,
-        },
-        {
-          title: "盈亏",
-          dataIndex: "pnlCents",
-          align: "right",
-          render: (v: number, r) => (
-            <span style={{ color: pnlColor(v) }}>
-              {v > 0 ? "+" : ""}
-              {centsToYuan(v)}
-              <br />
-              <Text style={{ color: pnlColor(v), fontSize: 12 }}>
-                {(r.pnlRate * 100).toFixed(2)}
-                %
-              </Text>
-            </span>
-          ),
-        },
-      ]}
-    />
-  );
+  // 份额与估值时点必须露出，理由与条件渲染的取舍都在 sharesAndNavNote 里
+  return <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />;
 }
 
 /** 主人还没注册时的引导提示 */
 export function AdminNotReady({ adminName }: { adminName: string }) {
   return (
-    <Card>
-      <Empty
+    <SectionCard>
+      <EmptyState
         description={(
           <div>
             <Paragraph>
@@ -175,6 +111,6 @@ export function AdminNotReady({ adminName }: { adminName: string }) {
           </div>
         )}
       />
-    </Card>
+    </SectionCard>
   );
 }

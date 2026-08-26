@@ -1,24 +1,19 @@
 import type { Route } from "./+types/_index";
-import {
-  Button,
-  Card,
-  Col,
-  Row,
-  Space,
-  Tag,
-  Typography,
-} from "antd";
+import { Button, Card, Col, Row, Space, Tag, Typography } from "antd";
+import { OrderList } from "~/components/OrderList";
 import {
   AdminNotReady,
-  HoldingTableReadonly,
+  HoldingListReadonly,
   PortfolioSummary,
 } from "~/components/PortfolioView";
+import { fmtYuan } from "~/components/ui/format";
+import { SectionCard } from "~/components/ui/SectionCard";
 import { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS } from "~/domain/checkin";
 import { INITIAL_CASH_CENTS } from "~/domain/config";
-import { centsToYuan } from "~/domain/money";
 import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
 import { getOrders, getPortfolio } from "~/services/portfolio-service";
+import { CARD_SHADOW } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -86,7 +81,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       {/* 头图区 */}
-      <Card>
+      <SectionCard>
         <Title level={2} style={{ marginBottom: 8 }}>
           用真实基金数据，玩一把不心疼的模拟盘
         </Title>
@@ -94,7 +89,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           注册即送
           {" "}
           <Text strong>
-            {centsToYuan(INITIAL_CASH_CENTS)}
+            {fmtYuan(INITIAL_CASH_CENTS)}
             {" "}
             元
           </Text>
@@ -103,9 +98,9 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           每日签到再领
           {" "}
           <Text strong>
-            {centsToYuan(CHECKIN_BASE_CENTS)}
+            {fmtYuan(CHECKIN_BASE_CENTS)}
             ~
-            {centsToYuan(CHECKIN_MAX_CENTS)}
+            {fmtYuan(CHECKIN_MAX_CENTS)}
             {" "}
             元
           </Text>
@@ -135,7 +130,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
                 </>
               )}
         </Space>
-      </Card>
+      </SectionCard>
 
       {/* 主人的盘 */}
       {loaderData.admin === null
@@ -143,11 +138,11 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             <AdminNotReady adminName={loaderData.adminName} />
           )
         : (
-            <Card
+            <SectionCard
               title={(
                 <span>
                   主人的示范盘
-                  <Tag color="red" style={{ marginLeft: 8 }}>
+                  <Tag color="blue" style={{ marginLeft: 8 }}>
                     公开
                   </Tag>
                 </span>
@@ -157,44 +152,28 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               <PortfolioSummary portfolio={loaderData.portfolio} showCash={false} />
               <div style={{ marginTop: 24 }}>
                 <Title level={5}>持仓</Title>
-                <HoldingTableReadonly holdings={loaderData.portfolio.holdings} />
+                <HoldingListReadonly holdings={loaderData.portfolio.holdings} />
               </div>
               {loaderData.orders.length > 0 && (
                 <div style={{ marginTop: 24 }}>
                   <Title level={5}>最近操作</Title>
-                  <Space direction="vertical" style={{ width: "100%" }}>
-                    {loaderData.orders.slice(0, 5).map(o => (
-                      <div key={o.id}>
-                        <Text type="secondary">{o.placeDate}</Text>
-                        {" "}
-                        <Tag color={o.side === "buy" ? "red" : "green"}>
-                          {o.side === "buy" ? "申购" : "赎回"}
-                        </Tag>
-                        {" "}
-                        <a href={`/funds/${o.fundCode}`}>{o.fundName}</a>
-                        {" "}
-                        {o.side === "buy" && o.amount !== null && (
-                          <Text>
-                            {centsToYuan(o.amount)}
-                            {" "}
-                            元
-                          </Text>
-                        )}
-                        {o.source === "dca" && <Tag color="blue">定投</Tag>}
-                        {o.status === "pending" && <Tag color="orange">待确认</Tag>}
-                      </div>
-                    ))}
-                  </Space>
+                  <OrderList orders={loaderData.orders.slice(0, 5)} />
                 </div>
               )}
-            </Card>
+            </SectionCard>
           )}
 
       {/* 卖点。这里用 UnoCSS 工具类替代内联 style，验证工具链接入生效 */}
       <Row gutter={[16, 16]}>
         {FEATURES.map(f => (
           <Col xs={24} sm={12} lg={6} key={f.title}>
-            <Card className="h-full">
+            {/* 裸 Card 是为了拿 className（等高栅格），但外观必须跟 SectionCard 一致：
+                同一页上一张有边框、一张有阴影，看起来像两套设计 */}
+            <Card
+              className="h-full"
+              variant="borderless"
+              style={{ boxShadow: CARD_SHADOW }}
+            >
               <Title level={5} className="mt-0">
                 {f.title}
               </Title>
@@ -206,8 +185,13 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         ))}
       </Row>
 
+      {/* 同上：裸 Card 只为拿 className（居中），外观仍对齐 SectionCard */}
       {!me && (
-        <Card className="text-center">
+        <Card
+          className="text-center"
+          variant="borderless"
+          style={{ boxShadow: CARD_SHADOW }}
+        >
           <Title level={4}>准备好开自己的盘了吗？</Title>
           <Paragraph type="secondary">
             用户名 + 密码即可注册，不用邮箱、不用手机号。

@@ -4,27 +4,28 @@ import type { HoldingView } from "~/services/portfolio-service";
 import {
   Alert,
   Button,
-  Card,
-  Empty,
   Space,
-  Statistic,
-  Table,
-  Tag,
   Typography,
 } from "antd";
 import { and, eq, sql } from "drizzle-orm";
 import { useState } from "react";
 import { useFetcher } from "react-router";
 import { BuyDrawer } from "~/components/BuyDrawer";
+import { HoldingList } from "~/components/HoldingList";
 import { SellDrawer } from "~/components/SellDrawer";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { fmtYuan } from "~/components/ui/format";
+import { SectionCard } from "~/components/ui/SectionCard";
+import { StatBig } from "~/components/ui/StatBig";
 import { account, fund, orders, shareLot } from "~/db/schema";
-import { centsToYuan, navToDisplay, SHARE_SCALE, sharesToDisplay, yuanToCents } from "~/domain/money";
+import { navToDisplay, SHARE_SCALE, sharesToDisplay, yuanToCents } from "~/domain/money";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { resolveConfirmDate } from "~/domain/trading-calendar";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getPortfolio } from "~/services/portfolio-service";
 import { placeBuyOrder, placeSellOrder } from "~/services/trade";
+import { pnlColor } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -139,14 +140,6 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
 }
 
-function pnlColor(v: number): string {
-  if (v > 0)
-    return "#c62828";
-  if (v < 0)
-    return "#2e7d32";
-  return undefined as unknown as string;
-}
-
 export default function MeHoldings({ loaderData }: Route.ComponentProps) {
   const { portfolio, details, cash, confirmDate } = loaderData;
   const { summary, holdings } = portfolio;
@@ -170,160 +163,91 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
         <Alert type="error" showIcon message={fetcher.data.error} closable />
       )}
 
-      <Card>
-        <Space size="large" wrap>
-          <Statistic title="持仓市值" value={centsToYuan(summary.marketValueCents)} suffix="元" />
-          <Statistic title="可用现金" value={centsToYuan(cash)} suffix="元" />
-          <Statistic
-            title="浮动盈亏"
-            value={centsToYuan(summary.totalPnlCents)}
+      <SectionCard>
+        {/* 三个数都用次位 24：本页没有「总资产」，但「持仓市值」在 /me 与 / 上都是
+            24，字号跟着**标签**走而不是跟着「本页第几个」走，同一个词换页不变大小 */}
+        <Space size={48} wrap>
+          {/* ⚠️ 这里刻意不传 size，吃 StatBig 的 32px 默认值。
+              StatBig 的规则是「主位 32、次位 24」—— 那是按**角色**定的，不是按标签定的。
+              /me 与 /master 上主位是「总资产」，所以那两页的「持仓市值」是次位 24；
+              本页根本不显示总资产，「持仓市值」就是这一页的主位。
+              全分支 review 曾按「同一标签跨页不该变字号」建议统一成 24，
+              那会让本页三个数字齐平、**一页没有视觉锚点**。不要再统一。 */}
+          <StatBig
+            label="持仓市值"
+            value={fmtYuan(summary.marketValueCents)}
             suffix="元"
-            valueStyle={{ color: pnlColor(summary.totalPnlCents) }}
-            prefix={summary.totalPnlCents > 0 ? "+" : ""}
+          />
+          <StatBig
+            label="可用现金"
+            value={fmtYuan(cash)}
+            suffix="元"
+            size={24}
+          />
+          <StatBig
+            label="浮动盈亏"
+            value={`${summary.totalPnlCents > 0 ? "+" : ""}${fmtYuan(summary.totalPnlCents)}`}
+            suffix="元"
+            size={24}
+            color={pnlColor(summary.totalPnlCents)}
           />
         </Space>
-      </Card>
+      </SectionCard>
 
-      <Card title={`持仓明细（${holdings.length} 只）`}>
+      <SectionCard title={`持仓明细（${holdings.length} 只）`}>
         {holdings.length === 0
           ? (
-              <Empty description="还没有持仓">
+              <EmptyState description="还没有持仓">
                 <Button type="primary" href="/funds">
                   去挑一只基金
                 </Button>
-              </Empty>
+              </EmptyState>
             )
           : (
-              <Table<HoldingView>
-                rowKey="fundCode"
-                dataSource={holdings}
-                pagination={false}
-                scroll={{ x: 900 }}
-                columns={[
-                  {
-                    title: "基金",
-                    dataIndex: "fundName",
-                    fixed: "left",
-                    width: 200,
-                    render: (name: string, r) => (
-                      <a href={`/funds/${r.fundCode}`}>
-                        {name}
-                        <br />
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {r.fundCode}
+              <HoldingList
+                holdings={holdings}
+                renderNote={(h) => {
+                  const d = detailOf(h.fundCode);
+                  return (
+                    <>
+                      {`${sharesToDisplay(h.sharesScaled)} 份 · 成本 ${fmtYuan(h.costCents)} 元`}
+                      {/* ⚠️ 与 sharesAndNavNote 同一道闸门，不要拆开成「净值恒显示、
+                          只有日期条件显示」：navDate 为 null 表示 portfolio-service
+                          拉不到净值、用**成本价**兜底填了 navScaled，此时渲染「净值」
+                          就是把成本价当净值给用户看。同一只持仓在 /me 与 /me/holdings
+                          必须给同一个答案，否则两处又会各自漂移 */}
+                      {h.navDate ? ` · 净值 ${navToDisplay(h.navScaled)}（${h.navDate}）` : ""}
+                      {` · ${d.lots.length} 批`}
+                      {d.pendingShares > 0 && (
+                        <Text type="warning">
+                          {` · ${sharesToDisplay(d.pendingShares)} 份待赎回`}
                         </Text>
-                      </a>
-                    ),
-                  },
-                  {
-                    title: "持有份额",
-                    dataIndex: "sharesScaled",
-                    align: "right",
-                    render: (v: number, r) => {
-                      const d = detailOf(r.fundCode);
-                      return (
-                        <span>
-                          {sharesToDisplay(v)}
-                          {d.pendingShares > 0 && (
-                            <>
-                              <br />
-                              <Text type="warning" style={{ fontSize: 12 }}>
-                                {sharesToDisplay(d.pendingShares)}
-                                {" "}
-                                待赎回
-                              </Text>
-                            </>
-                          )}
-                        </span>
-                      );
-                    },
-                  },
-                  {
-                    title: "成本",
-                    dataIndex: "costCents",
-                    align: "right",
-                    render: (v: number) => `${centsToYuan(v)} 元`,
-                  },
-                  {
-                    title: "净值",
-                    dataIndex: "navScaled",
-                    align: "right",
-                    render: (v: number, r) => (
-                      <span>
-                        {navToDisplay(v)}
-                        {r.navDate && (
-                          <>
-                            <br />
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              {r.navDate}
-                            </Text>
-                          </>
-                        )}
-                      </span>
-                    ),
-                  },
-                  {
-                    title: "市值",
-                    dataIndex: "marketValueCents",
-                    align: "right",
-                    render: (v: number) => `${centsToYuan(v)} 元`,
-                  },
-                  {
-                    title: "盈亏",
-                    dataIndex: "pnlCents",
-                    align: "right",
-                    render: (v: number, r) => (
-                      <span style={{ color: pnlColor(v) }}>
-                        {v > 0 ? "+" : ""}
-                        {centsToYuan(v)}
-                        <br />
-                        <Text style={{ color: pnlColor(v), fontSize: 12 }}>
-                          {(r.pnlRate * 100).toFixed(2)}
-                          %
-                        </Text>
-                      </span>
-                    ),
-                  },
-                  {
-                    title: "批次",
-                    align: "center",
-                    width: 80,
-                    render: (_: unknown, r) => (
-                      <Tag>
-                        {detailOf(r.fundCode).lots.length}
-                        {" "}
-                        批
-                      </Tag>
-                    ),
-                  },
-                  {
-                    title: "操作",
-                    fixed: "right",
-                    width: 140,
-                    render: (_: unknown, r) => (
-                      <Space>
-                        <Button size="small" onClick={() => setBuyTarget(r)}>
-                          加仓
-                        </Button>
-                        <Button
-                          size="small"
-                          danger
-                          onClick={() => setSellTarget(r)}
-                          disabled={detailOf(r.fundCode).availableShares <= 0}
-                        >
-                          赎回
-                        </Button>
-                      </Space>
-                    ),
-                  },
-                ]}
+                      )}
+                    </>
+                  );
+                }}
+                renderActions={h => (
+                  <Space>
+                    <Button size="small" onClick={() => setBuyTarget(h)}>
+                      加仓
+                    </Button>
+                    <Button
+                      size="small"
+                      danger
+                      onClick={() => setSellTarget(h)}
+                      disabled={detailOf(h.fundCode).availableShares <= 0}
+                    >
+                      赎回
+                    </Button>
+                  </Space>
+                )}
               />
             )}
         <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
           「批次」是同一只基金分次买入形成的份额批，赎回时按买入时间先进先出消耗，
           每批按各自持有天数计赎回费。
         </Paragraph>
-      </Card>
+      </SectionCard>
 
       {/* 加仓抽屉 */}
       {buyTarget && (

@@ -1,10 +1,7 @@
 import type { Route } from "./+types/me.dca";
-import type { DcaPlanView } from "~/services/portfolio-service";
 import {
   Alert,
   Button,
-  Card,
-  Empty,
   Form,
   Input,
   InputNumber,
@@ -12,14 +9,16 @@ import {
   Popconfirm,
   Select,
   Space,
-  Statistic,
-  Table,
-  Tag,
   Typography,
 } from "antd";
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
-import { centsToYuan, yuanToCents } from "~/domain/money";
+import { DcaPlanList } from "~/components/DcaPlanList";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { fmtYuan } from "~/components/ui/format";
+import { SectionCard } from "~/components/ui/SectionCard";
+import { StatBig } from "~/components/ui/StatBig";
+import { yuanToCents } from "~/domain/money";
 import { getAppContext } from "~/services/context";
 import {
   createDcaPlan,
@@ -122,16 +121,6 @@ const WEEKDAYS = [
   { value: 7, label: "周日" },
 ];
 
-/** 把频率配置渲染成人话 */
-function frequencyText(p: DcaPlanView): string {
-  if (p.frequency === "daily")
-    return "每个交易日";
-  if (p.frequency === "weekly") {
-    return `每周${WEEKDAYS.find(w => w.value === p.dayOfWeek)?.label.slice(1) ?? "—"}`;
-  }
-  return `每月 ${p.dayOfMonth} 号`;
-}
-
 export default function MeDca({ loaderData }: Route.ComponentProps) {
   const { plans } = loaderData;
   const fetcher = useFetcher<typeof action>();
@@ -175,13 +164,18 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
         <Alert type="error" showIcon message={fetcher.data.error} closable />
       )}
 
-      <Card>
-        <Space size="large" wrap>
-          <Statistic title="计划总数" value={plans.length} suffix="个" />
-          <Statistic title="执行中" value={activeCount} suffix="个" />
-          <Statistic title="累计投入" value={centsToYuan(totalInvested)} suffix="元" />
+      <SectionCard>
+        <Space size={48} wrap>
+          <StatBig label="计划总数" value={plans.length} suffix="个" size={24} />
+          <StatBig label="执行中" value={activeCount} suffix="个" size={24} />
+          <StatBig
+            label="累计投入"
+            value={fmtYuan(totalInvested)}
+            suffix="元"
+            size={24}
+          />
         </Space>
-        <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+        <Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
           系统每天北京时间
           {" "}
           <Text strong>10:00</Text>
@@ -189,116 +183,55 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
           扫描到期的定投计划并自动下单，
           当晚 20:30 按当日净值撮合确认。现金不足时该期跳过，不影响其他计划。
         </Paragraph>
-      </Card>
+      </SectionCard>
 
-      <Card title="计划列表">
+      <SectionCard title="计划列表">
         {plans.length === 0
           ? (
-              <Empty description="还没有定投计划">
+              <EmptyState description="还没有定投计划">
                 <Button type="primary" onClick={() => setOpen(true)}>
                   创建第一个计划
                 </Button>
-              </Empty>
+              </EmptyState>
             )
           : (
-              <Table<DcaPlanView>
-                rowKey="id"
-                dataSource={plans}
-                pagination={false}
-                scroll={{ x: 900 }}
-                columns={[
-                  {
-                    title: "基金",
-                    dataIndex: "fundName",
-                    fixed: "left",
-                    width: 180,
-                    render: (name: string, r) => (
-                      <a href={`/funds/${r.fundCode}`}>
-                        {name}
-                        <br />
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {r.fundCode}
-                        </Text>
-                      </a>
-                    ),
-                  },
-                  {
-                    title: "每期金额",
-                    dataIndex: "amount",
-                    align: "right",
-                    render: (v: number) => `${centsToYuan(v)} 元`,
-                  },
-                  {
-                    title: "频率",
-                    render: (_: unknown, r) => frequencyText(r),
-                  },
-                  { title: "下次执行", dataIndex: "nextRun", width: 120 },
-                  {
-                    title: "已投期数",
-                    dataIndex: "runCount",
-                    align: "right",
-                    render: (v: number) => `${v} 期`,
-                  },
-                  {
-                    title: "累计投入",
-                    dataIndex: "totalInvested",
-                    align: "right",
-                    render: (v: number) => `${centsToYuan(v)} 元`,
-                  },
-                  {
-                    title: "状态",
-                    dataIndex: "status",
-                    width: 90,
-                    render: (s: string) =>
-                      s === "active"
-                        ? (
-                            <Tag color="green">执行中</Tag>
-                          )
-                        : (
-                            <Tag>已暂停</Tag>
-                          ),
-                  },
-                  {
-                    title: "操作",
-                    fixed: "right",
-                    width: 150,
-                    render: (_: unknown, r) => (
-                      <Space>
-                        <fetcher.Form method="post" style={{ display: "inline" }}>
-                          <input type="hidden" name="intent" value="toggle" />
-                          <input type="hidden" name="id" value={r.id} />
-                          <input
-                            type="hidden"
-                            name="status"
-                            value={r.status === "active" ? "paused" : "active"}
-                          />
-                          <Button size="small" htmlType="submit">
-                            {r.status === "active" ? "暂停" : "启用"}
-                          </Button>
-                        </fetcher.Form>
-                        <Popconfirm
-                          title="确定删除这个定投计划？"
-                          description="已产生的订单和持仓不受影响。"
-                          okText="删除"
-                          okButtonProps={{ danger: true }}
-                          cancelText="取消"
-                          onConfirm={() =>
-                            fetcher.submit(
-                              { intent: "delete", id: String(r.id) },
-                              { method: "post" },
-                            )}
-                        >
-                          <Button size="small" danger>
-                            删除
-                          </Button>
-                        </Popconfirm>
-                      </Space>
-                    ),
-                  },
-                ]}
+              <DcaPlanList
+                plans={plans}
+                renderActions={p => (
+                  <Space>
+                    <fetcher.Form method="post" style={{ display: "inline" }}>
+                      <input type="hidden" name="intent" value="toggle" />
+                      <input type="hidden" name="id" value={p.id} />
+                      <input
+                        type="hidden"
+                        name="status"
+                        value={p.status === "active" ? "paused" : "active"}
+                      />
+                      <Button size="small" htmlType="submit">
+                        {p.status === "active" ? "暂停" : "启用"}
+                      </Button>
+                    </fetcher.Form>
+                    <Popconfirm
+                      title="确定删除这个定投计划？"
+                      description="已产生的订单和持仓不受影响。"
+                      okText="删除"
+                      okButtonProps={{ danger: true }}
+                      cancelText="取消"
+                      onConfirm={() =>
+                        fetcher.submit(
+                          { intent: "delete", id: String(p.id) },
+                          { method: "post" },
+                        )}
+                    >
+                      <Button size="small" danger>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                )}
               />
             )}
-      </Card>
+      </SectionCard>
 
       {/* 新建计划弹窗 */}
       <Modal

@@ -2,7 +2,6 @@ import type { RedeemTier, ShareLotInput } from "~/domain/redeem";
 import {
   Alert,
   Button,
-  Descriptions,
   Drawer,
   Form,
   Input,
@@ -12,14 +11,16 @@ import {
 } from "antd";
 import { useMemo, useState } from "react";
 import { useFetcher } from "react-router";
+import { DataRow } from "~/components/ui/DataRow";
+import { fmtYuan } from "~/components/ui/format";
 import {
-  centsToYuan,
   navToDisplay,
   rateToPercent,
   SHARE_SCALE,
   sharesToDisplay,
 } from "~/domain/money";
 import { calcRedeem } from "~/domain/redeem";
+import { COLOR, pnlColor } from "~/theme";
 
 const { Text, Paragraph } = Typography;
 
@@ -107,26 +108,20 @@ export function SellDrawer(props: SellDrawerProps) {
         <input type="hidden" name="intent" value="sell" />
         <input type="hidden" name="fundCode" value={fundCode} />
 
-        <Descriptions
-          size="small"
-          column={1}
-          bordered
-          style={{ marginBottom: 16 }}
-          items={[
-            { key: "code", label: "基金代码", children: fundCode },
-            {
-              key: "nav",
-              label: "最新净值",
-              children: `${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`,
-            },
-            {
-              key: "avail",
-              label: "可赎份额",
-              children: `${sharesToDisplay(availableSharesScaled)} 份`,
-            },
-            { key: "confirm", label: "预计确认日", children: confirmDate },
-          ]}
-        />
+        <div style={{ marginBottom: 16 }}>
+          <DataRow label="基金代码" value={fundCode} />
+          <DataRow
+            label="最新净值"
+            value={`${navToDisplay(navScaled)}${navDate ? `（${navDate}）` : ""}`}
+            mono
+          />
+          <DataRow
+            label="可赎份额"
+            value={`${sharesToDisplay(availableSharesScaled)} 份`}
+            mono
+          />
+          <DataRow label="预计确认日" value={confirmDate} last />
+        </div>
 
         <Form.Item label="赎回份额" layout="vertical" style={{ marginBottom: 12 }}>
           <Input
@@ -208,30 +203,39 @@ export function SellDrawer(props: SellDrawerProps) {
                       title: "赎回费",
                       dataIndex: "feeCents",
                       align: "right",
-                      render: (v: number) => `${centsToYuan(v)} 元`,
+                      render: (v: number) => `${fmtYuan(v)} 元`,
                     },
                   ]}
                 />
                 <div>
                   赎回总额：
                   <Text strong>
-                    {centsToYuan(estimate.totalGrossCents)}
+                    {fmtYuan(estimate.totalGrossCents)}
                     {" "}
                     元
                   </Text>
                 </div>
                 <div>
                   赎回费合计：
-                  <Text strong type="danger">
-                    {centsToYuan(estimate.totalFeeCents)}
+                  {/*
+                    刻意不标红：手续费是成本，既不是盈亏也不是收益，就是个金额。
+                    在「红=涨」的系统里给它上红色，会被读成收益；而 antd 的
+                    type="danger"（#ff4d4f）与两行下面 pnlColor 的涨红（#F5222D）
+                    肉眼分不出来，同一小块里出现两种红只有一个是盈亏，更糟。
+                    这块的读法：赎回总额、赎回费合计是推导过程（朴素），
+                    预计到账（蓝）与已实现盈亏（红绿）才是结论。
+                    费率高的警示由下方 Paragraph 的文案承载，不需要颜色再喊一遍。
+                  */}
+                  <Text strong>
+                    {fmtYuan(estimate.totalFeeCents)}
                     {" "}
                     元
                   </Text>
                 </div>
                 <div>
                   预计到账：
-                  <Text strong style={{ color: "#c62828" }}>
-                    {centsToYuan(estimate.totalNetCents)}
+                  <Text strong style={{ color: COLOR.primary }}>
+                    {fmtYuan(estimate.totalNetCents)}
                     {" "}
                     元
                   </Text>
@@ -240,12 +244,10 @@ export function SellDrawer(props: SellDrawerProps) {
                   已实现盈亏：
                   <Text
                     strong
-                    style={{
-                      color: estimate.realizedPnlCents >= 0 ? "#c62828" : "#2e7d32",
-                    }}
+                    style={{ color: pnlColor(estimate.realizedPnlCents) }}
                   >
                     {estimate.realizedPnlCents > 0 ? "+" : ""}
-                    {centsToYuan(estimate.realizedPnlCents)}
+                    {fmtYuan(estimate.realizedPnlCents)}
                     {" "}
                     元
                   </Text>

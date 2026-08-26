@@ -212,9 +212,18 @@ TS 7 是 Go 重写版，`typescript-eslint` 还不支持（会直接抛错拒绝
 
 原因是踩了两个坑：
 
-1. **`unocss/vite` 插件 + Vite 8 不兼容**：插件依赖 Vite 的内部 `vite:css-post` 插件，
-   而 Vite 8 换成 Rolldown 内核后该插件不存在。表现极其隐蔽——
-   构建只报一行警告就成功了，但产出的 CSS 里只有一个 48 字节的占位符，**所有工具类全部丢失**。
+1. **`unocss/vite` 插件与 React Router 8 的 Vite Environment API 不兼容**。
+
+   ⚠️ 这**不是** Vite 8 的问题——裸 Vite 8 + `unocss/vite` 实测完全正常，
+   纯 SPA 项目（`@vitejs/plugin-react` 单环境构建）也能正常用该插件。
+
+   问题出在 RR8 framework mode 会启用 Environment API（构建日志里能看到
+   `Using Vite Environment API`），把流水线拆成 client/ssr 多个环境。
+   UnoCSS 的 `unocss:global:build:generate` 要去当前环境的插件容器里找
+   `vite:css-post` 注入生成的 CSS，多环境下找不到。
+
+   表现极其隐蔽——构建只报一行 `failed to find vite:css-post plugin` 警告就"成功"了，
+   但产出的 CSS 里只有一个 48 字节的占位符，**所有工具类全部丢失**。
 2. **PostCSS 模式会让构建挂死**（超过 7 分钟无响应）。
 
 CLI 方案已验证可靠：工具类正确进入最终产物。改了 class 之后如果样式没生效，

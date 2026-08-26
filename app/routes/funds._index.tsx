@@ -1,7 +1,10 @@
 import type { Route } from "./+types/funds._index";
 import type { FundSearchItem } from "~/services/fund-data";
-import { Button, Card, Empty, Input, Space, Table, Tag, Typography } from "antd";
+import { Button, Input, Space, Typography } from "antd";
 import { Form as RouterForm, useNavigation } from "react-router";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { FundListItem } from "~/components/ui/FundListItem";
+import { SectionCard } from "~/components/ui/SectionCard";
 import { getAppContext } from "~/services/context";
 import { searchFunds } from "~/services/fund-data";
 
@@ -40,7 +43,7 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Card>
+      <SectionCard>
         <Title level={3}>基金搜索</Title>
         <Paragraph type="secondary">
           输入基金代码或名称，数据来自东方财富公开接口。点进详情可看真实净值曲线与费率。
@@ -59,44 +62,35 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
             </Button>
           </Space.Compact>
         </RouterForm>
-      </Card>
+      </SectionCard>
 
       {q
         ? (
-            <Card title={`「${q}」的搜索结果（${results.length} 条）`}>
+            <SectionCard title={`「${q}」的搜索结果（${results.length} 条）`}>
               {results.length === 0
                 ? (
-                    <Empty description="没搜到，换个关键词试试" />
+                    <EmptyState description="没搜到，换个关键词试试" />
                   )
                 : (
-                    <Table
-                      rowKey="code"
-                      dataSource={results}
-                      pagination={false}
-                      size="middle"
-                      columns={[
-                        { title: "代码", dataIndex: "code", width: 120 },
-                        { title: "名称", dataIndex: "name" },
-                        {
-                          title: "类型",
-                          dataIndex: "type",
-                          width: 160,
-                          render: (t: string) => (t ? <Tag>{t}</Tag> : "—"),
-                        },
-                        {
-                          title: "操作",
-                          width: 120,
-                          render: (_: unknown, r: FundSearchItem) => (
-                            <a href={`/funds/${r.code}`}>查看详情</a>
-                          ),
-                        },
-                      ]}
-                    />
+                    results.map((r, i) => (
+                      <FundListItem
+                        key={r.code}
+                        fundCode={r.code}
+                        fundName={r.name}
+                        fundType={r.type || undefined}
+                        last={i === results.length - 1}
+                        actions={(
+                          <Button size="small" type="link" href={`/funds/${r.code}`}>
+                            查看详情
+                          </Button>
+                        )}
+                      />
+                    ))
                   )}
-            </Card>
+            </SectionCard>
           )
         : (
-            <Card title="热门基金">
+            <SectionCard title="热门基金">
               <Space wrap>
                 {SUGGESTED.map(f => (
                   <Button key={f.code} href={`/funds/${f.code}`}>
@@ -107,7 +101,7 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
                   </Button>
                 ))}
               </Space>
-            </Card>
+            </SectionCard>
           )}
     </Space>
   );

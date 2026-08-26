@@ -1,6 +1,7 @@
 import type { LineConfig } from "@ant-design/charts";
-import { Empty, Radio } from "antd";
 import { lazy, Suspense, useMemo, useState, useSyncExternalStore } from "react";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { NAV_SCALE } from "~/domain/money";
 
 /**
@@ -55,9 +56,6 @@ function ChartSkeleton() {
 }
 
 /**
- * 净值曲线图。数据传入时净值是 ×10000 的整数，这里转成真实净值再画。
- */
-/**
  * 判断当前是否已在浏览器端 hydrate 完成。
  * 用 useSyncExternalStore 而非「useEffect 里 setState」——
  * 后者会多一次渲染，也会触发 react/set-state-in-effect 告警。
@@ -72,6 +70,9 @@ function useIsClient(): boolean {
   );
 }
 
+/**
+ * 净值曲线图。数据传入时净值是 ×10000 的整数，这里转成真实净值再画。
+ */
 export function NavChart({ data }: { data: NavPoint[] }) {
   const [range, setRange] = useState<string>("3m");
   const mounted = useIsClient();
@@ -88,7 +89,8 @@ export function NavChart({ data }: { data: NavPoint[] }) {
   }, [data, range]);
 
   if (data.length === 0) {
-    return <Empty description="暂无净值数据" />;
+    // 走 EmptyState 而不是裸 Empty：全站空态的留白由它统一
+    return <EmptyState description="暂无净值数据" />;
   }
 
   const config: LineConfig = {
@@ -114,15 +116,13 @@ export function NavChart({ data }: { data: NavPoint[] }) {
 
   return (
     <div>
-      <Radio.Group
-        value={range}
-        onChange={e => setRange(e.target.value)}
-        optionType="button"
-        buttonStyle="solid"
-        size="small"
-        style={{ marginBottom: 16 }}
-        options={RANGES.map(r => ({ label: r.label, value: r.key }))}
-      />
+      <div style={{ marginBottom: 16 }}>
+        <PeriodTabs
+          options={RANGES.map(r => ({ key: r.key, label: r.label }))}
+          value={range}
+          onChange={setRange}
+        />
+      </div>
       {mounted
         ? (
             <Suspense fallback={<ChartSkeleton />}>

@@ -13,6 +13,7 @@ import {
 } from "react-router";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
+import { ANTD_TOKEN, COLOR } from "~/theme";
 // UnoCSS 预生成的工具类样式（由 `pnpm uno:build` 产出）。
 // 放在 antd 之后引入，保证同优先级下工具类能覆盖 antd 的默认样式。
 import "./uno.gen.css";
@@ -44,6 +45,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" sizes="32x32" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Meta />
         <Links />
       </head>
@@ -68,34 +71,52 @@ export default function App() {
       .at(0) ?? (location.pathname === "/" ? "/" : "");
 
   return (
-    // antd 全局配置：中文语言包 + 主题色（国内习惯红涨绿跌，主色用喜庆红）
+    // antd 全局配置：中文语言包 + 视觉 token（见 app/theme.ts）
     <ConfigProvider
       locale={zhCN}
-      theme={{
-        algorithm: theme.defaultAlgorithm,
-        token: { colorPrimary: "#c62828" },
-      }}
+      theme={{ algorithm: theme.defaultAlgorithm, ...ANTD_TOKEN }}
     >
       <AntLayout style={{ minHeight: "100vh" }}>
-        <Header style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <a href="/" style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>
+        {/* Header 由 antd 默认的深色改为白底 + 底部细线，
+            这是「后台管理系统」与「消费级理财 App」观感的分水岭 */}
+        <Header
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 24,
+            paddingInline: 24,
+            background: COLOR.card,
+            borderBottom: `1px solid ${COLOR.border}`,
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+          }}
+        >
+          <a
+            href="/"
+            style={{
+              color: COLOR.primary,
+              fontWeight: 700,
+              fontSize: 18,
+              whiteSpace: "nowrap",
+            }}
+          >
             模拟基金
           </a>
           <Menu
-            theme="dark"
             mode="horizontal"
             selectedKeys={selectedKey ? [selectedKey] : []}
             items={NAV_ITEMS.map(i => ({
               key: i.key,
               label: <a href={i.key}>{i.label}</a>,
             }))}
-            style={{ flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 0, borderBottom: "none" }}
           />
           {/* 登录态区域：已登录显示用户名与登出，游客显示登录/注册 */}
           {user
             ? (
                 <Space>
-                  <span style={{ color: "rgba(255,255,255,.85)" }}>
+                  <span style={{ color: COLOR.textSecondary }}>
                     {user.username}
                     {user.role === "admin" ? "（主人）" : ""}
                   </span>
@@ -118,11 +139,16 @@ export default function App() {
               )}
         </Header>
         <Content
-          style={{ padding: 24, maxWidth: 1200, margin: "0 auto", width: "100%" }}
+          style={{
+            padding: "24px 24px 48px",
+            maxWidth: 1120,
+            margin: "0 auto",
+            width: "100%",
+          }}
         >
           <Outlet />
         </Content>
-        <Footer style={{ textAlign: "center" }}>
+        <Footer style={{ textAlign: "center", color: COLOR.textSecondary }}>
           模拟盘 · 数据来自公开接口 · 仅供学习，不构成投资建议
         </Footer>
       </AntLayout>

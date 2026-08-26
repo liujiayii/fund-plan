@@ -1,24 +1,32 @@
 import type { Route } from "./+types/master";
-import type { DcaPlanView, OrderView, TransactionView } from "~/services/portfolio-service";
-import { Card, Empty, Space, Table, Tabs, Tag, Typography } from "antd";
+import { Pagination, Space, Tabs, Tag, Typography } from "antd";
+import { useState } from "react";
+import { DcaPlanList } from "~/components/DcaPlanList";
+import { OrderList } from "~/components/OrderList";
 import {
   AdminNotReady,
-  HoldingTableReadonly,
+  HoldingListReadonly,
   PortfolioSummary,
 } from "~/components/PortfolioView";
-import { centsToYuan } from "~/domain/money";
+import { TxList } from "~/components/TxList";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { SectionCard } from "~/components/ui/SectionCard";
 import { getAppContext } from "~/services/context";
 import { getAdminUser } from "~/services/guard";
 import {
-
   getDcaPlans,
   getOrders,
   getPortfolio,
   getTransactions,
-
 } from "~/services/portfolio-service";
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Paragraph } = Typography;
+
+/**
+ * 每页条数。沿用被卡片列表取代的那两张旧 Table 的 `pageSize: 15`，
+ * 交易记录与资金流水各取 50 条，全铺开是 50 张卡片。
+ */
+const PAGE_SIZE = 15;
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -49,25 +57,14 @@ export async function loader({ context }: Route.LoaderArgs) {
   return { admin, portfolio, orders, plans, txs } as const;
 }
 
-const TX_TYPE_MAP: Record<string, { color: string; text: string }> = {
-  init: { color: "blue", text: "初始本金" },
-  checkin: { color: "gold", text: "签到奖励" },
-  buy: { color: "red", text: "申购" },
-  sell: { color: "green", text: "赎回到账" },
-  fee: { color: "volcano", text: "手续费" },
-};
-
-const WEEKDAY_LABEL = ["", "一", "二", "三", "四", "五", "六", "日"];
-
-function frequencyText(p: DcaPlanView): string {
-  if (p.frequency === "daily")
-    return "每个交易日";
-  if (p.frequency === "weekly")
-    return `每周${WEEKDAY_LABEL[p.dayOfWeek ?? 0] ?? "—"}`;
-  return `每月 ${p.dayOfMonth} 号`;
-}
-
 export default function Master({ loaderData }: Route.ComponentProps) {
+  // 客户端分页：两个 tab 各自一份页码，互不影响。
+  // ⚠️ 必须放在下面「主人未注册」的提前 return **之前** ——
+  // hook 调用数量要在两条渲染路径上一致，否则 React 报
+  // Rendered fewer hooks than expected
+  const [orderPage, setOrderPage] = useState(1);
+  const [txPage, setTxPage] = useState(1);
+
   if (!loaderData.admin) {
     return (
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -86,7 +83,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
           {admin.username}
           {" "}
           的示范盘
-          <Tag color="red" style={{ marginLeft: 8 }}>
+          <Tag color="blue" style={{ marginLeft: 8 }}>
             公开
           </Tag>
         </Title>
@@ -95,141 +92,53 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
-      <Card>
+      <SectionCard>
         <PortfolioSummary portfolio={portfolio} />
-      </Card>
+      </SectionCard>
 
-      <Card>
+      <SectionCard>
         <Tabs
           items={[
             {
               key: "holdings",
               label: `持仓（${portfolio.holdings.length}）`,
-              children: <HoldingTableReadonly holdings={portfolio.holdings} />,
+              children: <HoldingListReadonly holdings={portfolio.holdings} />,
             },
             {
               key: "dca",
               label: `定投计划（${plans.length}）`,
               children:
                 plans.length === 0
-                  ? (
-                      <Empty description="暂无定投计划" />
-                    )
-                  : (
-                      <Table<DcaPlanView>
-                        rowKey="id"
-                        dataSource={plans}
-                        pagination={false}
-                        scroll={{ x: 700 }}
-                        columns={[
-                          {
-                            title: "基金",
-                            dataIndex: "fundName",
-                            render: (name: string, r) => (
-                              <a href={`/funds/${r.fundCode}`}>
-                                {name}
-                                <br />
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {r.fundCode}
-                                </Text>
-                              </a>
-                            ),
-                          },
-                          {
-                            title: "每期金额",
-                            dataIndex: "amount",
-                            align: "right",
-                            render: (v: number) => `${centsToYuan(v)} 元`,
-                          },
-                          { title: "频率", render: (_: unknown, r) => frequencyText(r) },
-                          { title: "下次执行", dataIndex: "nextRun", width: 120 },
-                          {
-                            title: "已投期数",
-                            dataIndex: "runCount",
-                            align: "right",
-                            render: (v: number) => `${v} 期`,
-                          },
-                          {
-                            title: "累计投入",
-                            dataIndex: "totalInvested",
-                            align: "right",
-                            render: (v: number) => `${centsToYuan(v)} 元`,
-                          },
-                          {
-                            title: "状态",
-                            dataIndex: "status",
-                            width: 90,
-                            render: (s: string) =>
-                              s === "active"
-                                ? (
-                                    <Tag color="green">执行中</Tag>
-                                  )
-                                : (
-                                    <Tag>已暂停</Tag>
-                                  ),
-                          },
-                        ]}
-                      />
-                    ),
+                  ? <EmptyState description="暂无定投计划" />
+                  : <DcaPlanList plans={plans} />,
             },
             {
               key: "orders",
               label: `交易记录（${orders.length}）`,
               children:
                 orders.length === 0
-                  ? (
-                      <Empty description="暂无交易记录" />
-                    )
+                  ? <EmptyState description="暂无交易记录" />
                   : (
-                      <Table<OrderView>
-                        rowKey="id"
-                        dataSource={orders}
-                        pagination={{ pageSize: 15, showSizeChanger: false }}
-                        scroll={{ x: 700 }}
-                        columns={[
-                          { title: "下单日", dataIndex: "placeDate", width: 110 },
-                          { title: "基金", dataIndex: "fundName" },
-                          {
-                            title: "方向",
-                            dataIndex: "side",
-                            width: 80,
-                            render: (s: string) => (
-                              <Tag color={s === "buy" ? "red" : "green"}>
-                                {s === "buy" ? "申购" : "赎回"}
-                              </Tag>
-                            ),
-                          },
-                          {
-                            title: "来源",
-                            dataIndex: "source",
-                            width: 80,
-                            render: (s: string) =>
-                              s === "dca" ? <Tag color="blue">定投</Tag> : <Tag>手动</Tag>,
-                          },
-                          {
-                            title: "状态",
-                            dataIndex: "status",
-                            width: 90,
-                            render: (s: string) => {
-                              const m: Record<string, { color: string; text: string }> = {
-                                pending: { color: "orange", text: "待确认" },
-                                confirmed: { color: "green", text: "已确认" },
-                                failed: { color: "red", text: "失败" },
-                              };
-                              const x = m[s] ?? { color: "default", text: s };
-                              return <Tag color={x.color}>{x.text}</Tag>;
-                            },
-                          },
-                          {
-                            title: "成交金额",
-                            dataIndex: "dealAmount",
-                            align: "right",
-                            width: 120,
-                            render: (v: number | null) =>
-                              v === null ? "—" : `${centsToYuan(v)} 元`,
-                          },
-                        ]}
-                      />
+                      <>
+                        <OrderList
+                          orders={orders.slice(
+                            (orderPage - 1) * PAGE_SIZE,
+                            orderPage * PAGE_SIZE,
+                          )}
+                          detailed
+                        />
+                        {orders.length > PAGE_SIZE && (
+                          <Pagination
+                            align="end"
+                            current={orderPage}
+                            pageSize={PAGE_SIZE}
+                            total={orders.length}
+                            showSizeChanger={false}
+                            style={{ marginTop: 16 }}
+                            onChange={setOrderPage}
+                          />
+                        )}
+                      </>
                     ),
             },
             {
@@ -237,63 +146,32 @@ export default function Master({ loaderData }: Route.ComponentProps) {
               label: `资金流水（${txs.length}）`,
               children:
                 txs.length === 0
-                  ? (
-                      <Empty description="暂无流水" />
-                    )
+                  ? <EmptyState description="暂无流水" />
                   : (
-                      <Table<TransactionView>
-                        rowKey="id"
-                        dataSource={txs}
-                        pagination={{ pageSize: 15, showSizeChanger: false }}
-                        scroll={{ x: 600 }}
-                        columns={[
-                          {
-                            title: "时间",
-                            dataIndex: "createdAt",
-                            width: 170,
-                            render: (v: number) =>
-                              new Date(v).toLocaleString("zh-CN", {
-                                timeZone: "Asia/Shanghai",
-                              }),
-                          },
-                          {
-                            title: "类型",
-                            dataIndex: "type",
-                            width: 110,
-                            render: (t: string) => {
-                              const m = TX_TYPE_MAP[t] ?? { color: "default", text: t };
-                              return <Tag color={m.color}>{m.text}</Tag>;
-                            },
-                          },
-                          {
-                            title: "金额",
-                            dataIndex: "amount",
-                            align: "right",
-                            width: 130,
-                            render: (v: number) => (
-                              <Text style={{ color: v >= 0 ? "#c62828" : "#2e7d32" }}>
-                                {v > 0 ? "+" : ""}
-                                {centsToYuan(v)}
-                                {" "}
-                                元
-                              </Text>
-                            ),
-                          },
-                          {
-                            title: "变动后余额",
-                            dataIndex: "balance",
-                            align: "right",
-                            width: 140,
-                            render: (v: number) => `${centsToYuan(v)} 元`,
-                          },
-                          { title: "备注", dataIndex: "note" },
-                        ]}
-                      />
+                      <>
+                        <TxList
+                          txs={txs.slice(
+                            (txPage - 1) * PAGE_SIZE,
+                            txPage * PAGE_SIZE,
+                          )}
+                        />
+                        {txs.length > PAGE_SIZE && (
+                          <Pagination
+                            align="end"
+                            current={txPage}
+                            pageSize={PAGE_SIZE}
+                            total={txs.length}
+                            showSizeChanger={false}
+                            style={{ marginTop: 16 }}
+                            onChange={setTxPage}
+                          />
+                        )}
+                      </>
                     ),
             },
           ]}
         />
-      </Card>
+      </SectionCard>
     </Space>
   );
 }

@@ -1,27 +1,23 @@
 import type { Route } from "./+types/funds.$code";
 import type { RedeemTier } from "~/domain/redeem";
-import {
-  Alert,
-  Button,
-  Card,
-  Descriptions,
-  Space,
-  Statistic,
-  Tag,
-  Typography,
-} from "antd";
+import { Alert, Button, Space, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useState } from "react";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { NavChart } from "~/components/NavChart";
+import { DataRow } from "~/components/ui/DataRow";
+import { fmtYuan } from "~/components/ui/format";
+import { SectionCard } from "~/components/ui/SectionCard";
+import { StatBig } from "~/components/ui/StatBig";
 import { account, fund, fundNav } from "~/db/schema";
-import { centsToYuan, navToDisplay, rateToPercent } from "~/domain/money";
+import { navToDisplay, rateToPercent } from "~/domain/money";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { getAppContext } from "~/services/context";
 import { fetchFundBasic, fetchNavHistory } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
 import { getNavSeries } from "~/services/portfolio-service";
 import { placeBuyOrder } from "~/services/trade";
+import { pnlColor } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -154,13 +150,19 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   }
 }
 
-/** 风险等级对应的颜色与说明 */
+/**
+ * 风险等级对应的颜色与说明。
+ *
+ * ⚠️ 刻意避开红与绿：低风险不用 green、高风险不用 red ——
+ * 那两个颜色现在专属涨跌，拿来表示风险会让用户
+ * 把「高风险」误读成「在涨」。改用蓝→青→金→橙→火山的暖度递进。
+ */
 const RISK_MAP: Record<number, { color: string; label: string }> = {
-  1: { color: "green", label: "低风险" },
+  1: { color: "blue", label: "低风险" },
   2: { color: "cyan", label: "中低风险" },
-  3: { color: "blue", label: "中风险" },
+  3: { color: "gold", label: "中风险" },
   4: { color: "orange", label: "中高风险" },
-  5: { color: "red", label: "高风险" },
+  5: { color: "volcano", label: "高风险" },
 };
 
 export default function FundDetail({ loaderData }: Route.ComponentProps) {
@@ -173,7 +175,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Card>
+      <SectionCard>
         <Space direction="vertical" size="small" style={{ width: "100%" }}>
           <Space align="baseline" wrap>
             <Title level={3} style={{ margin: 0 }}>
@@ -182,25 +184,34 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             <Text type="secondary">{f.code}</Text>
             {f.type && <Tag>{f.type}</Tag>}
             <Tag color={risk.color}>{risk.label}</Tag>
-            <Tag color={f.status.includes("开放") ? "green" : "default"}>{f.status}</Tag>
+            <Tag color={f.status.includes("开放") ? "blue" : "default"}>{f.status}</Tag>
           </Space>
 
-          <Space size="large" wrap style={{ marginTop: 8 }}>
-            <Statistic
-              title={`单位净值${latest ? `（${latest.navDate}）` : ""}`}
+          <Space size={48} wrap style={{ marginTop: 8 }}>
+            <StatBig
+              label={`单位净值${latest ? `（${latest.navDate}）` : ""}`}
               value={latest ? navToDisplay(latest.unitNav) : "—"}
             />
-            <Statistic
-              title="日涨跌"
-              value={growthPct}
-              precision={2}
-              suffix="%"
-              // 国内习惯：红涨绿跌
-              valueStyle={{ color: growthPct >= 0 ? "#c62828" : "#2e7d32" }}
-              prefix={growthPct >= 0 ? "+" : ""}
+            <StatBig
+              label="日涨跌"
+              // 「%」写进 value、不走 suffix：同一行的「申购费率」是 rateToPercent()
+              // 自带的 %（大字号等宽），suffix 会渲染成灰 13px 比例字体并空 4px，
+              // 一行里两个百分号两种长相
+              value={`${growthPct > 0 ? "+" : ""}${growthPct.toFixed(2)}%`}
+              size={24}
+              color={pnlColor(growthPct)}
             />
-            <Statistic title="申购费率" value={rateToPercent(f.purchaseRate)} />
-            <Statistic title="起购金额" value={`${centsToYuan(f.minPurchase)} 元`} />
+            <StatBig
+              label="申购费率"
+              value={rateToPercent(f.purchaseRate)}
+              size={24}
+            />
+            <StatBig
+              label="起购金额"
+              value={fmtYuan(f.minPurchase)}
+              suffix="元"
+              size={24}
+            />
           </Space>
 
           <Space style={{ marginTop: 8 }}>
@@ -225,33 +236,36 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             </Button>
           </Space>
         </Space>
-      </Card>
+      </SectionCard>
 
-      <Card title="净值走势">
+      <SectionCard title="净值走势">
         <NavChart data={series} />
-      </Card>
+      </SectionCard>
 
-      <Card title="赎回费率阶梯">
+      <SectionCard title="赎回费率阶梯">
         <Paragraph type="secondary">
           赎回按
           <Text strong>份额批次先进先出</Text>
           逐批计费，每批按各自的持有天数查下表档位。
           所以一笔赎回可能同时按多个费率计费。
         </Paragraph>
-        <Descriptions
-          bordered
-          size="small"
-          column={1}
-          items={f.redeemTiers.map((t, i) => ({
-            key: String(i),
-            label:
+        {f.redeemTiers.map((t, i) => (
+          // key 用 minDays 而非数组索引：档位查找是 `holdDays >= t.minDays`，
+          // 重复的 minDays 会让查找产生歧义，所以「minDays 唯一」是这个
+          // 数据结构自身的契约；将来往中间插新档位时索引会全体错位，它不会。
+          <DataRow
+            key={t.minDays}
+            label={
               t.maxDays === null
                 ? `持有满 ${t.minDays} 天`
-                : `持有 ${t.minDays} ~ 不满 ${t.maxDays} 天`,
-            children: rateToPercent(t.rate),
-          }))}
-        />
-      </Card>
+                : `持有 ${t.minDays} ~ 不满 ${t.maxDays} 天`
+            }
+            value={rateToPercent(t.rate)}
+            mono
+            last={i === f.redeemTiers.length - 1}
+          />
+        ))}
+      </SectionCard>
 
       {!latest && (
         <Alert
