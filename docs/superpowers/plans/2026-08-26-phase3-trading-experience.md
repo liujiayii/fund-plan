@@ -1,5 +1,15 @@
 # 期三·交易体验 实施计划
 
+> ## 状态：已完成 · 2026-08-26
+>
+> 实现区间（本地 dev）`89075ce..25e3f4b`；并线 main squash commit `f7badbd`（PR #7）；线上部署 version `a05ff2d6`（CI 自动）
+>
+> - **下方复选框全部未勾，但工作已完成。** 别把「未勾」读成「未做」，勿照此重新施工。
+> - 期三零新 domain 金融逻辑（calcRedeem/calcPurchase 既有测试复用），只做 service/UI 接线 + 路由新增 + 抽屉重构。
+> - 验收①-⑤ 全过（final review opus Approved 零 Critical/Important）；4 处 Minor 全 defer（BuyPanel/SellPanel 的 fundName 声明未用、PnlText/format 注释里旧组件名、HoldingDetailView 字段名不对称、fetcher.data useEffect loader 不刷新是既有行为）。
+> - T7 实现者子代理撞 API 429 挂在半路，controller 接手收尾（me.holdings 瘦身 + git rm 抽屉）；T7 单任务评审也撞 429，跳过单任务评审直接进 final（产出已 controller 验过 + final review 兜底）。
+> - 上线方式：GitHub 直连本机已通（不需代理），推 origin/dev → PR #7 CI 全绿 → squash merge to main → CI deploy.yml 自动部署 Cloudflare。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把交易体验重构成支付宝式：新增单只持仓详情页（让份额批次与 FIFO 阶梯费率对用户可见），订单页改成确认进度时间线，买入/赎回抽屉重构成内嵌面板。
