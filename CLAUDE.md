@@ -235,6 +235,19 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix` 并重新 stage；
 `pre-push` 跑 `typecheck` + `test`。紧急绕过用 `--no-verify`。
 
+### 提交粒度
+
+**一个 Task 一个 commit——不要比这更细。**
+`docs/superpowers/plans/` 里每个 Task 末尾自带 commit 步骤，照它执行即可，但：
+
+- **code review 的修正合并进该 Task 自己的 commit**（`git commit --amend`），
+  或攒够一批再提一条。**绝不要一条注释一个 commit。**
+- **「计划写错了 → 改计划 → 再实现」不要拆成两条。**
+  计划修订跟实现代码走同一个 commit。
+
+反面教材（2026-08-25，一天 58 个 commit，其中 22 个只动 `docs/`）：
+`c10b8b2` `b7b5f7b` `9eb5676` `d037b5e` 四连击，每条只改了一句注释。
+
 已定向豁免的规则及理由见 `eslint.config.js`：Worker 里 `console` 是唯一日志手段；
 路由模块必须混合导出 loader/action 与组件。
 
@@ -246,7 +259,39 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 
 ## 文档
 
-- 设计文档 `docs/superpowers/specs/2026-08-24-fund-simulator-design.md`
-- 实施计划 `docs/superpowers/plans/2026-08-24-fund-simulator.md`
+**给人看的（长期有效，改动相关代码前该读）：**
+
 - 部署指南 `docs/deployment.md`（含免费版额度分析，**KV 写入 1000 次/天是最紧的一环**）
 - 开发指南 `docs/development.md`（踩坑记录的完整版）
+
+**设计文档 `docs/superpowers/specs/`（记录「为什么这样设计」，git diff 答不出的那部分）：**
+
+- `2026-08-24-fund-simulator-design.md` —— 金融内核与三层架构的决策依据
+- `2026-08-25-alipay-style-refactor-design.md` —— 支付宝式视觉重构
+
+**实施计划 `docs/superpowers/plans/`（是当时的施工图，不是现状描述）：**
+
+| 计划                                     | 状态                              |
+| ---------------------------------------- | --------------------------------- |
+| `2026-08-24-fund-simulator.md`           | 已完成 `26d645b..7cd59b5`         |
+| `2026-08-25-phase1-visual-foundation.md` | 已完成 `669ec88..64fa866`         |
+| `2026-08-26-phase2-asset-timeline.md`    | Task 1–5 已落地，Self-Review 待走 |
+
+### 计划文档完工后必须盖状态戳
+
+计划里的复选框**从来没被勾过**（252 个全空），所以**别拿勾选框判断进度**。
+一个阶段收尾时，在计划文件**标题的下一行、`For agentic workers` 那行之前**补一段：
+
+```text
+> ## 状态：已完成 · YYYY-MM-DD
+>
+> 实现区间 `<起>..<止>`
+>
+> - **下方复选框全部未勾，但工作已完成。** 别把「未勾」读成「未做」，勿照此重新施工。
+> - ⚠️ 作废段落：<哪个 Task 的什么规格已被 revert，以及正确结论是什么>
+```
+
+**必须盖在 `For agentic workers` 之前**——那行写着「照此逐 Task 施工」，
+戳晚一行，接手的人就先读到施工指令了。
+
+计划里含已 revert 的内容时尤其要写清：**过期的施工图比没有图更危险。**

@@ -1,5 +1,23 @@
 # 期二 · 我的资产（账本重放）实施计划
 
+> ## 状态：Task 1–5 已落地 · 2026-08-26
+>
+> 实现区间 `801549f..2e4ecd1`：
+>
+> | Task | commit    | 交付                                      |
+> | ---- | --------- | ----------------------------------------- |
+> | 1    | `801549f` | `replayDailyAssets` 纯函数 + TDD 测试     |
+> | 2    | `686b65a` | `asset-service.ts` 查 D1 拼 `ReplayInput` |
+> | 3    | `33aac6d` | `AssetTrendChart.tsx`                     |
+> | 4    | `08b5928` | `ProfitCalendar.tsx`                      |
+> | 5    | `2e4ecd1` | `/me` 装配                                |
+>
+> - **下方复选框全部未勾，但上表五项已完成。** 本计划按 commit 跟踪进度，不靠勾选框。
+>   别把「未勾」读成「未做」，更不要照此重新施工。
+> - ⏳ **未完：末尾 `## Self-Review` 章节尚未走过。** 期一的对应环节是
+>   Task 11 收尾验收（`338aedc`）+ 分支级缺陷清收（`7bcc760`，14 项）——
+>   期二还缺这一步，接手时从这里继续。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 用 domain 纯函数从 `transactions` / `orders` / `fund_nav` 重放出每日总资产与日收益，装配「资产走势曲线 + 收益日历 + 收益（截至 X 日）」到 `/me`，不动金融内核。

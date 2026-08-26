@@ -164,8 +164,6 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
       )}
 
       <SectionCard>
-        {/* 三个数都用次位 24：本页没有「总资产」，但「持仓市值」在 /me 与 / 上都是
-            24，字号跟着**标签**走而不是跟着「本页第几个」走，同一个词换页不变大小 */}
         <Space size={48} wrap>
           {/* ⚠️ 这里刻意不传 size，吃 StatBig 的 32px 默认值。
               StatBig 的规则是「主位 32、次位 24」—— 那是按**角色**定的，不是按标签定的。
