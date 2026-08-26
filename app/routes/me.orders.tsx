@@ -1,5 +1,6 @@
 import type { Route } from "./+types/me.orders";
-import { Alert, Space, Typography } from "antd";
+import { Alert, Pagination, Space, Typography } from "antd";
+import { useState } from "react";
 import { OrderList } from "~/components/OrderList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
@@ -8,6 +9,12 @@ import { requireUser } from "~/services/guard";
 import { getOrders } from "~/services/portfolio-service";
 
 const { Title, Text, Paragraph } = Typography;
+
+/**
+ * 每页条数。沿用被卡片列表取代的那张旧 Table 的 `pageSize: 20`，
+ * 翻页手感与改版前一致 —— loader 一次取 200 条，全铺在一页上是 200 张卡片。
+ */
+const PAGE_SIZE = 20;
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: "我的订单 · 模拟基金" }];
@@ -23,6 +30,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export default function MeOrders({ loaderData }: Route.ComponentProps) {
   const { orders } = loaderData;
   const pendingCount = orders.filter(o => o.status === "pending").length;
+  // 客户端分页：loader 已经把 200 条全取回来了，翻页不用再请求服务端
+  const [page, setPage] = useState(1);
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -45,7 +54,23 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
               <EmptyState description="还没有交易记录" />
             )
           : (
-              <OrderList orders={orders} detailed />
+              <>
+                <OrderList
+                  orders={orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+                  detailed
+                />
+                {orders.length > PAGE_SIZE && (
+                  <Pagination
+                    align="end"
+                    current={page}
+                    pageSize={PAGE_SIZE}
+                    total={orders.length}
+                    showSizeChanger={false}
+                    style={{ marginTop: 16 }}
+                    onChange={setPage}
+                  />
+                )}
+              </>
             )}
         <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
           申购采用真实的

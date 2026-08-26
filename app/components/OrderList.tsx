@@ -43,11 +43,15 @@ export function OrderList({ orders, detailed }: OrderListProps) {
       {orders.map((o, i) => {
         const statusTag = STATUS_TAG[o.status];
 
-        // 委托：申购看金额、赎回看份额
-        const commissioned
+        // 委托：申购看金额、赎回看份额。
+        // 单位单独拆出来渲染成灰 12px，与 HoldingList / DcaPlanList / TxList 统一 ——
+        // 数字先被读到，单位退到次要位置；「份」与「元」一视同仁，不然赎回行的
+        // 单位会比申购行重一档。
+        const commissionedValue
           = o.side === "buy"
-            ? `${fmtYuan(o.amount ?? 0)} 元`
-            : `${sharesToDisplay(o.shares ?? 0)} 份`;
+            ? fmtYuan(o.amount ?? 0)
+            : sharesToDisplay(o.shares ?? 0);
+        const commissionedUnit = o.side === "buy" ? " 元" : " 份";
 
         return (
           <FundListItem
@@ -87,7 +91,10 @@ export function OrderList({ orders, detailed }: OrderListProps) {
                   color: COLOR.textPrimary,
                 }}
               >
-                {commissioned}
+                {commissionedValue}
+                <span style={{ fontSize: 12, color: COLOR.textSecondary }}>
+                  {commissionedUnit}
+                </span>
               </span>
             )}
             secondary={

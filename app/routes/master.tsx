@@ -1,5 +1,6 @@
 import type { Route } from "./+types/master";
-import { Space, Tabs, Tag, Typography } from "antd";
+import { Pagination, Space, Tabs, Tag, Typography } from "antd";
+import { useState } from "react";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { OrderList } from "~/components/OrderList";
 import {
@@ -20,6 +21,12 @@ import {
 } from "~/services/portfolio-service";
 
 const { Title, Paragraph } = Typography;
+
+/**
+ * 每页条数。沿用被卡片列表取代的那两张旧 Table 的 `pageSize: 15`，
+ * 交易记录与资金流水各取 50 条，全铺开是 50 张卡片。
+ */
+const PAGE_SIZE = 15;
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -51,6 +58,13 @@ export async function loader({ context }: Route.LoaderArgs) {
 }
 
 export default function Master({ loaderData }: Route.ComponentProps) {
+  // 客户端分页：两个 tab 各自一份页码，互不影响。
+  // ⚠️ 必须放在下面「主人未注册」的提前 return **之前** ——
+  // hook 调用数量要在两条渲染路径上一致，否则 React 报
+  // Rendered fewer hooks than expected
+  const [orderPage, setOrderPage] = useState(1);
+  const [txPage, setTxPage] = useState(1);
+
   if (!loaderData.admin) {
     return (
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -104,7 +118,28 @@ export default function Master({ loaderData }: Route.ComponentProps) {
               children:
                 orders.length === 0
                   ? <EmptyState description="暂无交易记录" />
-                  : <OrderList orders={orders} detailed />,
+                  : (
+                      <>
+                        <OrderList
+                          orders={orders.slice(
+                            (orderPage - 1) * PAGE_SIZE,
+                            orderPage * PAGE_SIZE,
+                          )}
+                          detailed
+                        />
+                        {orders.length > PAGE_SIZE && (
+                          <Pagination
+                            align="end"
+                            current={orderPage}
+                            pageSize={PAGE_SIZE}
+                            total={orders.length}
+                            showSizeChanger={false}
+                            style={{ marginTop: 16 }}
+                            onChange={setOrderPage}
+                          />
+                        )}
+                      </>
+                    ),
             },
             {
               key: "txs",
@@ -112,7 +147,27 @@ export default function Master({ loaderData }: Route.ComponentProps) {
               children:
                 txs.length === 0
                   ? <EmptyState description="暂无流水" />
-                  : <TxList txs={txs} />,
+                  : (
+                      <>
+                        <TxList
+                          txs={txs.slice(
+                            (txPage - 1) * PAGE_SIZE,
+                            txPage * PAGE_SIZE,
+                          )}
+                        />
+                        {txs.length > PAGE_SIZE && (
+                          <Pagination
+                            align="end"
+                            current={txPage}
+                            pageSize={PAGE_SIZE}
+                            total={txs.length}
+                            showSizeChanger={false}
+                            style={{ marginTop: 16 }}
+                            onChange={setTxPage}
+                          />
+                        )}
+                      </>
+                    ),
             },
           ]}
         />

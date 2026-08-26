@@ -8,10 +8,6 @@ export interface PnlTextProps {
   rate?: number;
   /** 字号，默认 14 */
   size?: number;
-  /** 加粗，用于主位盈亏（如总览的大数字） */
-  strong?: boolean;
-  /** 显式指定判色依据；不传则用 cents，没有 cents 再用 rate */
-  colorBy?: number;
 }
 
 /**
@@ -22,18 +18,20 @@ export interface PnlTextProps {
  * ⚠️ 尚未收敛干净，别把本组件当成唯一出处：
  *  - `SellDrawer` 的「已实现盈亏」**刻意**仍手写这个模式 —— 只换它一处会让它拿到
  *    NUM_FONT，而同一块里的赎回总额/赎回费合计/预计到账仍是比例字体，块内反而更不一致。
- *  - `TxList` 的流水金额也手写着同一个形状（它的判色基准是资金进出，语义与盈亏不同）。
- *  - `PortfolioView` / `me._index` / `me.holdings` 的「浮动盈亏」手写 +/− 号后把
- *    `pnlColor(v)` 传给 `StatBig` —— 那里要的是大字号主位数字，本组件给不了。
+ *  - `PortfolioView` / `me.holdings` 的「浮动盈亏」与 `funds.$code` 的「日涨跌」
+ *    手写 +/− 号后把 `pnlColor(v)` 传给 `StatBig` —— 那里要的是大字号主位数字，
+ *    本组件给不了。
  * 也就是说本组件收敛的是**列表行与总览副值**这一类，不是全部。
+ * （`TxList` 的流水金额形状相似但**不判色**，理由见该文件的注释，不属于待收敛项。）
  *
  * cents 与 rate 都传时渲染成「+1,203.55 元  +2.31%」两段。
  * 金额必须带「元」：本组件用在卡片里，周围没有列头把数字归成金额，
  * 光秃秃的 "+1,203.55" 紧挨着 "+2.31%"，读不出哪个是钱哪个是率。
  * 负数的 "-" 号由 fmtYuan 自带，所以只在正数时补 "+"。
  */
-export function PnlText({ cents, rate, size = 14, strong, colorBy }: PnlTextProps) {
-  const basis = colorBy ?? cents ?? rate ?? 0;
+export function PnlText({ cents, rate, size = 14 }: PnlTextProps) {
+  // 判色依据：有金额看金额，只有率就看率。两者都没传当 0（中性灰）
+  const basis = cents ?? rate ?? 0;
 
   const amountText
     = cents === undefined ? null : `${cents > 0 ? "+" : ""}${fmtYuan(cents)} 元`;
@@ -51,7 +49,9 @@ export function PnlText({ cents, rate, size = 14, strong, colorBy }: PnlTextProp
         color: pnlColor(basis),
         fontFamily: NUM_FONT,
         fontSize: size,
-        fontWeight: strong ? 600 : 400,
+        // 固定 400（不做成 prop）：涨跌靠红绿表达，再加粗就是把同一件事说两遍；
+        // 写死也顺手挡住从父级继承来的粗体
+        fontWeight: 400,
       }}
     >
       {amountText !== null && <span>{amountText}</span>}

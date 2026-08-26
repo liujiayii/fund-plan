@@ -1,9 +1,9 @@
 import type { TransactionView } from "~/services/portfolio-service";
 import { Tag } from "antd";
 import { fmtYuan } from "~/components/ui/format";
-import { COLOR, NUM_FONT, pnlColor } from "~/theme";
+import { COLOR, NUM_FONT } from "~/theme";
 
-/** 流水类型的中文与配色。⚠️ 类型 Tag 不用红绿——红绿专属涨跌，这里是资金流向分类 */
+/** 流水类型的中文与配色。⚠️ 本组件全程不用红绿——红绿专属涨跌，这里是资金流向分类 */
 const TX_TYPE_MAP: Record<TransactionView["type"], { color: string; text: string }> = {
   init: { color: "blue", text: "初始本金" },
   checkin: { color: "gold", text: "签到奖励" },
@@ -19,8 +19,15 @@ export interface TxListProps {
 /**
  * 资金流水列表。取代 master.tsx 里 5 列的 <Table<TransactionView>>。
  *
- * 每行：左侧类型 Tag + 备注 + 时间，右侧金额（正入账红、负出账绿）与变动后余额。
- * 这里复用 pnlColor 是合适的 —— 资金的「进」与「出」和涨跌同一套红绿语义。
+ * 每行：左侧类型 Tag + 备注 + 时间，右侧金额与变动后余额，金额一律正文色。
+ *
+ * ⚠️ 金额刻意**不用红绿**，这是相对旧表格（`v >= 0 ? 红 : 绿`）的有意偏离：
+ * 红绿在本项目专属涨跌，而 /master 把「资金流水」与「持仓」「交易记录」做成同一张卡
+ * 的相邻 tab —— 同一片红绿两种含义，一次点击就能看见冲突。而且申购（现金换份额）
+ * 会被判成绿、读作「亏」，签到奖励会被判成红、读作「赚」，两者都不是涨跌。
+ * 方向已经由 `+`/`-` 号和类型 Tag（申购 / 赎回到账 / 签到奖励）说清，颜色是冗余的。
+ *
+ * 同类的有意偏离还有：身份 Tag 红→蓝、状态绿→蓝、手续费 danger→常规色、预计到账 红→蓝。
  */
 export function TxList({ txs }: TxListProps) {
   return (
@@ -65,13 +72,15 @@ export function TxList({ txs }: TxListProps) {
                 style={{
                   fontFamily: NUM_FONT,
                   fontSize: 15,
-                  color: pnlColor(t.amount),
+                  color: COLOR.textPrimary,
                 }}
               >
                 {t.amount > 0 ? "+" : ""}
                 {fmtYuan(t.amount)}
-                {/* 「元」必须留。旧表格两列都带「元」，靠列头是撑不起单位的 */}
-                <span style={{ fontSize: 12 }}> 元</span>
+                {/* 「元」必须留。旧表格两列都带「元」，靠列头是撑不起单位的。
+                    灰 12px 与 HoldingList / DcaPlanList / OrderList 统一：
+                    这三处在 /master 是同一张卡的相邻 tab，单位写法不齐一眼就看出来 */}
+                <span style={{ fontSize: 12, color: COLOR.textSecondary }}> 元</span>
               </div>
               {/* 余额也走 NUM_FONT：它和上面的金额同属一个右对齐数值列，
                   少了等宽字体，行与行之间金额对齐、余额却参差 */}

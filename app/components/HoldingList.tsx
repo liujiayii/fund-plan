@@ -9,14 +9,14 @@ import { COLOR, NUM_FONT } from "~/theme";
 export interface HoldingListProps {
   holdings: HoldingView[];
   /**
-   * 名称下方的补充说明。
+   * 名称下方的补充说明。**必填**。
    * 只读页（公开盘、仪表盘速览）传 `sharesAndNavNote` —— 份额 + 估值时点；
    * 持仓管理页传份额/成本/净值/批次/待赎回。
-   * ⚠️ 不要改成「只读页不传」。那句旧注释造成过两轮字段丢失
-   * （期四引入、期八延续）：旧表格的五列里「持有份额」「净值」都在，
-   * 只读不等于可以少给字段。
+   * ⚠️ 刻意做成必填而非可选：「只读页也得给份额和净值」这条规则此前只写在注释里，
+   * 结果被漏掉过两轮（期四引入、期八延续，「持有份额」「净值」各丢过一次）——
+   * 旧表格的五列里两者都在，只读不等于可以少给字段。必填把注释约束换成编译错误。
    */
-  renderNote?: (h: HoldingView) => ReactNode;
+  renderNote: (h: HoldingView) => ReactNode;
   /** 每行最右的操作按钮。只读页不传 */
   renderActions?: (h: HoldingView) => ReactNode;
 }
@@ -47,7 +47,7 @@ export function sharesAndNavNote(h: HoldingView): ReactNode {
  *
  * 支付宝式信息层级：右侧主值是**市值**（用户最关心「我这只值多少钱」），
  * 副值是盈亏金额 + 盈亏率。份额/净值/成本属于二级信息，
- * 由调用方通过 renderNote 决定要不要露出。
+ * 放在名称下方的 note 里，由调用方通过 renderNote 决定给到多细（但必须给）。
  */
 export function HoldingList({
   holdings,
@@ -62,7 +62,7 @@ export function HoldingList({
           fundCode={h.fundCode}
           fundName={h.fundName}
           fundType={h.fundType || undefined}
-          note={renderNote?.(h)}
+          note={renderNote(h)}
           last={i === holdings.length - 1}
           primary={(
             <span

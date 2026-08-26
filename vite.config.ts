@@ -3,7 +3,7 @@ import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig } from "vite";
 
 /**
- * 注意：UnoCSS 走 PostCSS 模式（见 postcss.config.mjs + app/app.css），
+ * 注意：UnoCSS 走 CLI 预生成（`pnpm uno:build` → `app/uno.gen.css`，由 root.tsx 导入），
  * 没有用 unocss/vite 插件。
  * 原因：**不是 Vite 8 的问题**（裸 Vite 8 + unocss/vite 实测正常），
  * 而是 UnoCSS 的 Vite 插件与 React Router 8 的 Vite Environment API 不兼容——

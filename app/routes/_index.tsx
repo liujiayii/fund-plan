@@ -13,6 +13,7 @@ import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
 import { getOrders, getPortfolio } from "~/services/portfolio-service";
+import { CARD_SHADOW } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -166,7 +167,13 @@ export default function Index({ loaderData }: Route.ComponentProps) {
       <Row gutter={[16, 16]}>
         {FEATURES.map(f => (
           <Col xs={24} sm={12} lg={6} key={f.title}>
-            <Card className="h-full">
+            {/* 裸 Card 是为了拿 className（等高栅格），但外观必须跟 SectionCard 一致：
+                同一页上一张有边框、一张有阴影，看起来像两套设计 */}
+            <Card
+              className="h-full"
+              variant="borderless"
+              style={{ boxShadow: CARD_SHADOW }}
+            >
               <Title level={5} className="mt-0">
                 {f.title}
               </Title>
@@ -178,8 +185,13 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         ))}
       </Row>
 
+      {/* 同上：裸 Card 只为拿 className（居中），外观仍对齐 SectionCard */}
       {!me && (
-        <Card className="text-center">
+        <Card
+          className="text-center"
+          variant="borderless"
+          style={{ boxShadow: CARD_SHADOW }}
+        >
           <Title level={4}>准备好开自己的盘了吗？</Title>
           <Paragraph type="secondary">
             用户名 + 密码即可注册，不用邮箱、不用手机号。

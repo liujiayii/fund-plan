@@ -12,9 +12,9 @@ import {
 import { useFetcher } from "react-router";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
+import { PortfolioSummary } from "~/components/PortfolioView";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
-import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_MAX_CENTS } from "~/domain/checkin";
@@ -22,7 +22,7 @@ import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getOrders, getPortfolio } from "~/services/portfolio-service";
-import { COLOR, pnlColor } from "~/theme";
+import { COLOR } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -62,7 +62,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
   const { user, portfolio, checkinStatus, orders } = loaderData;
-  const { summary, holdings } = portfolio;
+  // 总览数字全部交给 PortfolioSummary，这里只需要持仓列表
+  const { holdings } = portfolio;
   const fetcher = useFetcher<typeof action>();
   const signing = fetcher.state === "submitting";
 
@@ -89,47 +90,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
       {/* 资产总览。⚠️ 期二会在这里加「资产走势曲线」与「收益（截至 X 日）」，
           本期只做视觉，不动数据来源 */}
       <SectionCard>
-        <Row gutter={[24, 16]}>
-          <Col xs={12} md={6}>
-            <StatBig
-              label="总资产"
-              value={fmtYuan(summary.totalAssetCents)}
-              suffix="元"
-            />
-          </Col>
-          <Col xs={12} md={6}>
-            <StatBig
-              label="持仓市值"
-              value={fmtYuan(summary.marketValueCents)}
-              suffix="元"
-              size={24}
-            />
-          </Col>
-          <Col xs={12} md={6}>
-            <StatBig
-              label="可用现金"
-              value={fmtYuan(summary.cashCents)}
-              suffix="元"
-              size={24}
-            />
-          </Col>
-          <Col xs={12} md={6}>
-            <StatBig
-              label="浮动盈亏"
-              value={`${summary.totalPnlCents > 0 ? "+" : ""}${fmtYuan(summary.totalPnlCents)}`}
-              suffix="元"
-              size={24}
-              color={pnlColor(summary.totalPnlCents)}
-              extra={(
-                <>
-                  收益率
-                  {" "}
-                  <PnlText rate={summary.totalPnlRate} size={12} />
-                </>
-              )}
-            />
-          </Col>
-        </Row>
+        <PortfolioSummary portfolio={portfolio} />
       </SectionCard>
 
       {/* 每日签到 */}

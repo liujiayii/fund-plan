@@ -1,6 +1,7 @@
 import type { Route } from "./+types/login";
-import { Alert, Button, Card, Form, Input, Typography } from "antd";
+import { Alert, Button, Form, Input, Typography } from "antd";
 import { redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
+import { SectionCard } from "~/components/ui/SectionCard";
 import { loginUser } from "~/services/auth";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
@@ -58,41 +59,45 @@ export default function Login() {
       : "/me";
 
   return (
-    <Card style={{ maxWidth: 420, margin: "48px auto" }}>
-      <Title level={3}>登录</Title>
-      <Paragraph type="secondary">登录后即可管理自己的模拟盘、定投与签到。</Paragraph>
+    // 定位交给外层 div：SectionCard 刻意不透传 className / style，
+    // 但登录卡要窄、要居中，所以宽度与外边距在这一层给
+    <div style={{ maxWidth: 420, margin: "48px auto" }}>
+      <SectionCard>
+        <Title level={3}>登录</Title>
+        <Paragraph type="secondary">登录后即可管理自己的模拟盘、定投与签到。</Paragraph>
 
-      {actionData?.error && (
-        <Alert
-          type="error"
-          message={actionData.error}
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-      )}
-
-      <RouterForm method="post">
-        <input type="hidden" name="redirectTo" value={redirectTo} />
-        <Form.Item label="用户名" layout="vertical" style={{ marginBottom: 16 }}>
-          <Input name="username" size="large" placeholder="用户名" autoComplete="username" />
-        </Form.Item>
-        <Form.Item label="密码" layout="vertical" style={{ marginBottom: 24 }}>
-          <Input.Password
-            name="password"
-            size="large"
-            placeholder="密码"
-            autoComplete="current-password"
+        {actionData?.error && (
+          <Alert
+            type="error"
+            message={actionData.error}
+            showIcon
+            style={{ marginBottom: 16 }}
           />
-        </Form.Item>
-        <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
-          登录
-        </Button>
-      </RouterForm>
+        )}
 
-      <Paragraph style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
-        还没有账号？
-        <a href="/register">立即注册，送 10 万模拟本金</a>
-      </Paragraph>
-    </Card>
+        <RouterForm method="post">
+          <input type="hidden" name="redirectTo" value={redirectTo} />
+          <Form.Item label="用户名" layout="vertical" style={{ marginBottom: 16 }}>
+            <Input name="username" size="large" placeholder="用户名" autoComplete="username" />
+          </Form.Item>
+          <Form.Item label="密码" layout="vertical" style={{ marginBottom: 24 }}>
+            <Input.Password
+              name="password"
+              size="large"
+              placeholder="密码"
+              autoComplete="current-password"
+            />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
+            登录
+          </Button>
+        </RouterForm>
+
+        <Paragraph style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
+          还没有账号？
+          <a href="/register">立即注册，送 10 万模拟本金</a>
+        </Paragraph>
+      </SectionCard>
+    </div>
   );
 }

@@ -194,8 +194,10 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             />
             <StatBig
               label="日涨跌"
-              value={`${growthPct > 0 ? "+" : ""}${growthPct.toFixed(2)}`}
-              suffix="%"
+              // 「%」写进 value、不走 suffix：同一行的「申购费率」是 rateToPercent()
+              // 自带的 %（大字号等宽），suffix 会渲染成灰 13px 比例字体并空 4px，
+              // 一行里两个百分号两种长相
+              value={`${growthPct > 0 ? "+" : ""}${growthPct.toFixed(2)}%`}
               size={24}
               color={pnlColor(growthPct)}
             />

@@ -12,13 +12,21 @@ const { Paragraph } = Typography;
 
 export interface PortfolioViewProps {
   portfolio: PortfolioView;
-  /** 是否展示可用现金（公开盘只给总资产，不露现金明细） */
+  /**
+   * 是否展示「可用现金」这一格，默认展示。
+   * 全站只有首页 `/` 的引流卡片传 false；/me 与 /master 都不传，即都露现金 ——
+   * ⚠️ 别把它读成「公开盘不露现金」：/master 就是公开盘，它页面上写着
+   * 「持仓、定投与交易流水全部公开」，藏现金反而自相矛盾。
+   */
   showCash?: boolean;
 }
 
 /**
- * 组合总览。被 /me（本人）与 /master、/（公开只读）共用——
+ * 组合总览。被 /me（本人）、/master 与 /（公开只读）三处共用 ——
  * 主人的盘就是那个公开盘，一份代码两种身份。
+ *
+ * ⚠️ me._index 曾逐字复制过一份同样的 Row（期十三收掉），两份独立漂移过。
+ * 要加字段就加在这里，别再复制。
  *
  * ⚠️ pnlColor 已迁到 ~/theme，本文件不再导出它。
  */

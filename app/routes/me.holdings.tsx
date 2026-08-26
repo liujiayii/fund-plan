@@ -164,11 +164,14 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
       )}
 
       <SectionCard>
+        {/* 三个数都用次位 24：本页没有「总资产」，但「持仓市值」在 /me 与 / 上都是
+            24，字号跟着**标签**走而不是跟着「本页第几个」走，同一个词换页不变大小 */}
         <Space size={48} wrap>
           <StatBig
             label="持仓市值"
             value={fmtYuan(summary.marketValueCents)}
             suffix="元"
+            size={24}
           />
           <StatBig
             label="可用现金"
@@ -203,8 +206,12 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
                   return (
                     <>
                       {`${sharesToDisplay(h.sharesScaled)} 份 · 成本 ${fmtYuan(h.costCents)} 元`}
-                      {` · 净值 ${navToDisplay(h.navScaled)}`}
-                      {h.navDate ? `（${h.navDate}）` : ""}
+                      {/* ⚠️ 与 sharesAndNavNote 同一道闸门，不要拆开成「净值恒显示、
+                          只有日期条件显示」：navDate 为 null 表示 portfolio-service
+                          拉不到净值、用**成本价**兜底填了 navScaled，此时渲染「净值」
+                          就是把成本价当净值给用户看。同一只持仓在 /me 与 /me/holdings
+                          必须给同一个答案，否则两处又会各自漂移 */}
+                      {h.navDate ? ` · 净值 ${navToDisplay(h.navScaled)}（${h.navDate}）` : ""}
                       {` · ${d.lots.length} 批`}
                       {d.pendingShares > 0 && (
                         <Text type="warning">

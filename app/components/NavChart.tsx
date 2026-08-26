@@ -1,6 +1,6 @@
 import type { LineConfig } from "@ant-design/charts";
-import { Empty } from "antd";
 import { lazy, Suspense, useMemo, useState, useSyncExternalStore } from "react";
+import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { NAV_SCALE } from "~/domain/money";
 
@@ -89,7 +89,8 @@ export function NavChart({ data }: { data: NavPoint[] }) {
   }, [data, range]);
 
   if (data.length === 0) {
-    return <Empty description="暂无净值数据" />;
+    // 走 EmptyState 而不是裸 Empty：全站空态的留白由它统一
+    return <EmptyState description="暂无净值数据" />;
   }
 
   const config: LineConfig = {
