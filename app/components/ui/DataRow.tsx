@@ -45,7 +45,8 @@ export function DataRow({ label, value, last, mono }: DataRowProps) {
       </dt>
       <dd
         style={{
-          // dd 的默认 margin-inline-start 是 40px，不清掉会把值挤离右边缘
+          // dd 的浏览器默认 margin-inline-start 是 40px，会白占 40px 横向空间
+          // （space-between 下值仍贴右，但长标签 + 长数值的窄行会更早被挤换行）
           margin: 0,
           fontSize: 14,
           color: COLOR.textPrimary,

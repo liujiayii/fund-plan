@@ -23,8 +23,9 @@ export interface PnlTextProps {
  * NUM_FONT，而同一块里的赎回总额/赎回费合计/预计到账仍是比例字体，
  * 块内字体反而更不一致。
  *
- * cents 与 rate 都传时渲染成「+1,203.55 元  +2.31%」两段 ——
- * 金额带「元」是因为卡片里没有列头承载单位（旧的三张盈亏列靠列头）。
+ * cents 与 rate 都传时渲染成「+1,203.55 元  +2.31%」两段。
+ * 金额必须带「元」：本组件用在卡片里，周围没有列头把数字归成金额，
+ * 光秃秃的 "+1,203.55" 紧挨着 "+2.31%"，读不出哪个是钱哪个是率。
  * 负数的 "-" 号由 fmtYuan 自带，所以只在正数时补 "+"。
  */
 export function PnlText({ cents, rate, size = 14, strong, colorBy }: PnlTextProps) {
