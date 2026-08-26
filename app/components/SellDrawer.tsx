@@ -215,7 +215,16 @@ export function SellDrawer(props: SellDrawerProps) {
                 </div>
                 <div>
                   赎回费合计：
-                  <Text strong type="danger">
+                  {/*
+                    刻意不标红：手续费是成本，既不是盈亏也不是收益，就是个金额。
+                    在「红=涨」的系统里给它上红色，会被读成收益；而 antd 的
+                    type="danger"（#ff4d4f）与两行下面 pnlColor 的涨红（#F5222D）
+                    肉眼分不出来，同一小块里出现两种红只有一个是盈亏，更糟。
+                    这块的读法：赎回总额、赎回费合计是推导过程（朴素），
+                    预计到账（蓝）与已实现盈亏（红绿）才是结论。
+                    费率高的警示由下方 Paragraph 的文案承载，不需要颜色再喊一遍。
+                  */}
+                  <Text strong>
                     {centsToYuan(estimate.totalFeeCents)}
                     {" "}
                     元

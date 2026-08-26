@@ -154,7 +154,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
  *
  * ⚠️ 刻意避开红与绿：低风险不用 green、高风险不用 red ——
  * 那两个颜色现在专属涨跌，拿来表示风险会让用户
- * 把「高风险」误读成「在涨」。改用蓝→金→橙的暖度递进。
+ * 把「高风险」误读成「在涨」。改用蓝→青→金→橙→火山的暖度递进。
  */
 const RISK_MAP: Record<number, { color: string; label: string }> = {
   1: { color: "blue", label: "低风险" },
@@ -193,7 +193,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             />
             <StatBig
               label="日涨跌"
-              value={`${growthPct >= 0 ? "+" : ""}${growthPct.toFixed(2)}`}
+              value={`${growthPct > 0 ? "+" : ""}${growthPct.toFixed(2)}`}
               suffix="%"
               size={24}
               color={pnlColor(growthPct)}

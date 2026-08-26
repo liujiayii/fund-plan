@@ -56,9 +56,6 @@ function ChartSkeleton() {
 }
 
 /**
- * 净值曲线图。数据传入时净值是 ×10000 的整数，这里转成真实净值再画。
- */
-/**
  * 判断当前是否已在浏览器端 hydrate 完成。
  * 用 useSyncExternalStore 而非「useEffect 里 setState」——
  * 后者会多一次渲染，也会触发 react/set-state-in-effect 告警。
@@ -73,6 +70,9 @@ function useIsClient(): boolean {
   );
 }
 
+/**
+ * 净值曲线图。数据传入时净值是 ×10000 的整数，这里转成真实净值再画。
+ */
 export function NavChart({ data }: { data: NavPoint[] }) {
   const [range, setRange] = useState<string>("3m");
   const mounted = useIsClient();
