@@ -274,6 +274,25 @@ export const checkin = sqliteTable(
   ],
 );
 
+/**
+ * 自选基金（用户收藏的基金，与持仓无关）。
+ *
+ * 复合主键 (userId, fundCode) 天然防重复关注，不需要额外唯一约束——
+ * 重复 INSERT 用 onConflictDoNothing 吞掉即可。
+ * userId 级联删除：用户没了自选也跟着没。
+ */
+export const watchlist = sqliteTable(
+  "watchlist",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    fundCode: text("fund_code").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  t => [primaryKey({ columns: [t.userId, t.fundCode] })],
+);
+
 /** 供 drizzle 关系查询与类型推断使用的聚合导出 */
 export const schema = {
   fund,
@@ -287,6 +306,7 @@ export const schema = {
   dcaPlan,
   transactions,
   checkin,
+  watchlist,
 };
 
 // 便捷类型：插入/查询行类型
@@ -300,3 +320,4 @@ export type OrderRow = typeof orders.$inferSelect;
 export type DcaPlanRow = typeof dcaPlan.$inferSelect;
 export type TransactionRow = typeof transactions.$inferSelect;
 export type CheckinRow = typeof checkin.$inferSelect;
+export type WatchlistRow = typeof watchlist.$inferSelect;

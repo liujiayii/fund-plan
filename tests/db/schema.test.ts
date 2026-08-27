@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "~/db/client";
-import { checkin, fund, fundNav, user } from "~/db/schema";
+import { checkin, fund, fundNav, user, watchlist } from "~/db/schema";
 
 /**
  * schema 冒烟测试：用真实 D1 验证 10 张表建得对、
@@ -120,6 +120,35 @@ describe("D1 schema", () => {
         checkinDate: "2026-08-24",
         reward: 15000,
         streak: 2,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("watchlist 复合主键 (user_id, fund_code) 防重复关注", async () => {
+    const db = getDb(env.DB);
+    const [u] = await db
+      .insert(user)
+      .values({
+        username: "watcher",
+        passwordHash: "h",
+        salt: "s",
+        role: "user",
+        createdAt: Date.now(),
+      })
+      .returning();
+
+    await db.insert(watchlist).values({
+      userId: u.id,
+      fundCode: "000001",
+      createdAt: Date.now(),
+    });
+
+    // 同一用户再关注同一只基金 → 复合主键拒绝（onConflictDoNothing 在 service 层吞，这里直接插应报错）
+    await expect(
+      db.insert(watchlist).values({
+        userId: u.id,
+        fundCode: "000001",
+        createdAt: Date.now(),
       }),
     ).rejects.toThrow();
   });

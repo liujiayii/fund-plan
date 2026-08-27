@@ -8,6 +8,13 @@
       "when": 1787590892675,
       "tag": "0000_majestic_grandmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787745767259,
+      "tag": "0001_petite_frightful_four",
+      "breakpoints": true
     }
   ]
 }

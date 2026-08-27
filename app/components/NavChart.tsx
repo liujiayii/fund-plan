@@ -26,6 +26,12 @@ export interface NavPoint {
   growthRate: number;
 }
 
+/** 基准（沪深300 等）净值点：close 为真实收盘点数（非缩放整数） */
+export interface BenchmarkPoint {
+  date: string;
+  close: number;
+}
+
 /** 时间范围选项 */
 const RANGES = [
   { key: "1m", label: "近 1 月", days: 30 },
@@ -72,8 +78,18 @@ function useIsClient(): boolean {
 
 /**
  * 净值曲线图。数据传入时净值是 ×10000 的整数，这里转成真实净值再画。
+ *
+ * 可选叠加一条基准线（沪深300）：基准与基金窗口对齐后，按基金窗口首日净值
+ * 归一化——两条线从同一个 Y 点出发，直观对比相对涨跌而非绝对值。
+ * 拉不到基准（空数组）则不画，自动降级为单线图。
  */
-export function NavChart({ data }: { data: NavPoint[] }) {
+export function NavChart({
+  data,
+  benchmark,
+}: {
+  data: NavPoint[];
+  benchmark?: BenchmarkPoint[];
+}) {
   const [range, setRange] = useState<string>("3m");
   const mounted = useIsClient();
 
@@ -82,11 +98,32 @@ export function NavChart({ data }: { data: NavPoint[] }) {
     // data 是正序（旧→新），取最后 N 条即为最近 N 天
     const sliced
       = cfg.days === Number.MAX_SAFE_INTEGER ? data : data.slice(-cfg.days);
-    return sliced.map(d => ({
+    // 基金净值：×10000 整数转回真实值
+    const navRows = sliced.map(d => ({
       date: d.navDate,
-      nav: Number((d.unitNav / NAV_SCALE).toFixed(4)),
+      type: "本基金",
+      value: Number((d.unitNav / NAV_SCALE).toFixed(4)),
     }));
-  }, [data, range]);
+    if (benchmark && benchmark.length > 0) {
+      // 基准与基金同窗口切片
+      const benchSliced
+        = cfg.days === Number.MAX_SAFE_INTEGER
+          ? benchmark
+          : benchmark.slice(-cfg.days);
+      // 归一化基准到基金窗口首日净值：两者首日对齐到同一 Y 点
+      const fundFirst = sliced[0]?.unitNav ?? NAV_SCALE;
+      const benchFirst = benchSliced[0]?.close ?? 1;
+      const benchRows = benchSliced.map(b => ({
+        date: b.date,
+        type: "沪深300",
+        value: Number(
+          ((b.close / benchFirst) * (fundFirst / NAV_SCALE)).toFixed(4),
+        ),
+      }));
+      return [...navRows, ...benchRows];
+    }
+    return navRows;
+  }, [data, range, benchmark]);
 
   if (data.length === 0) {
     // 走 EmptyState 而不是裸 Empty：全站空态的留白由它统一
@@ -96,7 +133,9 @@ export function NavChart({ data }: { data: NavPoint[] }) {
   const config: LineConfig = {
     data: chartData,
     xField: "date",
-    yField: "nav",
+    yField: "value",
+    // colorField 按 type 分组画多条线；单线时只有一类「本基金」也正常
+    colorField: "type",
     height: 320,
     smooth: true,
     autoFit: true,
@@ -105,11 +144,6 @@ export function NavChart({ data }: { data: NavPoint[] }) {
     axis: {
       x: { labelAutoHide: true, labelAutoRotate: false },
       y: { labelFormatter: (v: number) => v.toFixed(4) },
-    },
-    tooltip: {
-      items: [
-        { channel: "y", name: "单位净值", valueFormatter: (v: number) => v.toFixed(4) },
-      ],
     },
     style: { lineWidth: 2 },
   };

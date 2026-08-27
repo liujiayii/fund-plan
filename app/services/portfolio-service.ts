@@ -37,12 +37,13 @@ export interface PortfolioView {
   holdings: HoldingView[];
 }
 
-/** 取每只基金的最新净值（日期 + 净值） */
-async function latestNavMap(
+/** 取每只基金的最新净值（日期 + 净值 + 日涨跌） */
+export async function latestNavMap(
   db: Db,
   codes: string[],
-): Promise<Map<string, { navDate: string; unitNav: number }>> {
-  const map = new Map<string, { navDate: string; unitNav: number }>();
+): Promise<Map<string, { navDate: string; unitNav: number; growthRate: number }>> {
+  const map
+    = new Map<string, { navDate: string; unitNav: number; growthRate: number }>();
   if (codes.length === 0)
     return map;
 
@@ -64,7 +65,12 @@ async function latestNavMap(
       ),
     });
     if (nav) {
-      map.set(r.fundCode, { navDate: nav.navDate, unitNav: nav.unitNav });
+      // 同时带 growthRate，供自选列表的日涨跌展示复用同一份净值口径
+      map.set(r.fundCode, {
+        navDate: nav.navDate,
+        unitNav: nav.unitNav,
+        growthRate: nav.growthRate,
+      });
     }
   }
   return map;
