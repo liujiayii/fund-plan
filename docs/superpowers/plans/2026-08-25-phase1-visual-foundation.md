@@ -343,7 +343,7 @@ import { ANTD_TOKEN, COLOR } from "~/theme";
                 <Space>
                   <span style={{ color: COLOR.textSecondary }}>
                     {user.username}
-                    {user.role === "admin" ? "（主人）" : ""}
+                    {user.role === "admin" ? "（主理人）" : ""}
                   </span>
                   <form method="post" action="/logout" style={{ display: "inline" }}>
                     <Button size="small" htmlType="submit">
@@ -408,7 +408,7 @@ pnpm dev
 - Logo「模拟基金」是**蓝色**
 - 页面底色是浅灰 `#F5F7FA`，卡片是白色，两者有明显区分
 - 「注册」按钮是**蓝色**实心（不再是红色）
-- 主人的盘里盈亏数字仍是红/绿
+- 主理人的盘里盈亏数字仍是红/绿
 - 内容区最宽 1120px 且居中
 
 - [ ] **Step 8: Commit**
@@ -1167,7 +1167,7 @@ export interface PortfolioViewProps {
 
 /**
  * 组合总览。被 /me（本人）与 /master、/（公开只读）共用——
- * 主人的盘就是那个公开盘，一份代码两种身份。
+ * 主理人的盘就是那个公开盘，一份代码两种身份。
  *
  * ⚠️ pnlColor 已迁到 ~/theme，本文件不再导出它。
  */
@@ -1232,7 +1232,7 @@ export function HoldingListReadonly({ holdings }: { holdings: HoldingView[] }) {
   return <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />;
 }
 
-/** 主人还没注册时的引导提示 */
+/** 主理人还没注册时的引导提示 */
 export function AdminNotReady({ adminName }: { adminName: string }) {
   return (
     <SectionCard>
@@ -1247,7 +1247,7 @@ export function AdminNotReady({ adminName }: { adminName: string }) {
               还没注册，公开示范盘暂时为空。
             </Paragraph>
             <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              用该用户名注册即成为主人，其组合会自动对所有访客公开。
+              用该用户名注册即成为主理人，其组合会自动对所有访客公开。
             </Paragraph>
           </div>
         )}
@@ -1971,7 +1971,7 @@ git commit -m "feat(ui): 持仓管理页卡片化，删除本地 pnlColor
 
 - [ ] **Step 1: 改 import**
 
-把第 3-16 行的 antd import 替换为（去掉 `Card`、`Empty`、`Statistic`、`Table`、`Tag` 之外仍需 `Tag`，因为标题还要贴「主人」）：
+把第 3-16 行的 antd import 替换为（去掉 `Card`、`Empty`、`Statistic`、`Table`、`Tag` 之外仍需 `Tag`，因为标题还要贴「主理人」）：
 
 ```tsx
 import {
@@ -2181,12 +2181,12 @@ import type { HoldingView } from "~/services/portfolio-service";
 import { centsToYuan } from "~/domain/money";
 ```
 
-- [ ] **Step 6: 换标题里的「主人」Tag 颜色**
+- [ ] **Step 6: 换标题里的「主理人」Tag 颜色**
 
 第 83 行：
 
 ```tsx
-          {user.role === "admin" && <Tag color="blue" style={{ marginLeft: 8 }}>主人</Tag>}
+          {user.role === "admin" && <Tag color="blue" style={{ marginLeft: 8 }}>主理人</Tag>}
 ```
 
 - [ ] **Step 7: 校验**
@@ -2222,7 +2222,7 @@ git commit -m "feat(ui): 我的仪表盘卡片化，清掉 8 处旧色值
 
 签到金额从红色改主色蓝：那是「领本金」的操作引导，不是投资收益，
 用红色会让人误以为赚了钱。Progress 的 strokeColor 改成 COLOR.primary
-（不能删，percent 满 100 时 antd 会自动变绿）。「主人」Tag 从红改蓝。"
+（不能删，percent 满 100 时 antd 会自动变绿）。「主理人」Tag 从红改蓝。"
 ```
 
 ---
@@ -2496,7 +2496,7 @@ import { SectionCard } from "~/components/ui/SectionCard";
 | 位置 | 处理 | 理由 |
 | ---- | ---- | ---- |
 | 第 89 行 头图 | → `SectionCard` | 需要统一阴影 |
-| 第 146 行 主人的盘 | → `SectionCard` | 需要标题栏 + `extra` 链接 |
+| 第 146 行 主理人的盘 | → `SectionCard` | 需要标题栏 + `extra` 链接 |
 | 第 197 行 卖点栅格 | **保留 `Card`** | 带 `className="h-full"`，而 `SectionCard` 不透传 className |
 | 第 210 行 底部 CTA | **保留 `Card`** | 带 `className="text-center"`，同上 |
 
@@ -2554,7 +2554,7 @@ git grep -n "HoldingTableReadonly" -- app/
 
 打开 `http://localhost:5173/`，确认：
 
-- 头图与「主人的示范盘」卡片有统一阴影、12 圆角
+- 头图与「主理人的示范盘」卡片有统一阴影、12 圆角
 - 「最近操作」是订单卡片行（不再是一串堆叠的 Tag）
 - 4 个卖点卡片仍是等高栅格（`className="h-full"` 生效）
 
@@ -2572,8 +2572,8 @@ master.tsx 的定投/订单/流水三张表全部换成列表组件，
 _index.tsx 的「最近操作」改用 OrderList，
 不再手工堆 Tag（原来一行最多贴 4 个）。
 
-「公开」「主人」等身份 Tag 一律从红改蓝——红色专属涨跌。
-头图与主人盘用 SectionCard；卖点栅格与底部 CTA 保留裸 Card，
+「公开」「主理人」等身份 Tag 一律从红改蓝——红色专属涨跌。
+头图与主理人盘用 SectionCard；卖点栅格与底部 CTA 保留裸 Card，
 因为它们需要 className 而 SectionCard 不透传。"
 ```
 
@@ -3045,7 +3045,7 @@ git grep -n "TX_TYPE_MAP" -- app/             # 应只剩 app/components/TxList.
 
 | 页面 | 必须能用 |
 | ---- | -------- |
-| `/` | 头图按钮跳转、主人的盘持仓与最近操作可见 |
+| `/` | 头图按钮跳转、主理人的盘持仓与最近操作可见 |
 | `/funds` | 搜索出结果、点进详情 |
 | `/funds/161725` | 净值图渲染、周期切换、点「买入」下单成功 |
 | `/master` | 四个 Tab 都能切换且有内容 |

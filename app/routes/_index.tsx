@@ -28,7 +28,7 @@ export function meta(_: Route.MetaArgs) {
 }
 
 /**
- * 首页。游客看到的是主人的示范盘 + 注册引导；
+ * 首页。游客看到的是主理人的示范盘 + 注册引导；
  * 已登录用户额外看到「去我的盘」入口。
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -125,14 +125,14 @@ export default function Index({ loaderData }: Route.ComponentProps) {
                     免费注册，领 10 万本金
                   </Button>
                   <Button size="large" href="/master">
-                    先围观主人的盘
+                    先围观主理人的盘
                   </Button>
                 </>
               )}
         </Space>
       </SectionCard>
 
-      {/* 主人的盘 */}
+      {/* 主理人的盘 */}
       {loaderData.admin === null
         ? (
             <AdminNotReady adminName={loaderData.adminName} />
@@ -141,7 +141,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             <SectionCard
               title={(
                 <span>
-                  主人的示范盘
+                  主理人的示范盘
                   <Tag color="blue" style={{ marginLeft: 8 }}>
                     公开
                   </Tag>

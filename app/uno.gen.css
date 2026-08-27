@@ -4,6 +4,10 @@
 /* layer: theme */
 :root, :host { --spacing: 0.25rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); }
 /* layer: default */
+.tab{-moz-tab-size:4;-o-tab-size:4;tab-size:4;}
+.m1{margin:calc(var(--spacing) * 1);}
+.m3{margin:calc(var(--spacing) * 3);}
+.m6{margin:calc(var(--spacing) * 6);}
 .\!me{margin-inline-end:calc(var(--spacing) * 4) !important;}
 .mb-0{margin-bottom:calc(var(--spacing) * 0);}
 .me{margin-inline-end:calc(var(--spacing) * 4);}
@@ -12,9 +16,12 @@
 .border{border-width:1px;}
 .flex{display:flex;}
 .inline-flex{display:inline-flex;}
+.grid{display:grid;}
 .h-full{height:100%;}
+.w1{width:calc(var(--spacing) * 1);}
 .inline{display:inline;}
 .block{display:block;}
 .hidden{display:none;}
 .ease{--un-ease:var(--ease-DEFAULT);transition-timing-function:var(--ease-DEFAULT);}
+.relative{position:relative;}
 .sticky{position:sticky;}

@@ -83,8 +83,8 @@ describe("requireUser 强制登录", () => {
   });
 });
 
-describe("getAdminUser 主人账号", () => {
-  it("主人已注册时能查到，且角色为 admin", async () => {
+describe("getAdminUser 主理人账号", () => {
+  it("主理人已注册时能查到，且角色为 admin", async () => {
     const db = getDb(env.DB);
     // 测试环境 ADMIN_USERNAME = 'testadmin'
     await registerUser(db, env, "testadmin", "hunter2");
@@ -95,12 +95,12 @@ describe("getAdminUser 主人账号", () => {
     expect(admin!.role).toBe("admin");
   });
 
-  it("主人还没注册时返回 null（首页应据此显示引导，而非报错）", async () => {
+  it("主理人还没注册时返回 null（首页应据此显示引导，而非报错）", async () => {
     const db = getDb(env.DB);
     expect(await getAdminUser(db, env)).toBeNull();
   });
 
-  it("存在其他用户但主人未注册时仍返回 null", async () => {
+  it("存在其他用户但主理人未注册时仍返回 null", async () => {
     const db = getDb(env.DB);
     await registerUser(db, env, "alice", "hunter2");
     expect(await getAdminUser(db, env)).toBeNull();
