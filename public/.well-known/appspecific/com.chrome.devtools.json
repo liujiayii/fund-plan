@@ -1,0 +1,3 @@
+{
+  "_comment": "占位文件，仅为满足 Chrome DevTools 对 /.well-known/appspecific/com.chrome.devtools.json 的自动探测。本地 dev 时 DevTools 会主动请求该路径做工作区/源映射自动关联；若不放此文件，React Router 因无匹配路由会在终端抛 'No route matches URL' 红字（仅 dev、仅 localhost，生产不受影响）。内容空对象即可，Chrome 拿到 200 就满足。"
+}

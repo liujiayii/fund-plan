@@ -24,6 +24,12 @@ export default defineConfig({
     // 而构建阶段却不报错（只在运行时炸），非常隐蔽。
     tsconfigPaths: true,
   },
+  server: {
+    // 钉死 5173：strictPort 让端口被占时直接报错退出，绝不偷偷跳到 5174/5175。
+    // 这样 curl 本地 cron、Local Explorer API 的端口写死 5173 才永远靠谱。
+    port: 5173,
+    strictPort: true,
+  },
   // antd 体积较大，交给 Vite 自动分包即可，这里只关掉 sourcemap 以加快构建
   build: {
     sourcemap: false,

@@ -1,6 +1,9 @@
 import type { Route } from "./+types/root";
-import { Layout as AntLayout, Button, ConfigProvider, Menu, Space, theme } from "antd";
+import { GithubOutlined, LogoutOutlined } from "@ant-design/icons";
+import { DefaultFooter } from "@ant-design/pro-components";
+import { Layout as AntLayout, Avatar, Button, ConfigProvider, Dropdown, Menu, Space, theme } from "antd";
 import zhCN from "antd/locale/zh_CN";
+import { useRef } from "react";
 import {
   isRouteErrorResponse,
   Links,
@@ -14,12 +17,15 @@ import {
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { ANTD_TOKEN, COLOR } from "~/theme";
+// antd v6 起全局重置样式需手动引入。link 顺序上必须早于 UnoCSS，
+// 才能让 UnoCSS 工具类在同级覆盖 reset；antd 组件样式走 cssinjs 运行时注入，
+// 顺序不受此处影响，故 reset 放在所有值导入之后即可。
+import "antd/dist/reset.css";
 // UnoCSS 预生成的工具类样式（由 `pnpm uno:build` 产出）。
-// 放在 antd 之后引入，保证同优先级下工具类能覆盖 antd 的默认样式。
 import "./uno.gen.css";
 
 // antd 的 Layout 重命名为 AntLayout，避免与 React Router 约定的文档骨架导出 Layout 冲突
-const { Header, Content, Footer } = AntLayout;
+const { Header, Content } = AntLayout;
 
 /**
  * 根 loader：把当前登录用户带给全站，用于导航栏显示登录态。
@@ -67,11 +73,21 @@ export default function App() {
   const location = useLocation();
   const user = data?.user ?? null;
 
+  // 登出表单引用：Dropdown 的菜单项点击后触发 submit，走 POST /logout。
+  // 仍用 form post 而非 client fetch，是为了沿用服务端清 session + 重定向的标准链路。
+  const logoutFormRef = useRef<HTMLFormElement>(null);
+
   // 高亮当前所在的一级导航
   const selectedKey
     = NAV_ITEMS.filter(i => i.key !== "/" && location.pathname.startsWith(i.key))
       .map(i => i.key)
       .at(0) ?? (location.pathname === "/" ? "/" : "");
+
+  // 用户名首字作为头像文字（中文取第一字，英文取首字母大写），
+  // 因 DB 未存头像 URL，用品牌蓝底白字字母头像是最接近消费级 App 的做法。
+  const avatarText = user
+    ? (/^[A-Z]/i.test(user.username) ? user.username[0].toUpperCase() : user.username[0])
+    : "";
 
   return (
     // antd 全局配置：中文语言包 + 视觉 token（见 app/theme.ts）
@@ -115,20 +131,38 @@ export default function App() {
             }))}
             style={{ flex: 1, minWidth: 0, borderBottom: "none" }}
           />
-          {/* 登录态区域：已登录显示用户名与登出，游客显示登录/注册 */}
+          {/* 登录态区域：已登录显示头像+用户名 Dropdown（登出入口收进菜单），
+              游客显示登录/注册。用 Dropdown 取代原先「昵称 + 登出按钮」并排，
+              避免操作按钮贴着昵称的别扭观感，也更贴近消费级 App 习惯。 */}
           {user
             ? (
-                <Space>
-                  <span style={{ color: COLOR.textSecondary }}>
-                    {user.username}
-                    {user.role === "admin" ? "（主理人）" : ""}
-                  </span>
-                  <form method="post" action="/logout" style={{ display: "inline" }}>
-                    <Button size="small" htmlType="submit">
-                      登出
-                    </Button>
-                  </form>
-                </Space>
+                <Dropdown
+                  placement="bottomRight"
+                  menu={{
+                    items: [
+                      {
+                        key: "logout",
+                        icon: <LogoutOutlined />,
+                        label: "登出",
+                        // 菜单项点击 → 触发隐藏的登出表单 submit
+                        onClick: () => logoutFormRef.current?.requestSubmit(),
+                      },
+                    ],
+                  }}
+                >
+                  <Space style={{ cursor: "pointer" }} size={8}>
+                    <Avatar
+                      size={28}
+                      style={{ background: COLOR.primary, verticalAlign: "middle" }}
+                    >
+                      {avatarText}
+                    </Avatar>
+                    <span style={{ color: COLOR.textPrimary }}>
+                      {user.username}
+                      {user.role === "admin" ? "（主理人）" : ""}
+                    </span>
+                  </Space>
+                </Dropdown>
               )
             : (
                 <Space>
@@ -140,6 +174,13 @@ export default function App() {
                   </Button>
                 </Space>
               )}
+          {/* 登出表单：视觉上隐藏，仅供 Dropdown 菜单项触发 submit 用 */}
+          <form
+            ref={logoutFormRef}
+            method="post"
+            action="/logout"
+            style={{ display: "none" }}
+          />
         </Header>
         <Content
           style={{
@@ -151,9 +192,26 @@ export default function App() {
         >
           <Outlet />
         </Content>
-        <Footer style={{ textAlign: "center", color: COLOR.textSecondary }}>
-          模拟盘 · 数据来自公开接口 · 仅供学习，不构成投资建议
-        </Footer>
+        {/* Pro 系标准 Footer：上行 links（GitHub），下行 © + 声明。
+            用 DefaultFooter 取代手写 Footer，省去自维护链接样式，视觉与 antd Pro 一致。 */}
+        <DefaultFooter
+          copyright="模拟盘 · 数据来自公开接口 · 仅供学习，不构成投资建议"
+          links={[
+            {
+              key: "github",
+              // GitHub 文字前置图标，免得链接孤零零一行不好看
+              title: (
+                <Space size={4}>
+                  <GithubOutlined />
+                  GitHub
+                </Space>
+              ),
+              href: "https://github.com/liujiayii/fund-plan",
+              // 新窗口打开（等价 target="_blank" rel="noreferrer"）
+              blankTarget: true,
+            },
+          ]}
+        />
       </AntLayout>
     </ConfigProvider>
   );
