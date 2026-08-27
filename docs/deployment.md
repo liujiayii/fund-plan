@@ -74,7 +74,7 @@ Cloudflare Dashboard → Workers & Pages → 你的 Worker → Settings → Trig
 ### 注册管理员账号
 
 访问 `https://<你的域名>/register`，用 `ADMIN_USERNAME` 指定的用户名注册。
-注册后访问首页，应能看到「主人的示范盘」。
+注册后访问首页，应能看到「主理人的示范盘」。
 
 ### 冒烟测试
 

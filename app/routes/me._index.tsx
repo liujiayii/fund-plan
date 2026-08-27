@@ -78,7 +78,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
           {user.username}
           {" "}
           的模拟盘
-          {user.role === "admin" && <Tag color="blue" style={{ marginLeft: 8 }}>主人</Tag>}
+          {user.role === "admin" && <Tag color="blue" style={{ marginLeft: 8 }}>主理人</Tag>}
         </Title>
         {user.role === "admin" && (
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>

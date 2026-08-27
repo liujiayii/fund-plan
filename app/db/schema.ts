@@ -76,7 +76,7 @@ export const user = sqliteTable("user", {
   passwordHash: text("password_hash").notNull(),
   /** 随机盐（hex） */
   salt: text("salt").notNull(),
-  /** 角色：admin（主人，组合公开）| user */
+  /** 角色：admin（主理人，组合公开）| user */
   role: text("role", { enum: ["admin", "user"] }).notNull().default("user"),
   createdAt: integer("created_at").notNull(),
 });

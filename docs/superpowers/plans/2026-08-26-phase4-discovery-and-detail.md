@@ -1714,7 +1714,7 @@ export default function MeWatchlist({ loaderData }: Route.ComponentProps) {
 ```ts
 const NAV_ITEMS = [
   { key: "/", label: "首页" },
-  { key: "/master", label: "主人的盘" },
+  { key: "/master", label: "主理人的盘" },
   { key: "/funds", label: "基金" },
   { key: "/me/watchlist", label: "自选" },
   { key: "/me", label: "我的" },

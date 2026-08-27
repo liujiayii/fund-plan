@@ -30,13 +30,13 @@ const PAGE_SIZE = 15;
 
 export function meta(_: Route.MetaArgs) {
   return [
-    { title: "主人的示范盘 · 模拟基金" },
+    { title: "主理人的示范盘 · 模拟基金" },
     { name: "description", content: "围观管理员的模拟基金组合：持仓、定投与交易流水全公开" },
   ];
 }
 
 /**
- * 主人的公开示范盘。游客无需登录即可查看——
+ * 主理人的公开示范盘。游客无需登录即可查看——
  * 这是产品的「围观大佬」卖点，全部只读。
  */
 export async function loader({ context }: Route.LoaderArgs) {
@@ -59,7 +59,7 @@ export async function loader({ context }: Route.LoaderArgs) {
 
 export default function Master({ loaderData }: Route.ComponentProps) {
   // 客户端分页：两个 tab 各自一份页码，互不影响。
-  // ⚠️ 必须放在下面「主人未注册」的提前 return **之前** ——
+  // ⚠️ 必须放在下面「主理人未注册」的提前 return **之前** ——
   // hook 调用数量要在两条渲染路径上一致，否则 React 报
   // Rendered fewer hooks than expected
   const [orderPage, setOrderPage] = useState(1);
@@ -68,7 +68,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
   if (!loaderData.admin) {
     return (
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
-        <Title level={3}>主人的示范盘</Title>
+        <Title level={3}>主理人的示范盘</Title>
         <AdminNotReady adminName={loaderData.adminName} />
       </Space>
     );

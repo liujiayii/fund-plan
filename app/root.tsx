@@ -34,7 +34,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 /** 顶部导航菜单项 */
 const NAV_ITEMS = [
   { key: "/", label: "首页" },
-  { key: "/master", label: "主人的盘" },
+  { key: "/master", label: "主理人的盘" },
   { key: "/funds", label: "基金" },
   // ⚠️ 必须排在 /me 之前：selectedKey 用 startsWith 取首个命中，
   // /me/watchlist 若在 /me 之后会被 /me 先吃掉，导致自选页高亮「我的」
@@ -121,7 +121,7 @@ export default function App() {
                 <Space>
                   <span style={{ color: COLOR.textSecondary }}>
                     {user.username}
-                    {user.role === "admin" ? "（主人）" : ""}
+                    {user.role === "admin" ? "（主理人）" : ""}
                   </span>
                   <form method="post" action="/logout" style={{ display: "inline" }}>
                     <Button size="small" htmlType="submit">

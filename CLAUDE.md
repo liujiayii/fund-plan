@@ -120,7 +120,7 @@ FIFO 逐批消耗，每批按各自持有天数查阶梯费率——所以一笔
 
 ### 权限模型
 
-`app/services/guard.ts`。admin **没有独立后台**——主人的 `/me` 就是被公开的那个盘，
+`app/services/guard.ts`。admin **没有独立后台**——主理人的 `/me` 就是被公开的那个盘，
 `/master` 只是它的只读镜像，两者共用 `app/components/PortfolioView.tsx`。
 admin 由环境变量 `ADMIN_USERNAME` 认定（`wrangler.jsonc` 的 `vars`）。
 

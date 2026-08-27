@@ -23,7 +23,7 @@ export interface PortfolioViewProps {
 
 /**
  * 组合总览。被 /me（本人）、/master 与 /（公开只读）三处共用 ——
- * 主人的盘就是那个公开盘，一份代码两种身份。
+ * 主理人的盘就是那个公开盘，一份代码两种身份。
  *
  * ⚠️ me._index 曾逐字复制过一份同样的 Row（期十三收掉），两份独立漂移过。
  * 要加字段就加在这里，别再复制。
@@ -91,7 +91,7 @@ export function HoldingListReadonly({ holdings }: { holdings: HoldingView[] }) {
   return <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />;
 }
 
-/** 主人还没注册时的引导提示 */
+/** 主理人还没注册时的引导提示 */
 export function AdminNotReady({ adminName }: { adminName: string }) {
   return (
     <SectionCard>
@@ -106,7 +106,7 @@ export function AdminNotReady({ adminName }: { adminName: string }) {
               还没注册，公开示范盘暂时为空。
             </Paragraph>
             <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              用该用户名注册即成为主人，其组合会自动对所有访客公开。
+              用该用户名注册即成为主理人，其组合会自动对所有访客公开。
             </Paragraph>
           </div>
         )}

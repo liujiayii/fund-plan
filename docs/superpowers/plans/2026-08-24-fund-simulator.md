@@ -59,8 +59,8 @@ app/
   routes.ts                     # 路由表（显式声明）
   entry.server.tsx              # SSR 入口 + antd cssinjs 样式提取
   routes/
-    _index.tsx                  # 首页：主人示范盘总览 + 注册引导
-    master.tsx                  # 主人组合详情（持仓/定投/流水 三 tab，公开只读）
+    _index.tsx                  # 首页：主理人示范盘总览 + 注册引导
+    master.tsx                  # 主理人组合详情（持仓/定投/流水 三 tab，公开只读）
     funds._index.tsx            # 基金搜索
     funds.$code.tsx             # 基金详情（净值曲线）
     login.tsx  register.tsx  logout.tsx
@@ -374,12 +374,12 @@ export function clearSessionCookie(): string;
 export interface CurrentUser { id: number; username: string; role: 'admin' | 'user' }
 export function getCurrentUser(request: Request, db: Db): Promise<CurrentUser | null>; // 无会话返回 null（游客）
 export function requireUser(request: Request, db: Db): Promise<CurrentUser>; // 未登录 throw redirect('/login')
-export function getAdminUser(db: Db, env: Env): Promise<CurrentUser | null>; // 按 ADMIN_USERNAME 查主人
+export function getAdminUser(db: Db, env: Env): Promise<CurrentUser | null>; // 按 ADMIN_USERNAME 查主理人
 ```
 
-- [ ] **Step 1**: 写测试：无 Cookie → `getCurrentUser` 返回 null；有效 Cookie → 返回用户；`requireUser` 无会话时抛出 302 到 `/login`；`getAdminUser` 按 `ADMIN_USERNAME` 找到主人、找不到返回 null
+- [ ] **Step 1**: 写测试：无 Cookie → `getCurrentUser` 返回 null；有效 Cookie → 返回用户；`requireUser` 无会话时抛出 302 到 `/login`；`getAdminUser` 按 `ADMIN_USERNAME` 找到主理人、找不到返回 null
 - [ ] **Step 2**: 跑测试确认失败
-- [ ] **Step 3**: 实现 Cookie 解析 + 会话查询；`requireUser` 抛 `redirect`。中文注释说明权限矩阵（游客只读主人盘 / 用户读写自己 + 只读主人 / admin 的 `/me` 即公开盘）
+- [ ] **Step 3**: 实现 Cookie 解析 + 会话查询；`requireUser` 抛 `redirect`。中文注释说明权限矩阵（游客只读主理人盘 / 用户读写自己 + 只读主理人 / admin 的 `/me` 即公开盘）
 - [ ] **Step 4**: 跑测试通过
 - [ ] **Step 5**: commit `feat(services): 鉴权与权限矩阵`
 
@@ -485,7 +485,7 @@ export function getCheckinStatus(db: Db, userId: number, today?: string): Promis
 **Files:** Create `app/routes/login.tsx`、`app/routes/register.tsx`、`app/routes/logout.tsx`、`app/entry.server.tsx`；Modify `app/root.tsx`、`app/routes.ts`
 
 - [ ] **Step 1**: `entry.server.tsx` 做 antd cssinjs SSR 样式提取：`createCache()` + `<StyleProvider>` 包裹 → `renderToReadableStream` → `await stream.allReady` → 读成字符串 → `extractStyle(cache, true)` 注入 `</head>` 前。**避免样式闪烁**
-- [ ] **Step 2**: `root.tsx`：antd `ConfigProvider`（`zhCN` + 主题色）+ `Layout` 顶栏导航（首页/主人的盘/基金/我的），根 loader 返回当前用户供导航态判断
+- [ ] **Step 2**: `root.tsx`：antd `ConfigProvider`（`zhCN` + 主题色）+ `Layout` 顶栏导航（首页/主理人的盘/基金/我的），根 loader 返回当前用户供导航态判断
 - [ ] **Step 3**: `login.tsx` / `register.tsx`：antd `Form` + action 调 `loginUser`/`registerUser`，成功 `Set-Cookie` 并 redirect；失败用 `useActionData` 显示错误。`logout.tsx` action 销毁会话 + 清 Cookie
 - [ ] **Step 4**: 写测试：注册 → 自动登录 → Cookie 生效；重复用户名报友好错误；错误密码报错
 - [ ] **Step 5**: `pnpm build` 通过。commit `feat(ui): 布局与注册登录`
@@ -542,15 +542,15 @@ export function getCheckinStatus(db: Db, userId: number, today?: string): Promis
 - [ ] **Step 5**: 写测试：创建计划 `next_run` 正确；暂停后扫描不触发
 - [ ] **Step 6**: commit `feat(ui): 定投计划管理`
 
-### Task 24: 首页 + 主人公开盘
+### Task 24: 首页 + 主理人公开盘
 
 **Files:** Create/Modify `app/routes/_index.tsx`、Create `app/routes/master.tsx`、`app/components/PortfolioView.tsx`
 
 - [ ] **Step 1**: 抽 `PortfolioView` 组件（总资产卡 + 持仓表 + 收益曲线 + 最近操作），**同时被 `/me` 与 `/master` 复用**，通过 `readonly` prop 控制是否显示操作按钮
-- [ ] **Step 2**: `_index.tsx`：loader 用 `getAdminUser` 取主人 → 读其组合 → 展示总收益概览 + 持仓 Top + 最近交易；未登录时显著「注册开始模拟」CTA，已登录显示「去我的盘」
+- [ ] **Step 2**: `_index.tsx`：loader 用 `getAdminUser` 取主理人 → 读其组合 → 展示总收益概览 + 持仓 Top + 最近交易；未登录时显著「注册开始模拟」CTA，已登录显示「去我的盘」
 - [ ] **Step 3**: `master.tsx`：三 tab（持仓 / 定投 / 交易流水），全部公开只读；游客直接可看
-- [ ] **Step 4**: 写测试：游客（无 Cookie）访问 `/` 与 `/master` 返回 200 且含主人持仓数据；`/me` 无 Cookie 302 到 `/login`
-- [ ] **Step 5**: commit `feat(ui): 首页与主人公开示范盘`
+- [ ] **Step 4**: 写测试：游客（无 Cookie）访问 `/` 与 `/master` 返回 200 且含主理人持仓数据；`/me` 无 Cookie 302 到 `/login`
+- [ ] **Step 5**: commit `feat(ui): 首页与主理人公开示范盘`
 
 ### Task 25: 设置页
 
@@ -571,7 +571,7 @@ export function getCheckinStatus(db: Db, userId: number, today?: string): Promis
 **Files:** Create `README.md`、`docs/deployment.md`、`docs/development.md`、`.dev.vars.example`；Modify `wrangler.jsonc`、`package.json`
 
 - [ ] **Step 1**: `package.json` scripts 齐活：`dev`、`build`、`deploy`、`test`、`typecheck`、`db:generate`、`db:migrate:local`、`db:migrate:prod`、`cf-typegen`
-- [ ] **Step 2**: `docs/deployment.md`：创建 D1（`wrangler d1 create`）与 KV（`wrangler kv namespace create`）、把返回的 id 填进 `wrangler.jsonc`、`ADMIN_USERNAME` 设为主人用户名、跑生产迁移、`wrangler deploy`、验证 Cron 已注册
+- [ ] **Step 2**: `docs/deployment.md`：创建 D1（`wrangler d1 create`）与 KV（`wrangler kv namespace create`）、把返回的 id 填进 `wrangler.jsonc`、`ADMIN_USERNAME` 设为主理人用户名、跑生产迁移、`wrangler deploy`、验证 Cron 已注册
 - [ ] **Step 3**: `docs/development.md`：pnpm + 淘宝镜像的由来（GitHub/npmjs 超时根因）、本地起 D1、跑测试、领域层精度约定、节假日表每年更新提醒
 - [ ] **Step 4**: `README.md`：功能截图位、技术栈、快速开始、权限矩阵、免费版额度说明
 - [ ] **Step 5**: 全量 `pnpm typecheck && pnpm test && pnpm build` 全绿
@@ -581,7 +581,7 @@ export function getCheckinStatus(db: Db, userId: number, today?: string): Promis
 
 ## 验收清单（完整可用的定义）
 
-- [ ] 游客不登录能看首页与 `/master` 主人公开盘（持仓/定投/流水/曲线）
+- [ ] 游客不登录能看首页与 `/master` 主理人公开盘（持仓/定投/流水/曲线）
 - [ ] 能注册 → 自动获得 10 万初始本金 → 登录
 - [ ] 能搜真实基金、看真实净值曲线与真实费率
 - [ ] 能买入（内扣法算费）、生成 pending 单、T+1 按确认日净值成交
