@@ -8,6 +8,12 @@
   "observability": {
     "enabled": true
   },
+  // 运行时放置：智能（smart）——wrangler 按 Worker 实际访问的数据自动就近路由，
+  // 减少跨区往返。务必写在配置里：Dashboard 手改的 placement 会被下次 `wrangler deploy`
+  // 覆盖回默认，只有写进 wrangler.jsonc 才是部署的稳定来源。
+  "placement": {
+    "mode": "smart"
+  },
   "vars": {
     // 管理员用户名：注册时用户名与此一致者获得 admin 角色，其组合公开展示
     "ADMIN_USERNAME": "liujiayii"
