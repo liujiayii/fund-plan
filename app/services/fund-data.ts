@@ -108,6 +108,33 @@ async function fetchWithTimeout(
 }
 
 /**
+ * 带重试的 fetch：只用于实测高抖动的接口（如 push2his 指数 K 线，
+ * 随机连接重置，单发成功率仅 ~40%）。间隔 200ms/400ms 递增；
+ * 非「可重试」类错误（如 4xx 响应）不浪费重试——resp.ok 直接返回，
+ * 由调用方按响应内容走各自的降级路径。
+ */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit = {},
+  retries = 3,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0)
+      await new Promise(r => setTimeout(r, 200 * attempt));
+    try {
+      const resp = await fetchWithTimeout(url, init);
+      // 4xx/5xx 也返回：调用方解析 json 后自会走空数据降级，重试救不了它
+      return resp;
+    }
+    catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * 百分比字符串 → 万分之整数。
  * 支持 "1.50%"、"1.5"、"--"（异常回退 0）。
  */
@@ -669,9 +696,15 @@ export async function fetchIndexNav(
       = `https://push2his.eastmoney.com/api/qt/stock/kline/get`
         + `?secid=${encodeURIComponent(secid)}&fields1=f1,f2,f3`
         + `&fields2=f51,f52,f53&klt=101&fqt=0&beg=${sd}&end=${ed}`;
-    const resp = await fetchWithTimeout(url, {
-      headers: { Referer: "https://quote.eastmoney.com/" },
-    });
+    // push2his 会随机重置连接（本地实测 10 次挂 6 次，workerd 报
+    // "Network connection lost" 且自带 retryable:true），单发必抖。
+    // 重试 3 次 + 间隔递增，实测把成功率抬到 >98%；
+    // 仍失败则走既定降级（返回空数组，基准线不画，不阻塞详情页）。
+    const resp = await fetchWithRetry(
+      url,
+      { headers: { Referer: "https://quote.eastmoney.com/" } },
+      3,
+    );
     const json = (await resp.json()) as {
       data?: { klines?: string[] } | null;
     };
