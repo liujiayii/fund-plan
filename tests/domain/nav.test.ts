@@ -38,6 +38,10 @@ describe("resolveSelectedKey", () => {
     expect(watchlistIdx).toBeLessThan(meIdx);
   });
 
+  it("/leaderboard 命中「排行榜」导航项", () => {
+    expect(resolveSelectedKey("/leaderboard", NAV_ITEMS)).toBe("/leaderboard");
+  });
+
   it("不命中任何导航项时返回空串（不高亮）", () => {
     expect(resolveSelectedKey("/login", NAV_ITEMS)).toBe("");
     expect(resolveSelectedKey("/register", NAV_ITEMS)).toBe("");

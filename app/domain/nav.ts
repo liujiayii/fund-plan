@@ -21,6 +21,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: "/", label: "首页" },
   { key: "/master", label: "主理人的盘" },
+  { key: "/leaderboard", label: "排行榜" },
   { key: "/funds", label: "基金" },
   { key: "/me/watchlist", label: "自选" },
   { key: "/me", label: "我的" },

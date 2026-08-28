@@ -11,6 +11,7 @@ export default [
   // ==== 公开 ====
   index("routes/_index.tsx"),
   route("master", "routes/master.tsx"),
+  route("leaderboard", "routes/leaderboard.tsx"),
   route("funds", "routes/funds._index.tsx"),
   route("funds/:code", "routes/funds.$code.tsx"),
   route("login", "routes/login.tsx"),
