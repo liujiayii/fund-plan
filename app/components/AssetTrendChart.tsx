@@ -96,7 +96,9 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
     data: chartData,
     xField: "date",
     yField: "asset",
-    height: CHART_HEIGHT,
+    // ⚠️ 刻意不传 height：G2 的 sizeOf 让显式 height 压过容器尺寸——
+    // 传了它，CSS 压容器（窄屏 220）canvas 也不跟随，会竖向溢出容器。
+    // 不传时 autoFit 读容器 clientHeight，高度由 responsive.css §6 全权管理
     smooth: true,
     autoFit: true,
     // 总资产波动幅度小，Y 轴不从 0 起，否则曲线压成一条直线

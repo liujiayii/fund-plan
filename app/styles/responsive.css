@@ -160,20 +160,25 @@
   }
 }
 
-/* ══════════ 6. 图表高度窄屏降档（spec §9）══════════ */
+/* ══════════ 6. 图表高度（容器定高，G2 autoFit 跟随）══════════ */
+
+/* 基准高度（桌面）。⚠️ 与 app/components/ui/chart.ts 的 CHART_HEIGHT 是
+   镜像常量，改的时候两处同改（CSS 引不进 JS 模块，与 TabBar 色值同取舍）。
+   :last-child 只命中图区层——裸 > div 会把 PeriodTabs 的外包 div
+   也定高，周期条下方多出大块死空白（Task 11 review 修正）。
+   图表 config 刻意不传 height：G2 sizeOf 的优先级是「显式 height 压过
+   容器尺寸」（@antv/g2 lib/api/utils.js 的 sizeOf）——config 传了 height，
+   autoFit 的容器高度就被无视，CSS 压容器 canvas 也不跟随 → canvas 竖向
+   溢出容器戳穿卡片。不传 height 时 autoFit 读容器 clientHeight，
+   高度由本节 CSS 全权管理 */
+.fp-chart-box > div:last-child {
+  height: 320px;
+}
 
 @media (max-width: 767px) {
-  /* 320px 高在 319px 内容宽下宽高比倒挂，曲线被竖向拉伸；降到 220 */
-  .fp-chart-box {
-    height: auto;
-  }
-  /* G2 的 autoFit 只管宽度；高度是 config 的 CHART_HEIGHT 传入值。
-     窄屏不走 CSS 变量，直接用 !important 高度覆盖图区层（autoFit 的
-     外层 div），压缩外层高度让 canvas 跟随（G2 autoFit 监听容器尺寸） */
-  /* ⚠️ 375px 实机若高度未变，按 Task 11 brief 的兜底顺序换 canvas 直压
-     或 config 高度 undefined，见计划 Task 11 Step 2 注。
-     :last-child 只命中图区层——裸 > div 会把 PeriodTabs 的外包 div
-     也定高 220px，周期条下方多出 ~210px 死空白（review 修正） */
+  /* 窄屏 320 高在 319px 内容宽下宽高比倒挂，曲线被竖向拉伸；降到 220（spec §9）。
+     !important 同时压过骨架 div 的 inline height: CHART_HEIGHT——
+     加载期间骨架与成图同高，切换不跳 */
   .fp-chart-box > div:last-child {
     height: 220px !important;
   }
