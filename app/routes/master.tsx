@@ -101,12 +101,12 @@ export default function Master({ loaderData }: Route.ComponentProps) {
           items={[
             {
               key: "holdings",
-              label: `持仓（${portfolio.holdings.length}）`,
+              label: `持仓`,
               children: <HoldingListReadonly holdings={portfolio.holdings} />,
             },
             {
               key: "dca",
-              label: `定投计划（${plans.length}）`,
+              label: `定投计划`,
               children:
                 plans.length === 0
                   ? <EmptyState description="暂无定投计划" />
@@ -114,7 +114,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
             },
             {
               key: "orders",
-              label: `交易记录（${orders.length}）`,
+              label: `交易记录`,
               children:
                 orders.length === 0
                   ? <EmptyState description="暂无交易记录" />
@@ -128,22 +128,25 @@ export default function Master({ loaderData }: Route.ComponentProps) {
                           detailed
                         />
                         {orders.length > PAGE_SIZE && (
-                          <Pagination
-                            align="end"
-                            current={orderPage}
-                            pageSize={PAGE_SIZE}
-                            total={orders.length}
-                            showSizeChanger={false}
-                            style={{ marginTop: 16 }}
-                            onChange={setOrderPage}
-                          />
+                          // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
+                          <div className="fp-h-scroll" style={{ marginTop: 16 }}>
+                            <Pagination
+                              align="end"
+                              responsive
+                              current={orderPage}
+                              pageSize={PAGE_SIZE}
+                              total={orders.length}
+                              showSizeChanger={false}
+                              onChange={setOrderPage}
+                            />
+                          </div>
                         )}
                       </>
                     ),
             },
             {
               key: "txs",
-              label: `资金流水（${txs.length}）`,
+              label: `资金流水`,
               children:
                 txs.length === 0
                   ? <EmptyState description="暂无流水" />
@@ -156,15 +159,18 @@ export default function Master({ loaderData }: Route.ComponentProps) {
                           )}
                         />
                         {txs.length > PAGE_SIZE && (
-                          <Pagination
-                            align="end"
-                            current={txPage}
-                            pageSize={PAGE_SIZE}
-                            total={txs.length}
-                            showSizeChanger={false}
-                            style={{ marginTop: 16 }}
-                            onChange={setTxPage}
-                          />
+                          // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
+                          <div className="fp-h-scroll" style={{ marginTop: 16 }}>
+                            <Pagination
+                              align="end"
+                              responsive
+                              current={txPage}
+                              pageSize={PAGE_SIZE}
+                              total={txs.length}
+                              showSizeChanger={false}
+                              onChange={setTxPage}
+                            />
+                          </div>
                         )}
                       </>
                     ),

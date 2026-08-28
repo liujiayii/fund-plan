@@ -20,11 +20,14 @@ export interface PeriodTabsProps {
  */
 export function PeriodTabs({ options, value, onChange, size = "small" }: PeriodTabsProps) {
   return (
-    <Segmented
-      size={size}
-      value={value}
-      onChange={v => onChange(String(v))}
-      options={options.map(o => ({ label: o.label, value: o.key }))}
-    />
+    // 外层滚动容器只在 767px 以下生效（overflow-x: auto），桌面无副作用
+    <div className="fp-h-scroll">
+      <Segmented
+        size={size}
+        value={value}
+        onChange={v => onChange(String(v))}
+        options={options.map(o => ({ label: o.label, value: o.key }))}
+      />
+    </div>
   );
 }
