@@ -23,6 +23,9 @@ import { ANTD_TOKEN, COLOR } from "~/theme";
 import "antd/dist/reset.css";
 // UnoCSS 预生成的工具类样式（由 `pnpm uno:build` 产出）。
 import "./uno.gen.css";
+// 期五移动端适配：唯一的媒体查询出处，必须排在 uno.gen.css 之后
+// 才能覆盖工具类与 antd 组件类（顺序理由见该文件头注释）
+import "./styles/responsive.css";
 
 // antd 的 Layout 重命名为 AntLayout，避免与 React Router 约定的文档骨架导出 Layout 冲突
 const { Header, Content } = AntLayout;
@@ -183,6 +186,7 @@ export default function App() {
           />
         </Header>
         <Content
+          className="fp-content"
           style={{
             padding: "24px 24px 48px",
             maxWidth: 1120,

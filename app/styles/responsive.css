@@ -1,0 +1,60 @@
+/**
+ * 期五 · 移动端适配的唯一媒体查询出处（spec §4.4）。
+ *
+ * ⚠️ 全部规则包在 max-width: 767px 里（antd md=768 以下为移动端），
+ * 桌面零回归是本期硬门槛。**不要在组件里散写 @media** ——
+ * 「窄屏长什么样」只认这一个文件。
+ *
+ * 为什么是手写 CSS 文件而不是 UnoCSS 断点变体类：
+ *  - uno.gen.css 是 pnpm uno:build 的纯产物，手改必被覆盖；
+ *  - preflights.reset=false 意味着 UnoCSS 不产出任何全局样式；
+ *  - uno.config.ts 的自定义 extractor 只认 className="静态字符串"，
+ *    条件拼接的 className 提取不到（spec §4.4）。
+ *
+ * import 顺序（root.tsx）：antd reset → uno.gen.css → 本文件。
+ * 排最后才能覆盖工具类与 antd 组件类。
+ */
+
+/* ══════════ 1. 全局基线（spec §5）══════════ */
+
+@media (max-width: 767px) {
+  /* Content padding 24→12：所有溢出的放大器（spec §5.1）。
+     底部 56px 给 TabBar + 安全区 + 16px 呼吸（Task 4 落 TabBar 后生效） */
+  .fp-content {
+    padding: 12px 12px calc(56px + env(safe-area-inset-bottom) + 16px) !important;
+  }
+
+  /* Card body 24→16（spec §5.2）。全局覆盖 .ant-card-body 而非改
+     SectionCard 的 props —— SectionCard 刻意不透传 style/styles，
+     那个封装不开口子；token 又无法只按视口生效。
+     ⚠️ !important：antd cssinjs 运行时注入的优先级更高，不加盖不住 */
+  .ant-card-body {
+    padding: 16px !important;
+  }
+
+  /* ══════════ 2. 显隐工具类（spec §7.1）══════════ */
+
+  .fp-desktop {
+    display: none !important;
+  }
+
+  /* ══════════ 3. 通用滚动容器 ═══════════ */
+
+  /* Segmented / Pagination 等不换行不滚动的组件套这层（spec §9） */
+  .fp-h-scroll {
+    overflow-x: auto;
+    /* 隐藏滚动条但保留滚动能力；Firefox 走 scrollbar-width */
+    scrollbar-width: none;
+  }
+  .fp-h-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* 767px 以下隐藏、以上恢复 —— 用属性选择器把 specificity 抬过
+   UnoCSS/antd 的 display 工具类（配合 .fp-desktop 的 !important 成对使用） */
+@media (min-width: 768px) {
+  .fp-mobile {
+    display: none;
+  }
+}
