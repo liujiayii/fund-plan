@@ -284,6 +284,68 @@ describe("fetchNavHistory 历史净值", () => {
     expect(await fetchNavHistory(fakeEnv(), "000001")).toEqual([]);
   });
 
+  it("要的条数超过单页上限时自动翻页拼齐（东财 lsjz 单页钳 20 行）", async () => {
+    // 东财 2026 年起对 lsjz 单页钳制 20 行（pageSize 填大了也只回 20，
+    // ≥400 直接回空）——要 400 天必须翻 20 页。这里 mock 三页拼 60 条。
+    const mkPage = (offset: number) => ({
+      TotalCount: 1657,
+      Data: {
+        LSJZList: Array.from({ length: 20 }, (_, i) => {
+          const d = new Date(Date.UTC(2026, 7, 1 + offset + i));
+          const iso = d.toISOString().slice(0, 10);
+          return { FSRQ: iso, DWJZ: "1.0000", LJJZ: "1.0000", JZZZL: "0" };
+        }),
+      },
+    });
+    const pages = [mkPage(0), mkPage(20), mkPage(40)];
+    const spy = vi.fn(async (url: string) => {
+      const m = /pageIndex=(\d+)/.exec(url);
+      const idx = m ? Number(m[1]) - 1 : 0;
+      return new Response(JSON.stringify(pages[idx] ?? { Data: { LSJZList: [] } }));
+    });
+    vi.stubGlobal("fetch", spy);
+
+    const rows = await fetchNavHistory(fakeEnv(), "000001", 60);
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect(rows).toHaveLength(60);
+  });
+
+  it("翻页时最后一页不满即停（不请求空页）", async () => {
+    const page1 = {
+      TotalCount: 30,
+      Data: {
+        LSJZList: Array.from({ length: 20 }, (_, i) => ({
+          FSRQ: `2026-08-${String(31 - i).padStart(2, "0")}`,
+          DWJZ: "1.0000",
+          LJJZ: "1.0000",
+          JZZZL: "0",
+        })),
+      },
+    };
+    const page2 = {
+      TotalCount: 30,
+      Data: {
+        LSJZList: Array.from({ length: 10 }, (_, i) => ({
+          FSRQ: `2026-08-${String(11 - i).padStart(2, "0")}`,
+          DWJZ: "1.0000",
+          LJJZ: "1.0000",
+          JZZZL: "0",
+        })),
+      },
+    };
+    const spy = vi.fn(async (url: string) => {
+      const m = /pageIndex=(\d+)/.exec(url);
+      const idx = m ? Number(m[1]) - 1 : 0;
+      return new Response(JSON.stringify(idx === 0 ? page1 : page2));
+    });
+    vi.stubGlobal("fetch", spy);
+
+    const rows = await fetchNavHistory(fakeEnv(), "000001", 60);
+    // 只要 60 条但第二页就凑齐了 30 条 TotalCount——到 TotalCount 即停
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(rows).toHaveLength(30);
+  });
+
   it("净值缺失或非法的行被跳过", async () => {
     const dirty = {
       Data: {

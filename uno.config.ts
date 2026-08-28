@@ -65,6 +65,25 @@ export default defineConfig({
       rise: COLOR.up,
       fall: COLOR.down,
     },
+    /**
+     * 断点显式对齐 antd 栅格（responsiveObserver：xs 480 / sm 576 / md 768 /
+     * lg 992 / xl 1200 / xxl 1600）。presetWind4 默认走 Tailwind v4 的
+     * sm 640 / md 768 / lg 1024，与 antd 只有 md 撞对——混用 Col sm={12}
+     * （576）与 sm:xxx 类（640）会在 576~640px 出现两套断点错位跳变。
+     *
+     * ⚠️ 键名是单数 breakpoint（Wind4 对齐 Tailwind v4 --breakpoint-* 变量），
+     * 写复数 breakpoints 会静默无效。本项目当前不使用断点变体类
+     * （媒体查询全在手写 responsive.css），此项是防御性对齐：
+     * 挡住将来有人顺手写 md:p-3 时与 antd 栅格错位。
+     */
+    breakpoint: {
+      xs: "480px",
+      sm: "576px",
+      md: "768px",
+      lg: "992px",
+      xl: "1200px",
+      xxl: "1600px",
+    },
   },
   /**
    * 只从 className="..." / class="..." 里提取工具类。

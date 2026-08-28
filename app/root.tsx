@@ -14,6 +14,8 @@ import {
   useLoaderData,
   useLocation,
 } from "react-router";
+import { MobileTabBar } from "~/components/MobileTabBar";
+import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { ANTD_TOKEN, COLOR } from "~/theme";
@@ -23,6 +25,9 @@ import { ANTD_TOKEN, COLOR } from "~/theme";
 import "antd/dist/reset.css";
 // UnoCSS 预生成的工具类样式（由 `pnpm uno:build` 产出）。
 import "./uno.gen.css";
+// 期五移动端适配：唯一的媒体查询出处，必须排在 uno.gen.css 之后
+// 才能覆盖工具类与 antd 组件类（顺序理由见该文件头注释）
+import "./styles/responsive.css";
 
 // antd 的 Layout 重命名为 AntLayout，避免与 React Router 约定的文档骨架导出 Layout 冲突
 const { Header, Content } = AntLayout;
@@ -37,16 +42,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { user };
 }
 
-/** 顶部导航菜单项 */
-const NAV_ITEMS = [
-  { key: "/", label: "首页" },
-  { key: "/master", label: "主理人的盘" },
-  { key: "/funds", label: "基金" },
-  // ⚠️ 必须排在 /me 之前：selectedKey 用 startsWith 取首个命中，
-  // /me/watchlist 若在 /me 之后会被 /me 先吃掉，导致自选页高亮「我的」
-  { key: "/me/watchlist", label: "自选" },
-  { key: "/me", label: "我的" },
-];
+// 一级导航项定义已迁至 ~/domain/nav（顶栏与移动端底部 TabBar 共用，顺序敏感）
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -77,11 +73,8 @@ export default function App() {
   // 仍用 form post 而非 client fetch，是为了沿用服务端清 session + 重定向的标准链路。
   const logoutFormRef = useRef<HTMLFormElement>(null);
 
-  // 高亮当前所在的一级导航
-  const selectedKey
-    = NAV_ITEMS.filter(i => i.key !== "/" && location.pathname.startsWith(i.key))
-      .map(i => i.key)
-      .at(0) ?? (location.pathname === "/" ? "/" : "");
+  // 高亮当前所在的一级导航（顶栏与底部 TabBar 共用同一份纯函数）
+  const selectedKey = resolveSelectedKey(location.pathname, NAV_ITEMS);
 
   // 用户名首字作为头像文字（中文取第一字，英文取首字母大写），
   // 因 DB 未存头像 URL，用品牌蓝底白字字母头像是最接近消费级 App 的做法。
@@ -99,6 +92,8 @@ export default function App() {
         {/* Header 由 antd 默认的深色改为白底 + 底部细线，
             这是「后台管理系统」与「消费级理财 App」观感的分水岭 */}
         <Header
+          // fp-header：窄屏 space-between 让登录态回到右侧（responsive.css）
+          className="fp-header"
           style={{
             display: "flex",
             alignItems: "center",
@@ -116,21 +111,26 @@ export default function App() {
             style={{
               color: COLOR.primary,
               fontWeight: 700,
-              fontSize: 18,
+              fontSize: "clamp(16px, 4vw, 18px)",
               whiteSpace: "nowrap",
             }}
           >
             模拟基金
           </a>
-          <Menu
-            mode="horizontal"
-            selectedKeys={selectedKey ? [selectedKey] : []}
-            items={NAV_ITEMS.map(i => ({
-              key: i.key,
-              label: <a href={i.key}>{i.label}</a>,
-            }))}
-            style={{ flex: 1, minWidth: 0, borderBottom: "none" }}
-          />
+          {/* 桌面顶栏导航。窄屏整体隐藏（display:none），职责移交底部 TabBar ——
+              用 CSS 隐藏而非条件渲染：条件渲染需要 JS 断点，SSR 下必闪一帧（spec §6.2）。
+              隐藏的 DOM 还在，代价是几个 <li>，可接受 */}
+          <div className="fp-desktop" style={{ flex: 1, minWidth: 0 }}>
+            <Menu
+              mode="horizontal"
+              selectedKeys={selectedKey ? [selectedKey] : []}
+              items={NAV_ITEMS.map(i => ({
+                key: i.key,
+                label: <a href={i.key}>{i.label}</a>,
+              }))}
+              style={{ minWidth: 0, borderBottom: "none" }}
+            />
+          </div>
           {/* 登录态区域：已登录显示头像+用户名 Dropdown（登出入口收进菜单），
               游客显示登录/注册。用 Dropdown 取代原先「昵称 + 登出按钮」并排，
               避免操作按钮贴着昵称的别扭观感，也更贴近消费级 App 习惯。 */}
@@ -183,6 +183,7 @@ export default function App() {
           />
         </Header>
         <Content
+          className="fp-content"
           style={{
             padding: "24px 24px 48px",
             maxWidth: 1120,
@@ -192,9 +193,12 @@ export default function App() {
         >
           <Outlet />
         </Content>
+        {/* 移动端底部导航（768px 以下显示）。放 Content 外保证固定定位不受内容影响 */}
+        <MobileTabBar />
         {/* Pro 系标准 Footer：上行 links（GitHub），下行 © + 声明。
             用 DefaultFooter 取代手写 Footer，省去自维护链接样式，视觉与 antd Pro 一致。 */}
         <DefaultFooter
+          className="fp-footer"
           copyright="模拟盘 · 数据来自公开接口 · 仅供学习，不构成投资建议"
           links={[
             {

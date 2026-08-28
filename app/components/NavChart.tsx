@@ -1,5 +1,6 @@
 import type { LineConfig } from "@ant-design/charts";
 import { lazy, Suspense, useMemo, useState, useSyncExternalStore } from "react";
+import { CHART_HEIGHT } from "~/components/ui/chart";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { NAV_SCALE } from "~/domain/money";
@@ -50,7 +51,8 @@ function ChartSkeleton() {
     <div
       style={{
         width: "100%",
-        height: 320,
+        // 窄屏由 responsive.css §6 的 .fp-chart-box > div 压到 220（骨架同样是直接子 div）
+        height: CHART_HEIGHT,
         borderRadius: 8,
         background:
           "linear-gradient(90deg, rgba(0,0,0,.06) 25%, rgba(0,0,0,.15) 37%, rgba(0,0,0,.06) 63%)",
@@ -136,20 +138,24 @@ export function NavChart({
     yField: "value",
     // colorField 按 type 分组画多条线；单线时只有一类「本基金」也正常
     colorField: "type",
-    height: 320,
+    // ⚠️ 刻意不传 height：G2 的 sizeOf 让显式 height 压过容器尺寸——
+    // 传了它，CSS 压容器（窄屏 220）canvas 也不跟随，会竖向溢出容器。
+    // 不传时 autoFit 读容器 clientHeight，高度由 responsive.css §6 全权管理
     smooth: true,
     autoFit: true,
     // 净值波动幅度小，Y 轴不从 0 起，否则曲线压成一条直线
     scale: { y: { nice: true, zero: false } },
     axis: {
-      x: { labelAutoHide: true, labelAutoRotate: false },
+      // labelAutoRotate 放开旋转：窄屏 X 轴标签斜排可读，桌面宽度足够时 G2 自行不转
+      x: { labelAutoHide: true, labelAutoRotate: true },
       y: { labelFormatter: (v: number) => v.toFixed(4) },
     },
     style: { lineWidth: 2 },
   };
 
   return (
-    <div>
+    // fp-chart-box：图表窄屏高度降档的挂载点（responsive.css §6），包住 PeriodTabs + 图区
+    <div className="fp-chart-box">
       <div style={{ marginBottom: 16 }}>
         <PeriodTabs
           options={RANGES.map(r => ({ key: r.key, label: r.label }))}

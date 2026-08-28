@@ -1,5 +1,5 @@
 import type { Route } from "./+types/me.watchlist";
-import { Alert, Button, Space, Typography } from "antd";
+import { Alert, Button, Dropdown, Space, Typography } from "antd";
 import { useFetcher } from "react-router";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { FundListItem } from "~/components/ui/FundListItem";
@@ -97,17 +97,33 @@ export default function MeWatchlist({ loaderData }: Route.ComponentProps) {
                   )}
                   secondary={<PnlText rate={it.growthRate / 10000} size={12} />}
                   actions={(
-                    <Space>
+                    /* 混合形态（Task 10）：「查看」保链接语义留在行内（高频操作，
+                       href 直达基金详情）；「取消自选」收进「···」Dropdown——
+                       原两按钮约 112px，375px 下挤兑左侧名称列，收进后 actions
+                       区约 76px（链接按钮 40 + Dropdown 28 + gap 8）放得下。
+                       ⚠️ 各行 actions 宽度一致（FundListItem 契约）：
+                       本列表所有行渲染同一结构，天然满足 */
+                    <Space size={8}>
                       <Button size="small" href={`/funds/${it.fundCode}`}>
                         查看
                       </Button>
-                      <fetcher.Form method="post" style={{ display: "inline" }}>
-                        <input type="hidden" name="intent" value="remove" />
-                        <input type="hidden" name="fundCode" value={it.fundCode} />
-                        <Button size="small" htmlType="submit">
-                          取消自选
-                        </Button>
-                      </fetcher.Form>
+                      <Dropdown
+                        menu={{
+                          items: [
+                            { key: "remove", label: "取消自选", danger: true },
+                          ],
+                          onClick: ({ key }) => {
+                            if (key === "remove") {
+                              fetcher.submit(
+                                { intent: "remove", fundCode: it.fundCode },
+                                { method: "post" },
+                              );
+                            }
+                          },
+                        }}
+                      >
+                        <Button size="small">···</Button>
+                      </Dropdown>
                     </Space>
                   )}
                 />

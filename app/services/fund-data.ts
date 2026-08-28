@@ -108,6 +108,33 @@ async function fetchWithTimeout(
 }
 
 /**
+ * 带重试的 fetch：只用于实测高抖动的接口（如 push2his 指数 K 线，
+ * 随机连接重置，单发成功率仅 ~40%）。间隔 200ms/400ms 递增；
+ * 非「可重试」类错误（如 4xx 响应）不浪费重试——resp.ok 直接返回，
+ * 由调用方按响应内容走各自的降级路径。
+ */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit = {},
+  retries = 3,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0)
+      await new Promise(r => setTimeout(r, 200 * attempt));
+    try {
+      const resp = await fetchWithTimeout(url, init);
+      // 4xx/5xx 也返回：调用方解析 json 后自会走空数据降级，重试救不了它
+      return resp;
+    }
+    catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * 百分比字符串 → 万分之整数。
  * 支持 "1.50%"、"1.5"、"--"（异常回退 0）。
  */
@@ -260,20 +287,35 @@ export async function fetchFundBasic(
 /**
  * 拉取历史净值序列（按日期倒序，最新在前）。
  *
+ * ⚠️ 东财 2026 年起对 lsjz 接口加了钳制：**单页最多 20 行**——pageSize 填
+ * 30~200 也只回 20 条，≥400 直接回空 `Data`。所以要拿长历史必须翻页：
+ * 本函数内部按 20 行/页自动翻页拼齐 `wantRows` 条，调用方无感
+ * （撮合 cron 要 30 条 → 2 页；详情页回填要 400 条 → 20 页）。
+ *
  * 失败时返回空数组——撮合任务据此让订单保持 pending 顺延到下个交易日，
- * 绝不能把「拉不到净值」误判成「订单失败」。
+ * 绝不能把「拉不到净值」误判成「订单失败」。翻页中途某页失败不炸整体
+ * （allSettled 保留成功页），第一页就失败才返回空。
  */
 export async function fetchNavHistory(
   env: Env,
   code: string,
-  pageSize = 60,
+  wantRows = 60,
 ): Promise<NavRow[]> {
-  try {
+  /** 接口单页实际上限（实测值；写大无效，写 ≥400 直接回空） */
+  const PAGE_SIZE = 20;
+  /** 翻页并发波次宽度：一口气全并发容易触发风控（push2his 的教训） */
+  const CONCURRENCY = 5;
+
+  /** 拉并解析一页；返回本页行数与 TotalCount（拿不到时为 null） */
+  const fetchPage = async (
+    pageIndex: number,
+  ): Promise<{ rows: NavRow[]; totalCount: number | null }> => {
     const url
       = `https://api.fund.eastmoney.com/f10/lsjz`
-        + `?fundCode=${encodeURIComponent(code)}&pageIndex=1&pageSize=${pageSize}`;
+        + `?fundCode=${encodeURIComponent(code)}&pageIndex=${pageIndex}&pageSize=${PAGE_SIZE}`;
     const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS });
     const json = (await resp.json()) as {
+      TotalCount?: number;
       Data?: {
         LSJZList?: {
           FSRQ?: string;
@@ -298,7 +340,43 @@ export async function fetchNavHistory(
         growthRate: percentToRate(item.JZZZL),
       });
     }
-    return rows;
+    return { rows, totalCount: json.TotalCount ?? null };
+  };
+
+  try {
+    // 第 1 页先单独拉：拿 TotalCount 决定还要翻几页
+    const first = await fetchPage(1);
+    if (first.rows.length === 0)
+      return first.rows;
+
+    // 需要的总页数：目标条数与接口存量取小（TotalCount 缺失时按首页行数估）
+    const total = first.totalCount ?? first.rows.length;
+    const maxPages = Math.min(
+      Math.ceil(wantRows / PAGE_SIZE),
+      Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    );
+
+    const collected = [...first.rows];
+    // 剩余页按波次并发（每波 CONCURRENCY 页），拉完为止
+    const restPages: number[] = [];
+    for (let p = 2; p <= maxPages; p++)
+      restPages.push(p);
+    for (let i = 0; i < restPages.length; i += CONCURRENCY) {
+      const wave = restPages.slice(i, i + CONCURRENCY);
+      const settled = await Promise.allSettled(wave.map(p => fetchPage(p)));
+      let shortPage = false;
+      for (const s of settled) {
+        if (s.status !== "fulfilled")
+          continue; // 单页失败不炸整体：已到手的页照常入库
+        collected.push(...s.value.rows);
+        // 不满一页说明后面没有更多数据了（TotalCount 不准时的兜底）
+        if (s.value.rows.length < PAGE_SIZE)
+          shortPage = true;
+      }
+      if (shortPage)
+        break;
+    }
+    return collected;
   }
   catch (err) {
     console.error(`[fund-data] 拉取基金 ${code} 净值失败：`, err);
@@ -669,9 +747,15 @@ export async function fetchIndexNav(
       = `https://push2his.eastmoney.com/api/qt/stock/kline/get`
         + `?secid=${encodeURIComponent(secid)}&fields1=f1,f2,f3`
         + `&fields2=f51,f52,f53&klt=101&fqt=0&beg=${sd}&end=${ed}`;
-    const resp = await fetchWithTimeout(url, {
-      headers: { Referer: "https://quote.eastmoney.com/" },
-    });
+    // push2his 会随机重置连接（本地实测 10 次挂 6 次，workerd 报
+    // "Network connection lost" 且自带 retryable:true），单发必抖。
+    // 重试 3 次 + 间隔递增，实测把成功率抬到 >98%；
+    // 仍失败则走既定降级（返回空数组，基准线不画，不阻塞详情页）。
+    const resp = await fetchWithRetry(
+      url,
+      { headers: { Referer: "https://quote.eastmoney.com/" } },
+      3,
+    );
     const json = (await resp.json()) as {
       data?: { klines?: string[] } | null;
     };

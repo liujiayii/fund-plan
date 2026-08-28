@@ -1,0 +1,185 @@
+/**
+ * 期五 · 移动端适配的唯一媒体查询出处（spec §4.4）。
+ *
+ * ⚠️ 全部规则包在 max-width: 767px 里（antd md=768 以下为移动端），
+ * 桌面零回归是本期硬门槛。**不要在组件里散写 @media** ——
+ * 「窄屏长什么样」只认这一个文件。
+ *
+ * 为什么是手写 CSS 文件而不是 UnoCSS 断点变体类：
+ *  - uno.gen.css 是 pnpm uno:build 的纯产物，手改必被覆盖；
+ *  - preflights.reset=false 意味着 UnoCSS 不产出任何全局样式；
+ *  - uno.config.ts 的自定义 extractor 只认 className="静态字符串"，
+ *    条件拼接的 className 提取不到（spec §4.4）。
+ *
+ * import 顺序（root.tsx）：antd reset → uno.gen.css → 本文件。
+ * 排最后才能覆盖工具类与 antd 组件类。
+ */
+
+/* ══════════ 1. 全局基线（spec §5）══════════ */
+
+@media (max-width: 767px) {
+  /* Content padding 24→12：所有溢出的放大器（spec §5.1）。
+     底部 56px 给 TabBar + 安全区 + 16px 呼吸（Task 4 落 TabBar 后生效） */
+  .fp-content {
+    padding: 12px 12px calc(56px + env(safe-area-inset-bottom) + 16px) !important;
+  }
+
+  /* Card body 24→16（spec §5.2）。全局覆盖 .ant-card-body 而非改
+     SectionCard 的 props —— SectionCard 刻意不透传 style/styles，
+     那个封装不开口子；token 又无法只按视口生效。
+     ⚠️ !important：antd cssinjs 运行时注入的优先级更高，不加盖不住 */
+  .ant-card-body {
+    padding: 16px !important;
+  }
+
+  /* ══════════ 2. 显隐工具类（spec §7.1）══════════ */
+
+  .fp-desktop {
+    display: none !important;
+  }
+
+  /* ══════════ 3. 通用滚动容器 ═══════════ */
+
+  /* Segmented / Pagination 等不换行不滚动的组件套这层（spec §9） */
+  .fp-h-scroll {
+    overflow-x: auto;
+    /* 隐藏滚动条但保留滚动能力；Firefox 走 scrollbar-width */
+    scrollbar-width: none;
+  }
+  .fp-h-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Footer 让位：Footer 在 Content 外，.fp-content 的让位盖不到它，
+     不补这条滚到底时 TabBar 会盖住 © 行（GlobalFooter 自身底距仅 24px） */
+  .fp-footer {
+    margin-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+
+  /* ══════════ 5. FundListItem 窄屏两段式（spec §8）══════════ */
+
+  /* 名称占第一行（不再被右侧 nowrap 挤到 50px），数值+操作第二行。
+     gap 要 !important：根 div 的 gap:16 是 inline style，不加盖不过（同 .fp-content）。
+     justify-content 让第二段靠右，对齐桌面「数值贴着操作区」的观感 ——
+     没有数值只有操作区的行（funds 搜索结果）也不至于吊在最左 */
+  .fp-fli {
+    flex-wrap: wrap;
+    gap: 8px !important;
+    justify-content: flex-end;
+  }
+  .fp-fli-main {
+    /* basis 100% 强制独占第一行；inline 的 flex:1（basis 0）不会换行，必须盖掉 */
+    flex: 1 1 100% !important;
+    min-width: 0;
+  }
+  .fp-fli-side {
+    /* 允许收缩：OrderList 的长副值（min-content 约 380px）能折行而不是顶穿页面。
+       overflow-wrap 用 anywhere 而非 break-word：anywhere 同时压低 min-content
+       计算，flex 收缩才收得动（break-word 下 flex 项仍按原 min-content 拒绝收缩） */
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* 收益日历窄屏：格子方形化 + 收紧内距与字号（spec §9）。
+     inline 是桌面值，这里用 !important 盖（与 .fp-content 同手法） */
+  .fp-cal-cell {
+    aspect-ratio: 1 / 1;
+    min-height: 36px !important;
+    padding: 2px 2px !important;
+  }
+  .fp-cal-pnl {
+    font-size: 10px !important;
+  }
+
+  /* 顶栏窄屏：Menu（flex:1 撑开项）隐藏后 logo 与登录态聚拢左侧，
+     space-between 让登录态回到右侧（与底栏形态对齐） */
+  .fp-header {
+    justify-content: space-between;
+  }
+}
+
+/* ══════════ 4. 底部 TabBar（spec §6）══════════ */
+
+/* 窄屏常驻、768px+ 由 .fp-mobile 隐藏（规则在本文件末尾） */
+.fp-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  /* 色值手写字面量而非引 JS 的 COLOR：CSS 文件 import 不进 JS 模块图，
+     引变量只能靠构建期工具（postcss-import + JS 变量），为一个文件引构建链不值。
+     ⚠️ 代价：改 theme.ts 的色值时本块 4 处（card/border/textSecondary/primary）要同改 */
+  background: #fff; /* = COLOR.card */
+  border-top: 1px solid #eef0f4; /* = COLOR.border */
+  /* iPhone 底部安全区：没这行最后一格标签被系统横条压住 */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.fp-tabbar-item {
+  /* 4 项均分：320px ÷ 4 = 80px/格（spec §6.1 的数字依据） */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 0 4px;
+  min-height: 48px; /* 触控区 ≥44px（WCAG）：图标 22 + gap 2 + 标签 14 + padding */
+  color: #8a9099; /* = COLOR.textSecondary */
+  text-decoration: none;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.fp-tabbar-item.active {
+  color: #1677ff; /* = COLOR.primary */
+  font-weight: 500;
+}
+
+.fp-tabbar-item .anticon {
+  font-size: 22px;
+}
+
+/* 767px 以下隐藏、768px+ 恢复 —— 与上面 .fp-desktop 的 !important 成对使用。
+   这里其实是普通类选择器（specificity 0,1,0），并不比工具类更高，
+   真正的胜负手是 import 顺序：本文件在 root.tsx 里排最后、同 specificity 后来者胜；
+   再补 !important 兜底，防某个 display 工具类（如 hidden）把 display 反杀回来。
+   桌面下 antd 不给普通 <div>/<nav> 元素设 display，antd 侧无需担心 */
+@media (min-width: 768px) {
+  .fp-mobile {
+    display: none !important;
+  }
+
+  /* 桌面恢复 nowrap：FundListItem 删了 inline nowrap（它造成窄屏顶穿），
+     桌面金额断行难看，在这里补回 */
+  .fp-fli-side {
+    white-space: nowrap;
+  }
+}
+
+/* ══════════ 6. 图表高度（容器定高，G2 autoFit 跟随）══════════ */
+
+/* 基准高度（桌面）。⚠️ 与 app/components/ui/chart.ts 的 CHART_HEIGHT 是
+   镜像常量，改的时候两处同改（CSS 引不进 JS 模块，与 TabBar 色值同取舍）。
+   :last-child 只命中图区层——裸 > div 会把 PeriodTabs 的外包 div
+   也定高，周期条下方多出大块死空白（Task 11 review 修正）。
+   图表 config 刻意不传 height：G2 sizeOf 的优先级是「显式 height 压过
+   容器尺寸」（@antv/g2 lib/api/utils.js 的 sizeOf）——config 传了 height，
+   autoFit 的容器高度就被无视，CSS 压容器 canvas 也不跟随 → canvas 竖向
+   溢出容器戳穿卡片。不传 height 时 autoFit 读容器 clientHeight，
+   高度由本节 CSS 全权管理 */
+.fp-chart-box > div:last-child {
+  height: 320px;
+}
+
+@media (max-width: 767px) {
+  /* 窄屏 320 高在 319px 内容宽下宽高比倒挂，曲线被竖向拉伸；降到 220（spec §9）。
+     !important 同时压过骨架 div 的 inline height: CHART_HEIGHT——
+     加载期间骨架与成图同高，切换不跳 */
+  .fp-chart-box > div:last-child {
+    height: 220px !important;
+  }
+}

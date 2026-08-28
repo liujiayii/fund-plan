@@ -48,7 +48,8 @@ export function TxList({ txs }: TxListProps) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 16,
+              // 8px：319px 内容宽下 Tag+备注 与右侧金额的挤压是既有缺陷，两端同改
+              gap: 8,
               padding: "12px 0",
               borderBottom:
                 i === txs.length - 1 ? undefined : `1px solid ${COLOR.border}`,

@@ -59,15 +59,18 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
                   orders={orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
                 />
                 {orders.length > PAGE_SIZE && (
-                  <Pagination
-                    align="end"
-                    current={page}
-                    pageSize={PAGE_SIZE}
-                    total={orders.length}
-                    showSizeChanger={false}
-                    style={{ marginTop: 16 }}
-                    onChange={setPage}
-                  />
+                  // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
+                  <div className="fp-h-scroll" style={{ marginTop: 16 }}>
+                    <Pagination
+                      align="end"
+                      responsive
+                      current={page}
+                      pageSize={PAGE_SIZE}
+                      total={orders.length}
+                      showSizeChanger={false}
+                      onChange={setPage}
+                    />
+                  </div>
                 )}
               </>
             )}

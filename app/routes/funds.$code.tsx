@@ -10,6 +10,7 @@ import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
+import { runBatch } from "~/db/client";
 import { account, fundNav } from "~/db/schema";
 import { navToDisplay, rateToPercent } from "~/domain/money";
 import { calcPeriodReturns } from "~/domain/performance";
@@ -50,23 +51,39 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw new Response(`没找到基金 ${code}`, { status: 404 });
   }
 
-  // 净值：库里没有就拉一批回来（首访 400 天，覆盖近 1 年阶段涨幅）
+  // 净值：历史残缺就回填一批（首访 400 天，覆盖近 1 年阶段涨幅）。
+  //
+  // ⚠️ 条件刻意不是「库里为空」而是「少于 60 条」：settle 的 cron 每天只拉
+  // 最近 30 条做滑动窗口同步，任何基金只要有持仓/待确认单，库在被人类访问
+  // 之前就已有数据——写 length === 0 的话回填永远不触发，库里的净值就永远
+  // 只有薄薄一层滑动窗口（实测 14 只基金全是 20~23 条），图表与近 1 年
+  // 阶段涨幅全都残缺。60 ≈ 一个季度交易日，低于它必是残缺历史；
+  // 回填一次后库里就有完整历史，条件自然不再命中（每基金一次性）。
   let series = await getNavSeries(db, code);
-  if (series.length === 0) {
+  if (series.length < 60) {
     const rows = await fetchNavHistory(env, code, 400);
-    for (const r of rows) {
-      await db
-        .insert(fundNav)
-        .values({
-          fundCode: code,
-          navDate: r.navDate,
-          unitNav: r.unitNav,
-          accNav: r.accNav,
-          growthRate: r.growthRate,
-        })
-        .onConflictDoNothing();
+    if (rows.length > 0) {
+      // 400 行走 batch 一次提交：逐条 await 是 400 次 D1 往返（约 1.2s），
+      // 会把触发回填的那次页面访问拖到超时边缘。onConflictDoNothing 保持
+      // 「已存在的日期不动」语义（与 cron 的 upsert 覆盖策略不同——
+      // 回填只补洞，不覆盖 cron 已写的当日新值）。
+      await runBatch(
+        db,
+        rows.map(r =>
+          db
+            .insert(fundNav)
+            .values({
+              fundCode: code,
+              navDate: r.navDate,
+              unitNav: r.unitNav,
+              accNav: r.accNav,
+              growthRate: r.growthRate,
+            })
+            .onConflictDoNothing(),
+        ),
+      );
+      series = await getNavSeries(db, code);
     }
-    series = await getNavSeries(db, code);
   }
 
   // 登录用户才需要现金余额（买入抽屉要用）与自选态
@@ -183,7 +200,10 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             <Tag color={f.status.includes("开放") ? "blue" : "default"}>{f.status}</Tag>
           </Space>
 
-          <Space size={48} wrap style={{ marginTop: 8 }}>
+          {/* [16,16]：统计行间距降档（Task 10）。原 48 横竖同值，窄屏折行后 rowGap 48
+              把 5 个数字撑成 535px 高（spec §9）；桌面窄窗口同样受害。
+              降到 16 后桌面多数仍一行放下，折行时间距也合理 */}
+          <Space size={[16, 16]} wrap style={{ marginTop: 8 }}>
             <StatBig
               label={`单位净值${latest ? `（${latest.navDate}）` : ""}`}
               value={latest ? navToDisplay(latest.unitNav) : "—"}
@@ -301,24 +321,44 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
       {loaderData.position.length > 0 && (
         <SectionCard title="重仓股（前 10）">
-          <Table
-            size="small"
-            pagination={false}
-            rowKey="code"
-            dataSource={loaderData.position.slice(0, 10)}
-            columns={[
-              { title: "代码", dataIndex: "code" },
-              { title: "简称", dataIndex: "name" },
-              {
-                title: "占净值比",
-                dataIndex: "ratio",
-                align: "right",
-                render: (v: number) => rateToPercent(v),
-              },
-              { title: "行业", dataIndex: "industry" },
-              { title: "增减持", dataIndex: "changeType" },
-            ]}
-          />
+          {/* 桌面视图：原 5 列 Table 原样保留（Task 8 双渲染，列不动） */}
+          <div className="fp-desktop">
+            <Table
+              size="small"
+              pagination={false}
+              rowKey="code"
+              dataSource={loaderData.position.slice(0, 10)}
+              columns={[
+                { title: "代码", dataIndex: "code" },
+                { title: "简称", dataIndex: "name" },
+                {
+                  title: "占净值比",
+                  dataIndex: "ratio",
+                  align: "right",
+                  render: (v: number) => rateToPercent(v),
+                },
+                { title: "行业", dataIndex: "industry" },
+                { title: "增减持", dataIndex: "changeType" },
+              ]}
+            />
+          </div>
+          {/* 窄屏：降级成 DataRow，字段不缺——代码/简称并进标题行，
+              占净值比/行业/增减持各占一行（同 SellPanel 的批次降级） */}
+          <div className="fp-mobile">
+            {loaderData.position.slice(0, 10).map(p => (
+              <div key={p.code} style={{ marginBottom: 8 }}>
+                <Text strong style={{ fontSize: 13 }}>
+                  {p.name}
+                  （
+                  {p.code}
+                  ）
+                </Text>
+                <DataRow label="占净值比" value={rateToPercent(p.ratio)} mono />
+                <DataRow label="行业" value={p.industry} />
+                <DataRow label="增减持" value={p.changeType} last />
+              </div>
+            ))}
+          </div>
         </SectionCard>
       )}
 

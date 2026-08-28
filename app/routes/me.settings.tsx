@@ -158,7 +158,8 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
       </SectionCard>
 
       <SectionCard title="修改密码">
-        <fetcher.Form method="post" style={{ maxWidth: 420 }}>
+        {/* min(420px, 100%)：显式兜底窄屏（Task 10），不再依赖外层 padding 的巧合 */}
+        <fetcher.Form method="post" style={{ maxWidth: "min(420px, 100%)" }}>
           <input type="hidden" name="intent" value="changePassword" />
           <Form.Item label="当前密码" layout="vertical">
             <Input.Password name="oldPassword" autoComplete="current-password" />

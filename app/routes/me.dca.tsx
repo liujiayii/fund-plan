@@ -2,11 +2,11 @@ import type { Route } from "./+types/me.dca";
 import {
   Alert,
   Button,
+  Dropdown,
   Form,
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Select,
   Space,
   Typography,
@@ -165,7 +165,8 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
       )}
 
       <SectionCard>
-        <Space size={48} wrap>
+        {/* [16,16]：统计行间距降档（Task 10），窄屏折行后 rowGap 不再是 48 */}
+        <Space size={[16, 16]} wrap>
           <StatBig label="计划总数" value={plans.length} suffix="个" size={24} />
           <StatBig label="执行中" value={activeCount} suffix="个" size={24} />
           <StatBig
@@ -197,37 +198,53 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
           : (
               <DcaPlanList
                 plans={plans}
+                // 行操作收进「···」Dropdown（Task 10）：行内「暂停/删除」两按钮
+                // 在 375px 挤不下，删除确认也从行内 Popconfirm 移到菜单里的
+                // Modal.confirm（点两步进删除）。桌面窄窗口同款，一处实现
                 renderActions={p => (
-                  <Space>
-                    <fetcher.Form method="post" style={{ display: "inline" }}>
-                      <input type="hidden" name="intent" value="toggle" />
-                      <input type="hidden" name="id" value={p.id} />
-                      <input
-                        type="hidden"
-                        name="status"
-                        value={p.status === "active" ? "paused" : "active"}
-                      />
-                      <Button size="small" htmlType="submit">
-                        {p.status === "active" ? "暂停" : "启用"}
-                      </Button>
-                    </fetcher.Form>
-                    <Popconfirm
-                      title="确定删除这个定投计划？"
-                      description="已产生的订单和持仓不受影响。"
-                      okText="删除"
-                      okButtonProps={{ danger: true }}
-                      cancelText="取消"
-                      onConfirm={() =>
-                        fetcher.submit(
-                          { intent: "delete", id: String(p.id) },
-                          { method: "post" },
-                        )}
-                    >
-                      <Button size="small" danger>
-                        删除
-                      </Button>
-                    </Popconfirm>
-                  </Space>
+                  <Dropdown
+                    menu={{
+                      items: [
+                        {
+                          key: "toggle",
+                          label: p.status === "active" ? "暂停" : "启用",
+                        },
+                        {
+                          key: "delete",
+                          label: "删除",
+                          danger: true,
+                        },
+                      ],
+                      onClick: ({ key }) => {
+                        if (key === "toggle") {
+                          fetcher.submit(
+                            {
+                              intent: "toggle",
+                              id: String(p.id),
+                              status: p.status === "active" ? "paused" : "active",
+                            },
+                            { method: "post" },
+                          );
+                        }
+                        else if (key === "delete") {
+                          Modal.confirm({
+                            title: "确定删除这个定投计划？",
+                            content: "已产生的订单和持仓不受影响。",
+                            okText: "删除",
+                            okButtonProps: { danger: true },
+                            cancelText: "取消",
+                            onOk: () =>
+                              fetcher.submit(
+                                { intent: "delete", id: String(p.id) },
+                                { method: "post" },
+                              ),
+                          });
+                        }
+                      },
+                    }}
+                  >
+                    <Button size="small">···</Button>
+                  </Dropdown>
                 )}
               />
             )}

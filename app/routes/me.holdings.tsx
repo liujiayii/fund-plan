@@ -46,7 +46,8 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
       </Title>
 
       <SectionCard>
-        <Space size={48} wrap>
+        {/* [16,16]：统计行间距降档（Task 10），窄屏折行后 rowGap 不再是 48 */}
+        <Space size={[16, 16]} wrap>
           {/* ⚠️ 这里刻意不传 size，吃 StatBig 的 32px 默认值。
               StatBig 的规则是「主位 32、次位 24」—— 那是按**角色**定的，不是按标签定的。
               /me 与 /master 上主位是「总资产」，所以那两页的「持仓市值」是次位 24；

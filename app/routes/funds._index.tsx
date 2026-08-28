@@ -117,22 +117,46 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
       <SectionCard
         title="基金排行榜"
         extra={(
-          <Space size="middle">
-            <Segmented
-              size="small"
-              value={type}
-              onChange={v => onTabChange(String(v), "type")}
-              options={FUND_TYPE_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-            />
-            <Segmented
-              size="small"
-              value={period}
-              onChange={v => onTabChange(String(v), "period")}
-              options={RANK_PERIOD_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-            />
-          </Space>
+          /* 桌面那份筛选器：767px 以下由 .fp-desktop 整体隐藏（与卡内 .fp-mobile 份成对） */
+          <div className="fp-desktop">
+            <Space size="middle">
+              <Segmented
+                size="small"
+                value={type}
+                onChange={v => onTabChange(String(v), "type")}
+                options={FUND_TYPE_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+              />
+              <Segmented
+                size="small"
+                value={period}
+                onChange={v => onTabChange(String(v), "period")}
+                options={RANK_PERIOD_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+              />
+            </Space>
+          </div>
         )}
       >
+        {/* 筛选器双渲染：窄屏显示这份（.fp-mobile），桌面显示 extra 那份（.fp-desktop）。
+            Card 标题行是不换行的 flex，两个 Segmented 合计约 454px 在窄屏必然顶穿（spec §9），
+            所以窄屏挪到卡内首行并套 .fp-h-scroll 可横滑。
+            两份读同一份 URL 态（loader 的 type/period）、走同一个 onTabChange，无逻辑分叉 */}
+        <div
+          className="fp-h-scroll fp-mobile"
+          style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}
+        >
+          <Segmented
+            size="small"
+            value={type}
+            onChange={v => onTabChange(String(v), "type")}
+            options={FUND_TYPE_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+          />
+          <Segmented
+            size="small"
+            value={period}
+            onChange={v => onTabChange(String(v), "period")}
+            options={RANK_PERIOD_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+          />
+        </div>
         {rank.length === 0
           ? <EmptyState description="暂无排行数据，接口可能不可用" />
           : (

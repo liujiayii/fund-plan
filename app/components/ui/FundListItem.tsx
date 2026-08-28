@@ -57,6 +57,7 @@ export function FundListItem(props: FundListItemProps) {
 
   return (
     <div
+      className="fp-fli"
       style={{
         display: "flex",
         alignItems: "center",
@@ -65,8 +66,9 @@ export function FundListItem(props: FundListItemProps) {
         borderBottom: last ? undefined : `1px solid ${COLOR.border}`,
       }}
     >
-      {/* 左侧：名称与标识。minWidth: 0 让长名字能被 flex 压缩而不撑破布局 */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      {/* 左侧：名称与标识。minWidth: 0 让长名字能被 flex 压缩而不撑破布局。
+          fp-fli-main 是窄屏两段式的锚点（responsive.css §5，spec §8） */}
+      <div className="fp-fli-main" style={{ flex: 1, minWidth: 0 }}>
         {/*
           ⚠️ <a> 必须同时包住名称与代码两行。
           旧表格的写法是 <a>{name}<br/><Text>{code}</Text></a> —— 两行都可点。
@@ -92,9 +94,12 @@ export function FundListItem(props: FundListItemProps) {
         )}
       </div>
 
-      {/* 右侧：主副数值。whiteSpace: nowrap 防止金额被折行 */}
+      {/* 右侧：主副数值。刻意不写 inline nowrap —— 它正是 OrderList 长副值
+          （min-content 约 380px）在窄屏顶穿整页的根因（spec §8）。
+          桌面 768px+ 由 responsive.css 的 .fp-fli-side 补回 nowrap
+          （金额断行难看）；窄屏允许收缩折行 */}
       {(primary !== undefined || secondary !== undefined) && (
-        <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+        <div className="fp-fli-side" style={{ textAlign: "right" }}>
           {primary !== undefined && <div>{primary}</div>}
           {secondary !== undefined && <div style={{ marginTop: 2 }}>{secondary}</div>}
         </div>

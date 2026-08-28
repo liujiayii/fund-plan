@@ -53,7 +53,9 @@ export default function Register() {
   return (
     // 定位交给外层 div：SectionCard 刻意不透传 className / style，
     // 但注册卡要窄、要居中，所以宽度与外边距在这一层给
-    <div style={{ maxWidth: 420, margin: "48px auto" }}>
+    // min(420px, 100%)：显式兜底窄屏（Task 10）——原先只写 420，
+    // 依赖「外层 Content padding 恰好小于 420」的巧合，现在不依赖了
+    <div style={{ maxWidth: "min(420px, 100%)", margin: "48px auto" }}>
       <SectionCard>
         <Title level={3}>注册</Title>
         <Paragraph type="secondary">
