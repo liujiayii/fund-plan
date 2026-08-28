@@ -14,6 +14,7 @@ import {
   useLoaderData,
   useLocation,
 } from "react-router";
+import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { ANTD_TOKEN, COLOR } from "~/theme";
@@ -40,16 +41,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { user };
 }
 
-/** 顶部导航菜单项 */
-const NAV_ITEMS = [
-  { key: "/", label: "首页" },
-  { key: "/master", label: "主理人的盘" },
-  { key: "/funds", label: "基金" },
-  // ⚠️ 必须排在 /me 之前：selectedKey 用 startsWith 取首个命中，
-  // /me/watchlist 若在 /me 之后会被 /me 先吃掉，导致自选页高亮「我的」
-  { key: "/me/watchlist", label: "自选" },
-  { key: "/me", label: "我的" },
-];
+// 一级导航项定义已迁至 ~/domain/nav（顶栏与移动端底部 TabBar 共用，顺序敏感）
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -80,11 +72,8 @@ export default function App() {
   // 仍用 form post 而非 client fetch，是为了沿用服务端清 session + 重定向的标准链路。
   const logoutFormRef = useRef<HTMLFormElement>(null);
 
-  // 高亮当前所在的一级导航
-  const selectedKey
-    = NAV_ITEMS.filter(i => i.key !== "/" && location.pathname.startsWith(i.key))
-      .map(i => i.key)
-      .at(0) ?? (location.pathname === "/" ? "/" : "");
+  // 高亮当前所在的一级导航（顶栏与底部 TabBar 共用同一份纯函数）
+  const selectedKey = resolveSelectedKey(location.pathname, NAV_ITEMS);
 
   // 用户名首字作为头像文字（中文取第一字，英文取首字母大写），
   // 因 DB 未存头像 URL，用品牌蓝底白字字母头像是最接近消费级 App 的做法。
@@ -119,21 +108,26 @@ export default function App() {
             style={{
               color: COLOR.primary,
               fontWeight: 700,
-              fontSize: 18,
+              fontSize: "clamp(16px, 4vw, 18px)",
               whiteSpace: "nowrap",
             }}
           >
             模拟基金
           </a>
-          <Menu
-            mode="horizontal"
-            selectedKeys={selectedKey ? [selectedKey] : []}
-            items={NAV_ITEMS.map(i => ({
-              key: i.key,
-              label: <a href={i.key}>{i.label}</a>,
-            }))}
-            style={{ flex: 1, minWidth: 0, borderBottom: "none" }}
-          />
+          {/* 桌面顶栏导航。窄屏整体隐藏（display:none），职责移交底部 TabBar ——
+              用 CSS 隐藏而非条件渲染：条件渲染需要 JS 断点，SSR 下必闪一帧（spec §6.2）。
+              隐藏的 DOM 还在，代价是几个 <li>，可接受 */}
+          <div className="fp-desktop" style={{ flex: 1, minWidth: 0 }}>
+            <Menu
+              mode="horizontal"
+              selectedKeys={selectedKey ? [selectedKey] : []}
+              items={NAV_ITEMS.map(i => ({
+                key: i.key,
+                label: <a href={i.key}>{i.label}</a>,
+              }))}
+              style={{ minWidth: 0, borderBottom: "none" }}
+            />
+          </div>
           {/* 登录态区域：已登录显示头像+用户名 Dropdown（登出入口收进菜单），
               游客显示登录/注册。用 Dropdown 取代原先「昵称 + 登出按钮」并排，
               避免操作按钮贴着昵称的别扭观感，也更贴近消费级 App 习惯。 */}
