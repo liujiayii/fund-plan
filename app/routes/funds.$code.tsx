@@ -301,24 +301,44 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
       {loaderData.position.length > 0 && (
         <SectionCard title="重仓股（前 10）">
-          <Table
-            size="small"
-            pagination={false}
-            rowKey="code"
-            dataSource={loaderData.position.slice(0, 10)}
-            columns={[
-              { title: "代码", dataIndex: "code" },
-              { title: "简称", dataIndex: "name" },
-              {
-                title: "占净值比",
-                dataIndex: "ratio",
-                align: "right",
-                render: (v: number) => rateToPercent(v),
-              },
-              { title: "行业", dataIndex: "industry" },
-              { title: "增减持", dataIndex: "changeType" },
-            ]}
-          />
+          {/* 桌面视图：原 5 列 Table 原样保留（Task 8 双渲染，列不动） */}
+          <div className="fp-desktop">
+            <Table
+              size="small"
+              pagination={false}
+              rowKey="code"
+              dataSource={loaderData.position.slice(0, 10)}
+              columns={[
+                { title: "代码", dataIndex: "code" },
+                { title: "简称", dataIndex: "name" },
+                {
+                  title: "占净值比",
+                  dataIndex: "ratio",
+                  align: "right",
+                  render: (v: number) => rateToPercent(v),
+                },
+                { title: "行业", dataIndex: "industry" },
+                { title: "增减持", dataIndex: "changeType" },
+              ]}
+            />
+          </div>
+          {/* 窄屏：降级成 DataRow，字段不缺——代码/简称并进标题行，
+              占净值比/行业/增减持各占一行（同 SellPanel 的批次降级） */}
+          <div className="fp-mobile">
+            {loaderData.position.slice(0, 10).map(p => (
+              <div key={p.code} style={{ marginBottom: 8 }}>
+                <Text strong style={{ fontSize: 13 }}>
+                  {p.name}
+                  （
+                  {p.code}
+                  ）
+                </Text>
+                <DataRow label="占净值比" value={rateToPercent(p.ratio)} mono />
+                <DataRow label="行业" value={p.industry} />
+                <DataRow label="增减持" value={p.changeType} last />
+              </div>
+            ))}
+          </div>
         </SectionCard>
       )}
 

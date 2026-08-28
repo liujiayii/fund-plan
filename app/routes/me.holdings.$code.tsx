@@ -13,6 +13,7 @@ import { useFetcher } from "react-router";
 import { BuyPanel } from "~/components/BuyPanel";
 import { OrderList } from "~/components/OrderList";
 import { SellPanel } from "~/components/SellPanel";
+import { DataRow } from "~/components/ui/DataRow";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
@@ -109,7 +110,9 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Space align="baseline">
+      {/* wrap：窄屏（375px）下基金名 + 代码 + 标签 + 返回按钮一行放不下，
+          允许换行避免把标题挤成竖排（Task 8） */}
+      <Space align="baseline" wrap>
         <Title level={3} style={{ margin: 0 }}>{d.fundName}</Title>
         <Text type="secondary">{d.fundCode}</Text>
         {d.fundType && <Tag>{d.fundType}</Tag>}
@@ -137,40 +140,71 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
               <EmptyState description="无在持批次" />
             )
           : (
-              <Table
-                size="small"
-                pagination={false}
-                rowKey="id"
-                dataSource={d.lots}
-                columns={[
-                  { title: "确认日", dataIndex: "confirmDate" },
-                  {
-                    title: "份额",
-                    dataIndex: "sharesScaled",
-                    align: "right",
-                    render: (v: number) => sharesToDisplay(v),
-                  },
-                  {
-                    title: "成本",
-                    dataIndex: "costCents",
-                    align: "right",
-                    render: (v: number) => `${fmtYuan(v)} 元`,
-                  },
-                  {
-                    title: "持有天数",
-                    key: "holdDays",
-                    align: "right",
-                    render: (_, l) => `${countDays(l.confirmDate, today)} 天`,
-                  },
-                  {
-                    title: "当前费率档",
-                    key: "rate",
-                    align: "right",
-                    // 按今天的持有天数查档，告诉用户「这批现在赎回按几费率」
-                    render: (_, l) => rateToPercent(findRedeemRate(d.tiers, countDays(l.confirmDate, today))),
-                  },
-                ]}
-              />
+              <>
+                {/* 桌面视图：原 5 列 Table 原样保留（Task 8 双渲染，列不动） */}
+                <div className="fp-desktop">
+                  <Table
+                    size="small"
+                    pagination={false}
+                    rowKey="id"
+                    dataSource={d.lots}
+                    columns={[
+                      { title: "确认日", dataIndex: "confirmDate" },
+                      {
+                        title: "份额",
+                        dataIndex: "sharesScaled",
+                        align: "right",
+                        render: (v: number) => sharesToDisplay(v),
+                      },
+                      {
+                        title: "成本",
+                        dataIndex: "costCents",
+                        align: "right",
+                        render: (v: number) => `${fmtYuan(v)} 元`,
+                      },
+                      {
+                        title: "持有天数",
+                        key: "holdDays",
+                        align: "right",
+                        render: (_, l) => `${countDays(l.confirmDate, today)} 天`,
+                      },
+                      {
+                        title: "当前费率档",
+                        key: "rate",
+                        align: "right",
+                        // 按今天的持有天数查档，告诉用户「这批现在赎回按几费率」
+                        render: (_, l) => rateToPercent(findRedeemRate(d.tiers, countDays(l.confirmDate, today))),
+                      },
+                    ]}
+                  />
+                </div>
+                {/* 窄屏：批次降级成 DataRow。它是 FIFO 阶梯费率可见性的载体
+                    （share_lot 存在的唯一理由），不能只横滚（spec §7）。
+                    五字段一个不少：确认日并进标题行「第 N 批 · 日期」，
+                    其余四项各占一行 DataRow */}
+                <div className="fp-mobile">
+                  {d.lots.map((l, i) => (
+                    <div key={l.id} style={{ marginBottom: 8 }}>
+                      <Text strong style={{ fontSize: 13 }}>
+                        第
+                        {i + 1}
+                        {" "}
+                        批 ·
+                        {l.confirmDate}
+                      </Text>
+                      <DataRow label="份额" value={`${sharesToDisplay(l.sharesScaled)} 份`} mono />
+                      <DataRow label="成本" value={`${fmtYuan(l.costCents)} 元`} mono />
+                      <DataRow label="持有天数" value={`${countDays(l.confirmDate, today)} 天`} mono />
+                      <DataRow
+                        label="当前费率档"
+                        value={rateToPercent(findRedeemRate(d.tiers, countDays(l.confirmDate, today)))}
+                        mono
+                        last
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
         <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
           赎回按批次先进先出，每批按各自持有天数查费率档——
