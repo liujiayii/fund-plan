@@ -23,3 +23,12 @@ trustPolicy: no-downgrade
 #   注意：这里精确锁到版本号，将来 semver 出新版本仍会重新走信任检查。
 trustPolicyExclude:
   - semver@6.3.1
+# 依赖定向覆盖：把 @esbuild-kit/core-utils 内嵌的 esbuild 钉到 ≥0.25。
+# 背景：drizzle-kit → @esbuild-kit/esm-loader → core-utils 锁着 esbuild@0.18.20
+#   （Dependabot 中危 GHSA：esbuild ≤0.24.2 的 dev server 漏洞）。
+#   本项目从不启动 esbuild dev server、esbuild 不进生产 bundle，实际暴露面为零——
+#   但物理清除有洞版本比解释「不用管」省事，也免得每个 PR 顶着警报。
+# 为什么不用全局 override（"esbuild": "^0.25"）：会把 Vite 用的 0.28.2 一并降级。
+# pnpm 11 的 overrides 只认这里，package.json 的 pnpm 段已不读（踩过：写那儿不生效）。
+overrides:
+  "@esbuild-kit/core-utils>esbuild": ^0.25.0
