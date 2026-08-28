@@ -143,7 +143,8 @@ function ProfitCalendarInner({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
+          // minmax(0,1fr) 强制均分：1fr 的 min-width 默认 auto，长数字会把列宽撑爆
+          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
           gap: 4,
         }}
       >
@@ -191,8 +192,10 @@ function ProfitCalendarInner({
                 position: "relative",
                 background: bg,
                 borderRadius: 6,
-                minHeight: 44,
-                padding: "4px 6px",
+                // 方形格子：宽随 7 列均分自适应，aspect-ratio 保证不塌成扁条
+                aspectRatio: "1 / 1",
+                minHeight: 36,
+                padding: "2px 2px",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
@@ -214,7 +217,8 @@ function ProfitCalendarInner({
                 <div
                   style={{
                     fontFamily: NUM_FONT,
-                    fontSize: 11,
+                    // 10px 是 319px 内容宽下「+1234」完整显示的安全字号
+                    fontSize: 10,
                     color: pnlFg,
                     textAlign: "center",
                     lineHeight: 1.2,
