@@ -2,10 +2,10 @@
 
 > ## 状态：已完成 · 2026-08-28
 >
-> 实现区间 `fbf1c7c..d0958dc`（领域层 → service → 页面 → 首页引流）
+> 实现区间 `fbf1c7c..079ce5e`（领域层 → service → 页面 → 首页引流）
 >
 > - **下方复选框全部未勾，但工作已完成。** 别把「未勾」读成「未做」，勿照此重新施工。
-> - ⚠️ 施工偏离记录：计划测试稿有 3 处笔误（rankLeaderboard 直接喂原始输入、未使用的 roundInt import、jsx 单行插值违反 lint），均由实施者修正；Task 2 注释「与 getPortfolio 完全一致」因上游 bug（portfolio-service.ts:115 兜底公式缺 ×100，无净值持仓市值低估百倍）改为如实口径描述，上游 bug 待另开修复任务。spec §4.3 原要求窄屏用 fp-h-scroll 包表格，实现改用 flex 列表（不横向溢出，更好），未用 fp-h-scroll。
+> - ⚠️ 施工偏离记录：计划测试稿有 3 处笔误（rankLeaderboard 直接喂原始输入、未使用的 roundInt import、jsx 单行插值违反 lint），均由实施者修正；Task 2 注释「与 getPortfolio 完全一致」因上游 bug（portfolio-service.ts:115 兜底公式缺 ×100，无净值持仓市值低估百倍）改为如实口径描述，上游 bug 待另开修复任务。spec §4.3 原要求窄屏用 fp-h-scroll 包表格，实现改用 flex 列表（不横向溢出，更好），未用 fp-h-scroll。终审后补第 5 查（pending 买单在途资金计入总资产），排序改单趟扫描。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

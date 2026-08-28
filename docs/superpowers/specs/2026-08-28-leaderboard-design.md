@@ -75,6 +75,8 @@ interface LeaderboardEntryInput {
   /** 持仓市值合计（分），由 service 用最新净值算好 */
   marketValueCents: number;
   cashCents: number;
+  /** 在途资金（分）——已冻结未撮合的买单金额 */
+  inFlightCashCents: number;
   initialCashCents: number;
   totalCheckinCents: number;
   /** 是否有过 confirmed 订单（门槛） */
@@ -82,7 +84,7 @@ interface LeaderboardEntryInput {
 }
 
 interface LeaderboardEntry extends LeaderboardEntryInput {
-  totalAssetCents: number;   // 市值 + 现金
+  totalAssetCents: number;   // 市值 + 现金 + 在途
   totalPnlCents: number;     // 总资产 − 累计入金
   totalPnlRate: number;      // 总收益 ÷ 累计入金（普通小数）
   rank: number;              // 名次，由 rankLeaderboard 填
@@ -100,13 +102,14 @@ function rankLeaderboard(entries: LeaderboardEntry[], by: 'rate' | 'pnl')
 
 ### 4.2 服务层 `app/services/leaderboard-service.ts`
 
-`getLeaderboard(db): Promise<LeaderboardRow[]>`，四次查询：
+`getLeaderboard(db): Promise<LeaderboardRow[]>`，五次查询：
 
 1. `user` + `account` 联查全量（用户名、现金、initialCash、totalCheckin）
 2. `holding` 全量（按 userId 分组求市值素材：份额 × 最新净值，无净值用成本兜底
    ——与 getPortfolio 同款兜底，不另立口径）
 3. `latestNavMap(db, codes)` 一次取所有涉及基金的最新净值（复用现成函数）
 4. `orders` 聚合出「哪些 userId 有过 confirmed 订单」
+5. `orders` 的 pending 买单 amount 按 userId 聚合（在途资金，计入总资产）
 
 不抛错：查不到数据返回空数组，页面渲染空态。模拟盘用户量小，全量内存计算即可，
 不做 KV 缓存（KV 写入 1000 次/天是最紧额度，别去挤）也不加 cron 物化。
