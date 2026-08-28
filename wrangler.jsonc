@@ -6,7 +6,14 @@
   // nodejs_compat：Drizzle / decimal.js 等库需要部分 Node 内建模块垫片
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true
+    }
   },
   // 运行时放置：智能（smart）——wrangler 按 Worker 实际访问的数据自动就近路由，
   // 减少跨区往返。务必写在配置里：Dashboard 手改的 placement 会被下次 `wrangler deploy`
