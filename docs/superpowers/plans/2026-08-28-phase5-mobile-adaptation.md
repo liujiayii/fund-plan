@@ -1,5 +1,17 @@
 # 期五 · 移动端适配 实施计划
 
+> ## 状态：已施工 · 2026-08-28
+>
+> 实现区间 `80850fb..8cb7add`（11 个 Task commit + 终审修正波 `8cb7add`）
+>
+> - **下方复选框全部未勾，但工作已完成。** 本计划按 commit 跟踪进度，不靠勾选框。
+>   别把「未勾」读成「未做」，勿照此重新施工。
+> - 逐 Task 台账与终审记录在 `.superpowers/sdd/2026-08-28-phase5-mobile-adaptation/`（git-ignored）。
+> - ⏳ **未完：`browser-checklist.md` 的人工验收尚未走过**（三档视口 320/375/390 + 桌面回归对照），
+>   这是本期唯一剩下的活，勾选权在主人。
+> - ⚠️ 施工中有三处对计划文本的必要修正（均有台账裁定）：Task 5 的 CSS 需 `!important` 压 inline、
+>   Task 11 选择器收窄为 `> div:last-child`、日历窄屏值从 inline 下沉 CSS（终审修正波）。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 单一断点 768px 下让全站在 320~375px 视口不溢出、能用、体面；桌面观感零回归（唯一豁免：SellPanel 表移出 Alert，属既有缺陷两端同修）。
