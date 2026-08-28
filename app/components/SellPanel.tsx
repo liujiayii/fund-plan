@@ -4,7 +4,7 @@ import {
   Button,
   Form,
   Input,
-  Slider,
+  Space,
   Table,
   Typography,
 } from "antd";
@@ -123,15 +123,20 @@ export function SellPanel(props: SellPanelProps) {
       </Form.Item>
 
       {availableSharesScaled > 0 && (
-        <Slider
-          min={0}
-          max={availableSharesScaled}
-          step={Math.max(1, Math.floor(availableSharesScaled / 100))}
-          value={Math.min(sharesScaled, availableSharesScaled)}
-          onChange={v => setSharesInput((v / SHARE_SCALE).toFixed(4))}
-          tooltip={{ formatter: v => `${sharesToDisplay(v ?? 0)} 份` }}
-          style={{ marginBottom: 16 }}
-        />
+        <Space wrap style={{ marginBottom: 16 }}>
+          {/* 快捷份额按钮。取代 Slider：279px 宽上 100 档 = 2.8px/档，
+              手指无法定位（spec §9）；BuyPanel 的快捷金额就是这个形态 */}
+          {[0.25, 0.5, 0.75, 1].map(r => (
+            <Button
+              key={r}
+              size="small"
+              onClick={() =>
+                setSharesInput((availableSharesScaled * r / SHARE_SCALE).toFixed(4))}
+            >
+              {r === 1 ? "全部" : `${r * 100}%`}
+            </Button>
+          ))}
+        </Space>
       )}
 
       {overLimit && (
@@ -143,101 +148,124 @@ export function SellPanel(props: SellPanelProps) {
         />
       )}
 
-      {/* FIFO 逐批费用明细 */}
+      {/* FIFO 逐批费用明细。⚠️ 曾经整块塞在 Alert 的 description 里 ——
+          Alert 自带 padding 20/24 + showIcon，任何宽度下都在挤压这张表，
+          这是既有缺陷，两端一起修（spec §1.3 唯一豁免的桌面变更） */}
       {estimate && (
-        <Alert
-          type="info"
-          style={{ marginBottom: 16 }}
-          message="赎回费用预估（先进先出，逐批计费）"
-          description={(
-            <div>
-              <Table
-                size="small"
-                pagination={false}
-                style={{ marginBottom: 12 }}
-                rowKey="lotId"
-                dataSource={estimate.lotResults}
-                columns={[
-                  {
-                    title: "批次份额",
-                    dataIndex: "consumedSharesScaled",
-                    align: "right",
-                    render: (v: number) => sharesToDisplay(v),
-                  },
-                  {
-                    title: "持有天数",
-                    dataIndex: "holdDays",
-                    align: "right",
-                    render: (v: number) => `${v} 天`,
-                  },
-                  {
-                    title: "费率",
-                    dataIndex: "rate",
-                    align: "right",
-                    render: (v: number) => rateToPercent(v),
-                  },
-                  {
-                    title: "赎回费",
-                    dataIndex: "feeCents",
-                    align: "right",
-                    render: (v: number) => `${fmtYuan(v)} 元`,
-                  },
-                ]}
-              />
-              <div>
-                赎回总额：
-                <Text strong>
-                  {fmtYuan(estimate.totalGrossCents)}
+        <div style={{ marginBottom: 16 }}>
+          <Text strong>赎回费用预估（先进先出，逐批计费）</Text>
+
+          {/* 桌面视图：原 4 列 Table 原样保留。
+              表与汇总间的 12px 底距从 Table 挪到本 wrapper（margin 折叠，
+              观感不变）；窄屏整个 wrapper 被 display:none 掉，这份间距
+              不会泄漏进卡片视图 */}
+          <div className="fp-desktop" style={{ marginBottom: 12 }}>
+            <Table
+              size="small"
+              pagination={false}
+              style={{ marginBottom: 0 }}
+              rowKey="lotId"
+              dataSource={estimate.lotResults}
+              columns={[
+                {
+                  title: "批次份额",
+                  dataIndex: "consumedSharesScaled",
+                  align: "right",
+                  render: (v: number) => sharesToDisplay(v),
+                },
+                {
+                  title: "持有天数",
+                  dataIndex: "holdDays",
+                  align: "right",
+                  render: (v: number) => `${v} 天`,
+                },
+                {
+                  title: "费率",
+                  dataIndex: "rate",
+                  align: "right",
+                  render: (v: number) => rateToPercent(v),
+                },
+                {
+                  title: "赎回费",
+                  dataIndex: "feeCents",
+                  align: "right",
+                  render: (v: number) => `${fmtYuan(v)} 元`,
+                },
+              ]}
+            />
+          </div>
+
+          {/* 窄屏视图：同一数据源降级成 DataRow 行，字段不缺（spec §11） */}
+          <div className="fp-mobile">
+            {estimate.lotResults.map((lot, i) => (
+              <div key={lot.lotId} style={{ marginBottom: 8 }}>
+                <Text strong style={{ fontSize: 13 }}>
+                  第
                   {" "}
-                  元
-                </Text>
-              </div>
-              <div>
-                赎回费合计：
-                {/*
-                  刻意不标红：手续费是成本，既不是盈亏也不是收益，就是个金额。
-                  在「红=涨」的系统里给它上红色，会被读成收益；而 antd 的
-                  type="danger"（#ff4d4f）与两行下面 pnlColor 的涨红（#F5222D）
-                  肉眼分不出来，同一小块里出现两种红只有一个是盈亏，更糟。
-                  这块的读法：赎回总额、赎回费合计是推导过程（朴素），
-                  预计到账（蓝）与已实现盈亏（红绿）才是结论。
-                  费率高的警示由下方 Paragraph 的文案承载，不需要颜色再喊一遍。
-                */}
-                <Text strong>
-                  {fmtYuan(estimate.totalFeeCents)}
+                  {i + 1}
                   {" "}
-                  元
+                  批
                 </Text>
+                <DataRow label="批次份额" value={`${sharesToDisplay(lot.consumedSharesScaled)} 份`} mono />
+                <DataRow label="持有天数" value={`${lot.holdDays} 天`} mono />
+                <DataRow label="费率" value={rateToPercent(lot.rate)} mono />
+                <DataRow label="赎回费" value={`${fmtYuan(lot.feeCents)} 元`} mono last />
               </div>
-              <div>
-                预计到账：
-                <Text strong style={{ color: COLOR.primary }}>
-                  {fmtYuan(estimate.totalNetCents)}
-                  {" "}
-                  元
-                </Text>
-              </div>
-              <div>
-                已实现盈亏：
-                <Text
-                  strong
-                  style={{ color: pnlColor(estimate.realizedPnlCents) }}
-                >
-                  {estimate.realizedPnlCents > 0 ? "+" : ""}
-                  {fmtYuan(estimate.realizedPnlCents)}
-                  {" "}
-                  元
-                </Text>
-              </div>
-              <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-                按最新净值试算，实际
-                <Text strong>以确认日净值为准</Text>
-                。
-                持有不满 7 天的批次赎回费高达 1.5%，可考虑再等等。
-              </Paragraph>
-            </div>
-          )}
-        />
+            ))}
+          </div>
+
+          <div>
+            赎回总额：
+            <Text strong>
+              {fmtYuan(estimate.totalGrossCents)}
+              {" "}
+              元
+            </Text>
+          </div>
+          <div>
+            赎回费合计：
+            {/*
+              刻意不标红：手续费是成本，既不是盈亏也不是收益，就是个金额。
+              在「红=涨」的系统里给它上红色，会被读成收益；而 antd 的
+              type="danger"（#ff4d4f）与两行下面 pnlColor 的涨红（#F5222D）
+              肉眼分不出来，同一小块里出现两种红只有一个是盈亏，更糟。
+              这块的读法：赎回总额、赎回费合计是推导过程（朴素），
+              预计到账（蓝）与已实现盈亏（红绿）才是结论。
+              费率高的警示由下方 Paragraph 的文案承载，不需要颜色再喊一遍。
+            */}
+            <Text strong>
+              {fmtYuan(estimate.totalFeeCents)}
+              {" "}
+              元
+            </Text>
+          </div>
+          <div>
+            预计到账：
+            <Text strong style={{ color: COLOR.primary }}>
+              {fmtYuan(estimate.totalNetCents)}
+              {" "}
+              元
+            </Text>
+          </div>
+          <div>
+            已实现盈亏：
+            <Text
+              strong
+              style={{ color: pnlColor(estimate.realizedPnlCents) }}
+            >
+              {estimate.realizedPnlCents > 0 ? "+" : ""}
+              {fmtYuan(estimate.realizedPnlCents)}
+              {" "}
+              元
+            </Text>
+          </div>
+          <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+            按最新净值试算，实际
+            <Text strong>以确认日净值为准</Text>
+            。
+            持有不满 7 天的批次赎回费高达 1.5%，可考虑再等等。
+          </Paragraph>
+        </div>
       )}
 
       {fetcher.data?.error && (
