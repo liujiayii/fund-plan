@@ -278,7 +278,7 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 | `2026-08-26-phase2-asset-timeline.md`       | Task 1–5 已落地，Self-Review 待走       |
 | `2026-08-26-phase3-trading-experience.md`   | 已完成 `89075ce..25e3f4b`               |
 | `2026-08-26-phase4-discovery-and-detail.md` | 已完成 `5f74dcf..2d59b74`               |
-| `2026-08-28-phase5-mobile-adaptation.md`    | 已施工 `80850fb..8cb7add`，人工验收待走 |
+| `2026-08-28-phase5-mobile-adaptation.md`    | 已完成 `80850fb..d033b2e`，人工验收已过 |
 
 ### 计划文档完工后必须盖状态戳
 

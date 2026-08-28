@@ -1,16 +1,18 @@
 # 期五 · 移动端适配 实施计划
 
-> ## 状态：已施工 · 2026-08-28
+> ## 状态：已完成 · 2026-08-28
 >
-> 实现区间 `80850fb..8cb7add`（11 个 Task commit + 终审修正波 `8cb7add`）
+> 实现区间 `80850fb..d033b2e`（11 个 Task commit + 终审修正波 + 收尾三笔修复）
 >
 > - **下方复选框全部未勾，但工作已完成。** 本计划按 commit 跟踪进度，不靠勾选框。
 >   别把「未勾」读成「未做」，勿照此重新施工。
 > - 逐 Task 台账与终审记录在 `.superpowers/sdd/2026-08-28-phase5-mobile-adaptation/`（git-ignored）。
-> - ⏳ **未完：`browser-checklist.md` 的人工验收尚未走过**（三档视口 320/375/390 + 桌面回归对照），
->   这是本期唯一剩下的活，勾选权在主人。
+> - ✅ **人工验收已过**（2026-08-28，主人实机走查三档视口 + 桌面对照，含走势图溢出问题的复验）。
 > - ⚠️ 施工中有三处对计划文本的必要修正（均有台账裁定）：Task 5 的 CSS 需 `!important` 压 inline、
 >   Task 11 选择器收窄为 `> div:last-child`、日历窄屏值从 inline 下沉 CSS（终审修正波）。
+> - ⚠️ 验收后追加三笔修复（非计划内，主人测试反馈驱动）：净值历史翻页化 `91d90a7`（东财 lsjz
+>   单页钳 20 行，旧「首访 400 天」从未生效）、走势图竖向溢出 `d033b2e`（G2 显式 height 压过
+>   容器，config 不再传 height）、push2his 重试 `3f15686`。详见台账「后续修复」各节。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

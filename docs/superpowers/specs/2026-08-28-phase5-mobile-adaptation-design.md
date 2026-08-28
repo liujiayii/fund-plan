@@ -1,7 +1,7 @@
 # 移动端适配（期五）—— 设计文档
 
-> 2026-08-28 · 状态：**已施工**（2026-08-28 收尾，实现区间 `80850fb..8cb7add`，分支 feat/phase5-mobile-adaptation）
-> 人工验收清单待走：`.superpowers/sdd/2026-08-28-phase5-mobile-adaptation/browser-checklist.md`
+> 2026-08-28 · 状态：**已完成**（实现区间 `80850fb..d033b2e`，分支 feat/phase5-mobile-adaptation；人工验收已过）
+> 验收记录与逐 Task 台账：`.superpowers/sdd/2026-08-28-phase5-mobile-adaptation/`（git-ignored）
 > 前置文档：[`2026-08-25-alipay-style-refactor-design.md`](./2026-08-25-alipay-style-refactor-design.md)
 >
 > ⚠️ **本文推翻前置文档的「桌面为主」定位。** 具体推翻了哪几条、哪几条依然成立，
