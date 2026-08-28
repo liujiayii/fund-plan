@@ -287,20 +287,35 @@ export async function fetchFundBasic(
 /**
  * 拉取历史净值序列（按日期倒序，最新在前）。
  *
+ * ⚠️ 东财 2026 年起对 lsjz 接口加了钳制：**单页最多 20 行**——pageSize 填
+ * 30~200 也只回 20 条，≥400 直接回空 `Data`。所以要拿长历史必须翻页：
+ * 本函数内部按 20 行/页自动翻页拼齐 `wantRows` 条，调用方无感
+ * （撮合 cron 要 30 条 → 2 页；详情页回填要 400 条 → 20 页）。
+ *
  * 失败时返回空数组——撮合任务据此让订单保持 pending 顺延到下个交易日，
- * 绝不能把「拉不到净值」误判成「订单失败」。
+ * 绝不能把「拉不到净值」误判成「订单失败」。翻页中途某页失败不炸整体
+ * （allSettled 保留成功页），第一页就失败才返回空。
  */
 export async function fetchNavHistory(
   env: Env,
   code: string,
-  pageSize = 60,
+  wantRows = 60,
 ): Promise<NavRow[]> {
-  try {
+  /** 接口单页实际上限（实测值；写大无效，写 ≥400 直接回空） */
+  const PAGE_SIZE = 20;
+  /** 翻页并发波次宽度：一口气全并发容易触发风控（push2his 的教训） */
+  const CONCURRENCY = 5;
+
+  /** 拉并解析一页；返回本页行数与 TotalCount（拿不到时为 null） */
+  const fetchPage = async (
+    pageIndex: number,
+  ): Promise<{ rows: NavRow[]; totalCount: number | null }> => {
     const url
       = `https://api.fund.eastmoney.com/f10/lsjz`
-        + `?fundCode=${encodeURIComponent(code)}&pageIndex=1&pageSize=${pageSize}`;
+        + `?fundCode=${encodeURIComponent(code)}&pageIndex=${pageIndex}&pageSize=${PAGE_SIZE}`;
     const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS });
     const json = (await resp.json()) as {
+      TotalCount?: number;
       Data?: {
         LSJZList?: {
           FSRQ?: string;
@@ -325,7 +340,43 @@ export async function fetchNavHistory(
         growthRate: percentToRate(item.JZZZL),
       });
     }
-    return rows;
+    return { rows, totalCount: json.TotalCount ?? null };
+  };
+
+  try {
+    // 第 1 页先单独拉：拿 TotalCount 决定还要翻几页
+    const first = await fetchPage(1);
+    if (first.rows.length === 0)
+      return first.rows;
+
+    // 需要的总页数：目标条数与接口存量取小（TotalCount 缺失时按首页行数估）
+    const total = first.totalCount ?? first.rows.length;
+    const maxPages = Math.min(
+      Math.ceil(wantRows / PAGE_SIZE),
+      Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    );
+
+    const collected = [...first.rows];
+    // 剩余页按波次并发（每波 CONCURRENCY 页），拉完为止
+    const restPages: number[] = [];
+    for (let p = 2; p <= maxPages; p++)
+      restPages.push(p);
+    for (let i = 0; i < restPages.length; i += CONCURRENCY) {
+      const wave = restPages.slice(i, i + CONCURRENCY);
+      const settled = await Promise.allSettled(wave.map(p => fetchPage(p)));
+      let shortPage = false;
+      for (const s of settled) {
+        if (s.status !== "fulfilled")
+          continue; // 单页失败不炸整体：已到手的页照常入库
+        collected.push(...s.value.rows);
+        // 不满一页说明后面没有更多数据了（TotalCount 不准时的兜底）
+        if (s.value.rows.length < PAGE_SIZE)
+          shortPage = true;
+      }
+      if (shortPage)
+        break;
+    }
+    return collected;
   }
   catch (err) {
     console.error(`[fund-data] 拉取基金 ${code} 净值失败：`, err);

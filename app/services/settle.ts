@@ -2,6 +2,7 @@ import type { Db } from "~/db/client";
 import type { OrderRow } from "~/db/schema";
 import type { RedeemTier } from "~/domain/redeem";
 import { and, asc, eq, inArray, lte } from "drizzle-orm";
+import { runBatch } from "~/db/client";
 import {
   account,
   fund,
@@ -35,19 +36,6 @@ export interface SettleResult {
   skipped: number;
   /** 因业务原因失败的订单数 */
   failed: number;
-}
-
-/** db.batch 要求「至少一条」的元组类型 */
-type BatchWrites = Parameters<Db["batch"]>[0];
-
-/**
- * 安全地执行一组写操作：空数组直接跳过，
- * 非空时收窄成 batch 需要的非空元组类型。
- */
-async function runBatch(db: Db, writes: unknown[]): Promise<void> {
-  if (writes.length === 0)
-    return;
-  await db.batch(writes as unknown as BatchWrites);
 }
 
 /**
