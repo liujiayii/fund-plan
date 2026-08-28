@@ -183,7 +183,10 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             <Tag color={f.status.includes("开放") ? "blue" : "default"}>{f.status}</Tag>
           </Space>
 
-          <Space size={48} wrap style={{ marginTop: 8 }}>
+          {/* [16,16]：统计行间距降档（Task 10）。原 48 横竖同值，窄屏折行后 rowGap 48
+              把 5 个数字撑成 535px 高（spec §9）；桌面窄窗口同样受害。
+              降到 16 后桌面多数仍一行放下，折行时间距也合理 */}
+          <Space size={[16, 16]} wrap style={{ marginTop: 8 }}>
             <StatBig
               label={`单位净值${latest ? `（${latest.navDate}）` : ""}`}
               value={latest ? navToDisplay(latest.unitNav) : "—"}

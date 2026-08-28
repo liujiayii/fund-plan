@@ -124,7 +124,8 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
 
       {/* 持仓概览：与 /me/holdings 列表同源估值 */}
       <SectionCard title="持仓概览">
-        <Space size={48} wrap>
+        {/* [16,16]：统计行间距降档（Task 10），窄屏折行后 rowGap 不再是 48 */}
+        <Space size={[16, 16]} wrap>
           <StatBig label="持有市值" value={fmtYuan(d.marketValueCents)} suffix="元" />
           <StatBig label="持有收益" value={`${d.pnlCents > 0 ? "+" : ""}${fmtYuan(d.pnlCents)}`} suffix="元" size={24} color={pnlColor(d.pnlCents)} />
           <StatBig label="成本" value={fmtYuan(d.costCents)} suffix="元" size={24} />
