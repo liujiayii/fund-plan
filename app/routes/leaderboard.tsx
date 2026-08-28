@@ -145,9 +145,10 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
             )}
       </SectionCard>
 
-      {/* 已登录且不在前排：底部钉一行「我的排名」。
-          不在榜上（没成交）时也提示，形成引导闭环 */}
-      {meId !== null && (
+      {/* 已登录且不在榜单前排（前三名）时：底部钉一行「我的排名」。
+          前三名本身已在榜单前排高亮，再渲染卡片会重复出现两次；
+          未上榜（没成交过）时保留引导空态，形成引导闭环 */}
+      {meId !== null && (mine === null || mine.rank > 3) && (
         <SectionCard title="我的排名">
           {mine
             ? (
