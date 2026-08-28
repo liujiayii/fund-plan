@@ -55,6 +55,31 @@
   .fp-footer {
     margin-bottom: calc(56px + env(safe-area-inset-bottom));
   }
+
+  /* ══════════ 5. FundListItem 窄屏两段式（spec §8）══════════ */
+
+  /* 名称占第一行（不再被右侧 nowrap 挤到 50px），数值+操作第二行。
+     gap 要 !important：根 div 的 gap:16 是 inline style，不加盖不过（同 .fp-content）。
+     justify-content 让第二段靠右，对齐桌面「数值贴着操作区」的观感 ——
+     没有数值只有操作区的行（funds 搜索结果）也不至于吊在最左 */
+  .fp-fli {
+    flex-wrap: wrap;
+    gap: 8px !important;
+    justify-content: flex-end;
+  }
+  .fp-fli-main {
+    /* basis 100% 强制独占第一行；inline 的 flex:1（basis 0）不会换行，必须盖掉 */
+    flex: 1 1 100% !important;
+    min-width: 0;
+  }
+  .fp-fli-side {
+    /* 允许收缩：OrderList 的长副值（min-content 约 380px）能折行而不是顶穿页面。
+       overflow-wrap 用 anywhere 而非 break-word：anywhere 同时压低 min-content
+       计算，flex 收缩才收得动（break-word 下 flex 项仍按原 min-content 拒绝收缩） */
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* ══════════ 4. 底部 TabBar（spec §6）══════════ */
@@ -109,5 +134,11 @@
 @media (min-width: 768px) {
   .fp-mobile {
     display: none !important;
+  }
+
+  /* 桌面恢复 nowrap：FundListItem 删了 inline nowrap（它造成窄屏顶穿），
+     桌面金额断行难看，在这里补回 */
+  .fp-fli-side {
+    white-space: nowrap;
   }
 }
