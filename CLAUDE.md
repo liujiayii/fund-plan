@@ -152,21 +152,10 @@ admin 由环境变量 `ADMIN_USERNAME` 认定（`wrangler.jsonc` 的 `vars`）�
 
 ### UnoCSS 走 CLI 预生成，不是 Vite 插件
 
-**不是 UnoCSS 不支持 Vite 8** —— 裸 Vite 8 + `unocss/vite` 完全正常（已实测）。
-真正的原因是 **UnoCSS 的 Vite 插件与 React Router 8 的 Vite Environment API 不兼容**。
-
-React Router 8 framework mode 构建时会输出 `Using Vite Environment API`，把流水线拆成
-`client` / `ssr` 多个环境。UnoCSS 的 `unocss:global:build:generate` 要去当前环境的插件容器里
-找 `vite:css-post` 注入生成的 CSS，多环境下找不到，于是：
-
-```
-[plugin unocss:global:build:generate] [unocss] failed to find vite:css-post plugin
-```
-
-**构建只报这一行警告就"成功"了**，但产物 CSS 只剩 48 字节占位符
-（`#--unocss--{layer:__ALL__}`），所有工具类静默丢失。PostCSS 模式则会让构建挂死。
-
-> 纯 SPA 项目（`@vitejs/plugin-react`，单环境构建）不受此影响，可正常用 `unocss/vite` 插件。
+原因：UnoCSS 的 Vite 插件与 React Router 8 的 Vite Environment API 不兼容——
+多环境构建下 `failed to find vite:css-post plugin` 只报一行警告就"成功"，
+产物 CSS 只剩 48 字节占位符，所有工具类静默丢失（完整考证见 `docs/development.md`）。
+纯 SPA 项目（`@vitejs/plugin-react`，单环境）不受此影响。
 
 所以 `dev`/`build` 前会跑 `pnpm uno:build` 生成 `app/uno.gen.css`（该文件**入库**，不要手改）。
 改了 class 后样式没生效，先确认这步跑过。
@@ -245,8 +234,7 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 - **「计划写错了 → 改计划 → 再实现」不要拆成两条。**
   计划修订跟实现代码走同一个 commit。
 
-反面教材（2026-08-25，一天 58 个 commit，其中 22 个只动 `docs/`）：
-`c10b8b2` `b7b5f7b` `9eb5676` `d037b5e` 四连击，每条只改了一句注释。
+踩过"一天几十条 commit、其中大量只动 `docs/`"的坑，勿重蹈。
 
 已定向豁免的规则及理由见 `eslint.config.js`：Worker 里 `console` 是唯一日志手段；
 路由模块必须混合导出 loader/action 与组件。
@@ -271,30 +259,7 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 
 **实施计划 `docs/superpowers/plans/`（是当时的施工图，不是现状描述）：**
 
-| 计划                                        | 状态                                    |
-| ------------------------------------------- | --------------------------------------- |
-| `2026-08-24-fund-simulator.md`              | 已完成 `26d645b..7cd59b5`               |
-| `2026-08-25-phase1-visual-foundation.md`    | 已完成 `669ec88..64fa866`               |
-| `2026-08-26-phase2-asset-timeline.md`       | Task 1–5 已落地，Self-Review 待走       |
-| `2026-08-26-phase3-trading-experience.md`   | 已完成 `89075ce..25e3f4b`               |
-| `2026-08-26-phase4-discovery-and-detail.md` | 已完成 `5f74dcf..2d59b74`               |
-| `2026-08-28-phase5-mobile-adaptation.md`    | 已完成 `80850fb..d033b2e`，人工验收已过 |
-
-### 计划文档完工后必须盖状态戳
-
-计划里的复选框**从来没被勾过**（252 个全空），所以**别拿勾选框判断进度**。
-一个阶段收尾时，在计划文件**标题的下一行、`For agentic workers` 那行之前**补一段：
-
-```text
-> ## 状态：已完成 · YYYY-MM-DD
->
-> 实现区间 `<起>..<止>`
->
-> - **下方复选框全部未勾，但工作已完成。** 别把「未勾」读成「未做」，勿照此重新施工。
-> - ⚠️ 作废段落：<哪个 Task 的什么规格已被 revert，以及正确结论是什么>
-```
-
-**必须盖在 `For agentic workers` 之前**——那行写着「照此逐 Task 施工」，
-戳晚一行，接手的人就先读到施工指令了。
-
-计划里含已 revert 的内容时尤其要写清：**过期的施工图比没有图更危险。**
+进度**只看各计划文件标题下的状态戳**（「状态：已完成 · 日期」），不要看复选框——
+历史上从未勾过，全空不代表没做，勿照此重新施工。一期收尾时必须补盖状态戳，
+格式与作废段落的写法见任一已完成计划的开头，**必须盖在 `For agentic workers` 之前**
+（那行写着「照此逐 Task 施工」，戳晚一行，接手的人就先读到施工指令了）。
