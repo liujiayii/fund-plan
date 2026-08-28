@@ -49,12 +49,65 @@
   .fp-h-scroll::-webkit-scrollbar {
     display: none;
   }
+
+  /* Footer 让位：Footer 在 Content 外，.fp-content 的让位盖不到它，
+     不补这条滚到底时 TabBar 会盖住 © 行（GlobalFooter 自身底距仅 24px） */
+  .fp-footer {
+    margin-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
 }
 
-/* 767px 以下隐藏、以上恢复 —— 用属性选择器把 specificity 抬过
-   UnoCSS/antd 的 display 工具类（配合 .fp-desktop 的 !important 成对使用） */
+/* ══════════ 4. 底部 TabBar（spec §6）══════════ */
+
+/* 窄屏常驻、768px+ 由 .fp-mobile 隐藏（规则在本文件末尾） */
+.fp-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  /* 色值手写字面量而非引 JS 的 COLOR：CSS 文件 import 不进 JS 模块图，
+     引变量只能靠构建期工具（postcss-import + JS 变量），为一个文件引构建链不值。
+     ⚠️ 代价：改 theme.ts 的色值时本块 4 处（card/border/textSecondary/primary）要同改 */
+  background: #fff; /* = COLOR.card */
+  border-top: 1px solid #eef0f4; /* = COLOR.border */
+  /* iPhone 底部安全区：没这行最后一格标签被系统横条压住 */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.fp-tabbar-item {
+  /* 4 项均分：320px ÷ 4 = 80px/格（spec §6.1 的数字依据） */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 0 4px;
+  min-height: 48px; /* 触控区 ≥44px（WCAG）：图标 22 + gap 2 + 标签 14 + padding */
+  color: #8a9099; /* = COLOR.textSecondary */
+  text-decoration: none;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.fp-tabbar-item.active {
+  color: #1677ff; /* = COLOR.primary */
+  font-weight: 500;
+}
+
+.fp-tabbar-item .anticon {
+  font-size: 22px;
+}
+
+/* 767px 以下隐藏、768px+ 恢复 —— 与上面 .fp-desktop 的 !important 成对使用。
+   这里其实是普通类选择器（specificity 0,1,0），并不比工具类更高，
+   真正的胜负手是 import 顺序：本文件在 root.tsx 里排最后、同 specificity 后来者胜；
+   再补 !important 兜底，防某个 display 工具类（如 hidden）把 display 反杀回来。
+   桌面下 antd 不给普通 <div>/<nav> 元素设 display，antd 侧无需担心 */
 @media (min-width: 768px) {
   .fp-mobile {
-    display: none;
+    display: none !important;
   }
 }
