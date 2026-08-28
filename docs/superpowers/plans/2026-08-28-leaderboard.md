@@ -1,5 +1,12 @@
 # 收益排行榜实施计划
 
+> ## 状态：已完成 · 2026-08-28
+>
+> 实现区间 `fbf1c7c..d0958dc`（领域层 → service → 页面 → 首页引流）
+>
+> - **下方复选框全部未勾，但工作已完成。** 别把「未勾」读成「未做」，勿照此重新施工。
+> - ⚠️ 施工偏离记录：计划测试稿有 3 处笔误（rankLeaderboard 直接喂原始输入、未使用的 roundInt import、jsx 单行插值违反 lint），均由实施者修正；Task 2 注释「与 getPortfolio 完全一致」因上游 bug（portfolio-service.ts:115 兜底公式缺 ×100，无净值持仓市值低估百倍）改为如实口径描述，上游 bug 待另开修复任务。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 新增公开页 `/leaderboard`——全体用户的收益/收益率排行榜（累计口径），含导航入口与首页引流卡片。
