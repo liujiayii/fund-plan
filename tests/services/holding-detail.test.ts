@@ -91,6 +91,24 @@ describe("getHoldingDetail", () => {
     expect(d!.minPurchase).toBe(1000);
   });
 
+  it("无净值时用成本价兜底：市值 ≈ 成本、盈亏 ≈ 0（×100 回归钉）", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    // 注意：不 seedNav——fund_nav 空，走兜底分支。
+    // 旧公式少乘 100，这里会把 2000 元成本估成 20 元（1/100），此测试就是钉它的
+    const userId = await seedUser();
+    await db.insert(holding).values({ userId, fundCode: "000001", totalShares: 20000000, totalCost: 200000 });
+
+    const d = await getHoldingDetail(db, userId, "000001");
+    expect(d).not.toBeNull();
+    expect(d!.navDate).toBeNull();
+    // 兜底净值 = 200000 × 10⁶ / 20000000 = 10000（即 1.0000）
+    expect(d!.navScaled).toBe(10000);
+    // 市值 = 2000 份 × 1.0 × 100 = 200000 分 = 成本，盈亏为 0
+    expect(d!.marketValueCents).toBe(200000);
+    expect(d!.pnlCents).toBe(0);
+  });
+
   it("无持仓返回 null", async () => {
     const db = getDb(env.DB);
     await seedFund();

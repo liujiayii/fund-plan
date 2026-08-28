@@ -1,4 +1,3 @@
-// app/services/leaderboard-service.ts
 import type { Db } from "~/db/client";
 import type { LeaderboardEntry, LeaderboardEntryInput } from "~/domain/leaderboard";
 import { and, eq } from "drizzle-orm";
@@ -7,7 +6,7 @@ import {
   computeLeaderboard,
   rankLeaderboard,
 } from "~/domain/leaderboard";
-import { navToDecimal, roundInt, sharesToDecimal, YUAN } from "~/domain/money";
+import { costBasisNavScaled, valuateHolding } from "~/domain/portfolio";
 import { latestNavMap } from "~/services/portfolio-service";
 
 /**
@@ -70,23 +69,21 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardView> {
   }
 
   // ── 市值聚合：userId → 持仓市值合计 ────────────────────────────────
-  // 口径：无净值时按成本兜底（市值 = 成本，盈亏为 0）。
-  // 注意：getPortfolio 的兜底公式（成本/份额折算净值）存在 ×100 缩放偏差，
-  // 兜底市值会低估百倍；此处不复刻该偏差（上游 bug 已另行记录）。
+  // 估值与 getPortfolio / getHoldingDetail 同源：valuateHolding + 无净值
+  // 时 costBasisNavScaled 成本兜底（市值 ≈ 成本，盈亏 ≈ 0）。
   // 遍历 active（与 codes 同源），两处共用同一份过滤，逻辑不漂移。
   const marketValueByUser = new Map<number, number>();
   for (const h of active) {
     const navInfo = navMap.get(h.fundCode);
-    // 无净值 → 成本兜底（市值 = 成本）
-    const mvCents = navInfo
-      ? roundInt(
-          sharesToDecimal(h.totalShares)
-            .mul(navToDecimal(navInfo.unitNav))
-            .mul(YUAN),
-        )
-      : h.totalCost;
+    const v = valuateHolding({
+      fundCode: h.fundCode,
+      totalSharesScaled: h.totalShares,
+      totalCostCents: h.totalCost,
+      // 无净值 → 成本兜底净值
+      navScaled: navInfo ? navInfo.unitNav : costBasisNavScaled(h.totalCost, h.totalShares),
+    });
     const prev = marketValueByUser.get(h.userId) ?? 0;
-    marketValueByUser.set(h.userId, prev + mvCents);
+    marketValueByUser.set(h.userId, prev + v.marketValueCents);
   }
 
   // ── 拼 LeaderboardEntryInput 喂领域层 ─────────────────────────────

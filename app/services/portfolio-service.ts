@@ -14,6 +14,7 @@ import {
 } from "~/db/schema";
 import {
 
+  costBasisNavScaled,
   valuateHolding,
   valuatePortfolio,
 } from "~/domain/portfolio";
@@ -108,18 +109,16 @@ export async function getPortfolio(
 
   const holdings: HoldingView[] = active.map((r) => {
     const navInfo = navMap.get(r.fundCode);
-    // 无净值时用成本价兜底：市值 = 成本，盈亏为 0，避免显示成腰斩
+    // 无净值时用成本价兜底：市值 ≈ 成本，盈亏 ≈ 0，避免显示成腰斩
     const navScaled = navInfo
       ? navInfo.unitNav
-      : r.totalShares > 0
-        ? Math.round((r.totalCost / r.totalShares) * 10000 * 100) / 100
-        : 10000;
+      : costBasisNavScaled(r.totalCost, r.totalShares);
 
     const v = valuateHolding({
       fundCode: r.fundCode,
       totalSharesScaled: r.totalShares,
       totalCostCents: r.totalCost,
-      navScaled: Math.round(navScaled),
+      navScaled,
     });
 
     return {
@@ -326,18 +325,16 @@ export async function getHoldingDetail(
   const navInfo = navMap.get(fundCode);
   const f = await db.query.fund.findFirst({ where: eq(fund.code, fundCode) });
 
-  // 无净值时用成本价兜底，公式与 getPortfolio 逐字一致，保证同源
+  // 无净值时用成本价兜底，公式收口在 domain 的 costBasisNavScaled（含曾经的 ×100 修复）
   const navScaled = navInfo
     ? navInfo.unitNav
-    : row.totalShares > 0
-      ? Math.round((row.totalCost / row.totalShares) * 10000 * 100) / 100
-      : 10000;
+    : costBasisNavScaled(row.totalCost, row.totalShares);
 
   const v = valuateHolding({
     fundCode,
     totalSharesScaled: row.totalShares,
     totalCostCents: row.totalCost,
-    navScaled: Math.round(navScaled),
+    navScaled,
   });
 
   // 份额批次，FIFO 升序：确认日升、id 升

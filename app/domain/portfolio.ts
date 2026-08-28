@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { navToDecimal, roundInt, sharesToDecimal, YUAN } from "./money";
+import { NAV_SCALE, navToDecimal, roundInt, sharesToDecimal, YUAN } from "./money";
 
 /** 单只持仓的估值结果 */
 export interface HoldingValuation {
@@ -62,6 +62,25 @@ export function valuateHolding(i: {
     pnlCents,
     pnlRate,
   };
+}
+
+/**
+ * 无净值时的成本价兜底净值：把「每份成本」换算成净值口径（×10000）。
+ *   navScaled = 成本（分）× 10⁶ ÷ 份额（×10000）
+ * 用它喂 valuateHolding 可得 市值 ≈ 成本、盈亏 ≈ 0（先取整再估值，极端数字差 1 分内）。
+ * 份额为 0 时返回 NAV_SCALE（净值 1.0）：市值恒为 0，清仓行不给假数字。
+ *
+ * ⚠️ 曾有一版内联公式少乘 100（算出的是「分/份」而非「元/份」），兜底市值被
+ * 低估百倍。调用方（getPortfolio / getHoldingDetail / leaderboard-service）
+ * 别再内联手写这个换算，统一走本函数。
+ */
+export function costBasisNavScaled(
+  costCents: number,
+  sharesScaled: number,
+): number {
+  if (sharesScaled <= 0)
+    return NAV_SCALE;
+  return roundInt(new Decimal(costCents).mul(1_000_000).div(sharesScaled));
 }
 
 /**
