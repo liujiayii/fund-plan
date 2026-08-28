@@ -54,12 +54,20 @@
 
 - **注册即送 10 万模拟本金**，用户名 + 密码，不要邮箱不要手机号
 - **每日签到领本金**：基础 100 元/天，每多连签一天 +50 元，封顶 500 元，断签归零
-- **基金搜索与详情**：真实档案、费率、风险等级、净值曲线（1 月 / 3 月 / 1 年 / 全部）
+- **基金发现**：搜索 + 排行榜挑热门；详情页有真实档案、费率、风险等级、
+  净值曲线（1 月 / 3 月 / 1 年 / 全部，可叠加沪深300 基准对比）
+- **自选基金**：收藏关注的基金，自选页快速看日涨跌
 - **买入**：抽屉内按内扣法**实时预估**手续费与份额
-- **赎回**：抽屉内按 FIFO **逐批试算**，展示各批持有天数、费率与费用明细
+- **赎回**：抽屉内按 FIFO **逐批试算**，展示各批持有天数、费率与费用明细；
+  持仓详情页可看份额批次与待赎回占用
 - **定投**：支持日 / 周 / 月，Cron 每日自动扫描下单，可暂停 / 启用 / 删除
+- **资产时间线**：逐日重放总资产，收益趋势图 + 收益日历，签到入金不算收益
+- **收益排行榜**：全站用户收益率 / 总收益双榜（累计口径：清仓利润保留、
+  签到不算收益、pending 买单在途资金计入总资产），前三名奖牌 + 我的排名，
+  游客免登录围观
 - **订单与流水**：全部可追溯，区分手动 / 定投来源与待确认 / 已确认 / 失败状态
 - **围观主理人盘**：游客免登录查看管理员的持仓、定投与交易流水
+- **移动端适配**：响应式布局 + 底部导航栏
 - **重置模拟盘**：练废了一键归零，不用重新注册
 
 ## 技术栈
@@ -97,7 +105,9 @@ D1 数据库与 KV 已在 Cloudflare 上创建好，`wrangler.jsonc` 里的 id �
 | D1   | `fund-plan-db`（区域 WNAM） |
 | KV   | binding `KV`                |
 
-线上库已跑完迁移（10 张业务表）。部署只需 `pnpm deploy`。
+线上库已跑完迁移（12 张业务表）。合并到 main 后 GitHub Actions 自动执行
+「测试 → 全绿 → 部署到 Cloudflare」流水线（含幂等 D1 迁移，
+见 `.github/workflows/deploy.yml`）；需要时也可本地手动 `pnpm deploy`。
 本地开发用的是 miniflare 模拟的独立数据库（`.wrangler/state/`），与线上互不影响。
 
 完整部署步骤见 [docs/deployment.md](docs/deployment.md)。
@@ -125,16 +135,19 @@ pnpm verify        # lint + typecheck + test，提交前全量校验
 - 净值缺失时订单顺延而非误判失败
 - `share_lot` 与 `holding` 对账一致性
 - 连签奖励递增 / 封顶 / 断签归零
+- 排行榜口径（清仓利润保留、签到不算收益、在途资金计入总资产、
+  收益率与总收益两维排序互不可推）
+- 无净值兜底估值回归钉（`costBasisNavScaled`，曾因缺 ×100 被低估百倍）
 - 越权防护（不能操作他人的定投计划）
 
 ## 项目结构
 
 ```
 app/
-  domain/       纯函数领域层（撮合、赎回、定投、签到、估值、交易日历）
-  services/     应用层（数据接入、认证、下单、撮合、组合读取）
+  domain/       纯函数领域层（撮合、赎回、定投、签到、估值、排行榜、资产时间线、交易日历）
+  services/     应用层（数据接入、认证、下单、撮合、组合读取、排行榜聚合）
   routes/       页面与 loader/action
-  components/   复用 UI（净值图、买入/赎回抽屉、组合视图）
+  components/   复用 UI（净值图、买入/赎回抽屉、组合视图、收益日历）
   db/           Drizzle schema 与 client
 workers/app.ts  Worker 入口（fetch + scheduled）
 drizzle/        迁移 SQL
@@ -147,11 +160,11 @@ docs/           设计文档、实施计划、部署与开发指南
 - **不发邮件**：CF 免费版无 SMTP，故无邮箱验证与邮件找回密码，忘密码需管理员手动重置
 - **无盘中实时估值**：`fundgz` 接口从服务器直连被挡；T+1 撮合本身用收盘净值，不受影响
 - **节假日表需每年更新**：见 `app/domain/trading-calendar.ts`，有净值日反向校正作为兜底
-- **暂无收益率排行榜**：需要快照表 + 结算任务，后期可平滑添加
 
 ## 文档
 
-- [设计文档](docs/superpowers/specs/2026-08-24-fund-simulator-design.md)
-- [实施计划](docs/superpowers/plans/2026-08-24-fund-simulator.md)
+- [设计文档](docs/superpowers/specs/2026-08-24-fund-simulator-design.md)——金融内核与三层架构
+- [支付宝式视觉重构设计](docs/superpowers/specs/2026-08-25-alipay-style-refactor-design.md)
+- [收益排行榜设计](docs/superpowers/specs/2026-08-28-leaderboard-design.md)
 - [部署指南](docs/deployment.md)
 - [开发指南](docs/development.md)
