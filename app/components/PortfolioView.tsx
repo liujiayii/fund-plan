@@ -37,14 +37,14 @@ export function PortfolioSummary({
   const { summary } = portfolio;
   return (
     <Row gutter={[24, 16]}>
-      <Col xs={12} md={6}>
+      <Col xs={24} sm={12} md={6}>
         <StatBig
           label="总资产"
           value={fmtYuan(summary.totalAssetCents)}
           suffix="元"
         />
       </Col>
-      <Col xs={12} md={6}>
+      <Col xs={24} sm={12} md={6}>
         <StatBig
           label="持仓市值"
           value={fmtYuan(summary.marketValueCents)}
@@ -53,7 +53,7 @@ export function PortfolioSummary({
         />
       </Col>
       {showCash && (
-        <Col xs={12} md={6}>
+        <Col xs={24} sm={12} md={6}>
           <StatBig
             label="可用现金"
             value={fmtYuan(summary.cashCents)}
@@ -62,7 +62,7 @@ export function PortfolioSummary({
           />
         </Col>
       )}
-      <Col xs={12} md={6}>
+      <Col xs={24} sm={12} md={6}>
         <StatBig
           label="浮动盈亏"
           value={`${summary.totalPnlCents > 0 ? "+" : ""}${fmtYuan(summary.totalPnlCents)}`}

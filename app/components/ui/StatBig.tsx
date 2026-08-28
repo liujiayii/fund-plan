@@ -47,6 +47,7 @@ export function StatBig({
           alignItems: "baseline",
           gap: 4,
           marginTop: 2,
+          minWidth: 0, // 允许本行收缩：flex 项默认 min-width:auto，长数值会把窄屏 Col 撑破
         }}
       >
         <span
@@ -56,6 +57,7 @@ export function StatBig({
             fontWeight: 500,
             lineHeight: 1.2,
             color: color ?? COLOR.textPrimary,
+            overflowWrap: "break-word", // 320px 下「128,450.66」这类长数值允许折行，不溢出
           }}
         >
           {value}
