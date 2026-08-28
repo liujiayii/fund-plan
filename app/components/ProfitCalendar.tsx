@@ -188,14 +188,15 @@ function ProfitCalendarInner({
           return (
             <div
               key={day}
+              // fp-cal-cell：窄屏方形化/内距/格高下沉 responsive.css（spec §9），
+              // inline 只留桌面值，别把两端同生效的值写进来（桌面零回归）
+              className="fp-cal-cell"
               style={{
                 position: "relative",
                 background: bg,
                 borderRadius: 6,
-                // 方形格子：宽随 7 列均分自适应，aspect-ratio 保证不塌成扁条
-                aspectRatio: "1 / 1",
-                minHeight: 36,
-                padding: "2px 2px",
+                minHeight: 44,
+                padding: "4px 6px",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
@@ -215,10 +216,12 @@ function ProfitCalendarInner({
               {/* 收益金额：有数据且非零时显示 */}
               {hasData && d!.dayPnlCents !== 0 && (
                 <div
+                  // fp-cal-pnl：窄屏字号降到 10px 在 responsive.css（spec §9），
+                  // inline 是桌面值 11
+                  className="fp-cal-pnl"
                   style={{
                     fontFamily: NUM_FONT,
-                    // 10px 是 319px 内容宽下「+1234」完整显示的安全字号
-                    fontSize: 10,
+                    fontSize: 11,
                     color: pnlFg,
                     textAlign: "center",
                     lineHeight: 1.2,

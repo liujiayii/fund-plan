@@ -80,6 +80,23 @@
     max-width: 100%;
     overflow-wrap: anywhere;
   }
+
+  /* 收益日历窄屏：格子方形化 + 收紧内距与字号（spec §9）。
+     inline 是桌面值，这里用 !important 盖（与 .fp-content 同手法） */
+  .fp-cal-cell {
+    aspect-ratio: 1 / 1;
+    min-height: 36px !important;
+    padding: 2px 2px !important;
+  }
+  .fp-cal-pnl {
+    font-size: 10px !important;
+  }
+
+  /* 顶栏窄屏：Menu（flex:1 撑开项）隐藏后 logo 与登录态聚拢左侧，
+     space-between 让登录态回到右侧（与底栏形态对齐） */
+  .fp-header {
+    justify-content: space-between;
+  }
 }
 
 /* ══════════ 4. 底部 TabBar（spec §6）══════════ */

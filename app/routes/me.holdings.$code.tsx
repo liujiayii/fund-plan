@@ -188,9 +188,11 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
                     <div key={l.id} style={{ marginBottom: 8 }}>
                       <Text strong style={{ fontSize: 13 }}>
                         第
+                        {" "}
                         {i + 1}
                         {" "}
                         批 ·
+                        {" "}
                         {l.confirmDate}
                       </Text>
                       <DataRow label="份额" value={`${sharesToDisplay(l.sharesScaled)} 份`} mono />

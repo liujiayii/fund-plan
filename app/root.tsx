@@ -92,6 +92,8 @@ export default function App() {
         {/* Header 由 antd 默认的深色改为白底 + 底部细线，
             这是「后台管理系统」与「消费级理财 App」观感的分水岭 */}
         <Header
+          // fp-header：窄屏 space-between 让登录态回到右侧（responsive.css）
+          className="fp-header"
           style={{
             display: "flex",
             alignItems: "center",
