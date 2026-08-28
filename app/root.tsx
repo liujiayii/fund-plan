@@ -193,7 +193,7 @@ export default function App() {
         >
           <Outlet />
         </Content>
-        {/* 移动端底部导航（768px 以下显示）。放 Content 外保证 fixed 定位不受内容影响 */}
+        {/* 移动端底部导航（768px 以下显示）。放 Content 外保证固定定位不受内容影响 */}
         <MobileTabBar />
         {/* Pro 系标准 Footer：上行 links（GitHub），下行 © + 声明。
             用 DefaultFooter 取代手写 Footer，省去自维护链接样式，视觉与 antd Pro 一致。 */}
