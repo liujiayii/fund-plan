@@ -163,6 +163,20 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             </SectionCard>
           )}
 
+      {/* 排行榜引流：游客与已登录都给入口（移动端底栏进不去排行榜，这是移动端唯一入口） */}
+      <SectionCard
+        title="收益排行榜"
+        extra={<a href="/leaderboard">看完整榜单 →</a>}
+      >
+        <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          全站用户的模拟盘同台竞技：收益率、总收益两个维度实时排名。
+          注册开第一单，看看你能不能排到主理人前面。
+        </Paragraph>
+        <Button type="primary" href="/leaderboard">
+          去看排行榜
+        </Button>
+      </SectionCard>
+
       {/* 卖点。这里用 UnoCSS 工具类替代内联 style，验证工具链接入生效 */}
       <Row gutter={[16, 16]}>
         {FEATURES.map(f => (
