@@ -193,4 +193,31 @@ describe("getLeaderboard", () => {
     const lb = await getLeaderboard(db);
     expect(lb.byRate).toHaveLength(0);
   });
+
+  it("pending 买单的在途资金计入总资产（pending 窗口不缩水）", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+
+    // alice 有历史成交（过门槛），现金 10 万；再造一笔 pending 买单 1000 元
+    // ——现金虽未实际扣（造数直插），但口径上应把在途金额加进总资产
+    const alice = await seedUser("alice");
+    await seedConfirmedOrder(alice);
+    await db.insert(orders).values({
+      userId: alice,
+      fundCode: "000001",
+      side: "buy",
+      status: "pending",
+      source: "manual",
+      amount: 100_000,
+      placeDate: "2026-08-24",
+      confirmDate: "2026-08-25",
+      createdAt: Date.now(),
+    });
+
+    const lb = await getLeaderboard(db);
+    expect(lb.byRate).toHaveLength(1);
+    // 不含在途是 10_000_000，含在途应为 10_100_000（多出 100_000 分买单金额）
+    expect(lb.byRate[0].totalAssetCents).toBe(10_100_000);
+    expect(lb.byRate[0].totalPnlCents).toBe(100_000);
+  });
 });

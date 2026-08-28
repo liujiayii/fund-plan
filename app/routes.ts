@@ -4,7 +4,7 @@ import { index, route } from "@react-router/dev/routes";
 /**
  * 显式路由表。
  *
- * 公开页（游客可见）：/ /master /funds /funds/:code /login /register
+ * 公开页（游客可见）：/ /master /leaderboard /funds /funds/:code /login /register
  * 需登录页：/me 系列（鉴权在各自 loader 里用 requireUser 做）
  */
 export default [

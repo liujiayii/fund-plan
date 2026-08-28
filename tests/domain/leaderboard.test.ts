@@ -17,6 +17,7 @@ function mk(over: Partial<Parameters<typeof computeLeaderboard>[0][number]>) {
     username: "alice",
     marketValueCents: 0,
     cashCents: 10_000_000,
+    inFlightCashCents: 0,
     initialCashCents: 10_000_000,
     totalCheckinCents: 0,
     hasTrades: true,
@@ -74,6 +75,19 @@ describe("computeLeaderboard 口径", () => {
     expect(out[0].totalPnlRate).toBeCloseTo(-0.1, 10);
   });
 
+  it("pending 买单在途资金计入总资产：pending 窗口内不凭空缩水", () => {
+    // 两人都入金 10 万：甲买了 5000 元基金但还在 pending（现金已扣），
+    // 乙什么都没动。甲的在途资金必须补回总资产——两人总资产应相等、收益都为 0
+    const out = computeLeaderboard([
+      mk({ userId: 1, username: "甲", cashCents: 9_500_000, inFlightCashCents: 500_000 }),
+      mk({ userId: 2, username: "乙", cashCents: 10_000_000 }),
+    ]);
+    expect(out[0].totalAssetCents).toBe(10_000_000);
+    expect(out[1].totalAssetCents).toBe(10_000_000);
+    expect(out[0].totalAssetCents).toBe(out[1].totalAssetCents);
+    expect(out[0].totalPnlCents).toBe(0);
+  });
+
   it("除零守卫：累计入金为 0 时 rate 返回 0 而非 NaN/Infinity", () => {
     const out = computeLeaderboard([
       mk({
@@ -120,9 +134,29 @@ describe("rankLeaderboard 排序", () => {
     expect(ranked.map(r => r.userId)).toEqual([6, 4, 5, 7]);
   });
 
+  it("收益率榜与总收益榜顺序可以不同（判别性用例）", () => {
+    // 甲：入金 10 万、当前总资产 10.1 万 → pnl +1000、rate +1%
+    // 乙：入金 1 万、当前总资产 1.05 万 → pnl +500、rate +5%
+    // 收益率榜乙第一（率更高），总收益榜甲第一（赚得更多）——两维不可互推
+    const base = [
+      mk({ userId: 1, username: "甲", cashCents: 10_100_000 }),
+      mk({
+        userId: 2,
+        username: "乙",
+        cashCents: 1_050_000,
+        initialCashCents: 1_000_000,
+      }),
+    ];
+    const byRate = rankLeaderboard(computeLeaderboard(base), "rate");
+    const byPnl = rankLeaderboard(computeLeaderboard(base), "pnl");
+    expect(byRate.map(r => r.userId)).toEqual([2, 1]);
+    expect(byPnl.map(r => r.userId)).toEqual([1, 2]);
+  });
+
   it("不修改入参数组（纯函数）", () => {
-    const input = [...base];
-    rankLeaderboard(computeLeaderboard(base), "rate");
-    expect(base).toEqual(input);
+    const entries = computeLeaderboard(base);
+    const snapshot = structuredClone(entries);
+    rankLeaderboard(entries, "rate");
+    expect(entries).toEqual(snapshot);
   });
 });
