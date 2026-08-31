@@ -50,3 +50,46 @@ export function isPageVisit(r: VisitRequestInfo): boolean {
 
   return true;
 }
+
+// ==================== 独立访客（UV）标识 ====================
+
+/** 匿名访客 Cookie 名。fp_ 前缀 = 本站（fund-plan）自留命名空间，与 session 区分 */
+export const VISITOR_COOKIE_NAME = "fp_vid";
+
+/** 访客 Cookie 有效期：1 年（过期后再来算新访客，业界通行口径） */
+export const VISITOR_COOKIE_MAX_AGE_SEC = 365 * 24 * 60 * 60;
+
+/**
+ * 从请求的 Cookie 头里解出访客 ID，没有返回 null。
+ * 纯字符串解析，不依赖 Fetch API——与 session.ts 的 readTokenFromRequest 同款手法。
+ */
+export function parseVisitorId(cookieHeader: string | null): string | null {
+  if (!cookieHeader)
+    return null;
+  for (const part of cookieHeader.split(";")) {
+    const [k, ...rest] = part.trim().split("=");
+    if (k === VISITOR_COOKIE_NAME) {
+      const v = rest.join("=");
+      // 空值（如 "fp_vid="）视同没有——半截 cookie 不当访客算
+      return v.length > 0 ? v : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * 序列化访客 Cookie 为 Set-Cookie 值。
+ * 属性与 sessionCookie 同款：HttpOnly 防 XSS 读取、SameSite=Lax、Secure 只走 HTTPS
+ * （localhost 浏览器豁免不影响本地调试）、Path=/ 全站生效。
+ * 随机 UUID 不关联任何个人信息，隐私级别与 CF beacon 相当。
+ */
+export function visitorCookie(id: string): string {
+  return [
+    `${VISITOR_COOKIE_NAME}=${id}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    "Secure",
+    `Max-Age=${VISITOR_COOKIE_MAX_AGE_SEC}`,
+  ].join("; ");
+}

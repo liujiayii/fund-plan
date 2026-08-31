@@ -30,6 +30,16 @@ export function meta(_: Route.MetaArgs) {
 }
 
 /**
+ * 统计起点标注：YYYY-MM-DD → 「8 月 31 日」（去前导零，与资产走势日期标签同款手法）。
+ * 计数从功能上线才开始落库，「累计」不是建站以来——不标注的话，
+ * 数字尚小的阶段极易被读成「这站就这么点人」。
+ */
+function fmtStatsSince(date: string): string {
+  const [m, d] = date.slice(5).split("-");
+  return `${String(Number(m))} 月 ${String(Number(d))} 日`;
+}
+
+/**
  * 首页。游客看到的是主理人的示范盘 + 注册引导；
  * 已登录用户额外看到「去我的盘」入口。
  */
@@ -168,20 +178,38 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             </SectionCard>
           )}
 
-      {/* 平台数据：社交证明。整数为纯计数指标，不含金额，不涉及精度铁律 */}
-      <SectionCard title="平台数据">
+      {/* 平台数据：社交证明。计数为纯整数指标，不含金额，不涉及精度铁律。
+          访问（次）与访客（人）分开摆：PV 是热度、UV 是reach，口径混了会被内行看出业余 */}
+      <SectionCard
+        title="平台数据"
+        extra={stats.statsSince && (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            统计自
+            {" "}
+            {fmtStatsSince(stats.statsSince)}
+            {" "}
+            起
+          </Text>
+        )}
+      >
         <Row gutter={[24, 16]}>
-          <Col xs={12} md={6}>
-            <StatBig label="注册用户" value={fmtInt(stats.users)} suffix="人" size={24} />
-          </Col>
-          <Col xs={12} md={6}>
-            <StatBig label="累计成交" value={fmtInt(stats.confirmedOrders)} suffix="笔" size={24} />
-          </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={8}>
             <StatBig label="今日访问" value={fmtInt(stats.todayVisits)} suffix="次" size={24} />
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={8}>
             <StatBig label="累计访问" value={fmtInt(stats.totalVisits)} suffix="次" size={24} />
+          </Col>
+          <Col xs={12} md={8}>
+            <StatBig label="注册用户" value={fmtInt(stats.users)} suffix="人" size={24} />
+          </Col>
+          <Col xs={12} md={8}>
+            <StatBig label="今日访客" value={fmtInt(stats.todayVisitors)} suffix="人" size={24} />
+          </Col>
+          <Col xs={12} md={8}>
+            <StatBig label="累计访客" value={fmtInt(stats.totalVisitors)} suffix="人" size={24} />
+          </Col>
+          <Col xs={12} md={8}>
+            <StatBig label="累计成交" value={fmtInt(stats.confirmedOrders)} suffix="笔" size={24} />
           </Col>
         </Row>
       </SectionCard>

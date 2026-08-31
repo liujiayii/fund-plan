@@ -289,6 +289,25 @@ export const visitDaily = sqliteTable("visit_daily", {
 });
 
 /**
+ * 每日独立访客（一访客一天至多一行，复合主键去重）。
+ *
+ * 访客身份 = 匿名 Cookie fp_vid（随机 UUID，见 domain/visit.ts），
+ * 不碰 IP——隐私级别与 CF beacon 相当，登录与否无关。
+ * 今日访客 = 当日行数；累计访客 = COUNT(DISTINCT visitor_id)。
+ * INSERT OR IGNORE 落库，同一访客当日重复访问不再写行（PV 照涨，UV 不涨）。
+ */
+export const dailyVisitor = sqliteTable(
+  "daily_visitor",
+  {
+    /** 统计日 YYYY-MM-DD（北京时间） */
+    date: text("date").notNull(),
+    /** 匿名访客 ID（fp_vid 的值） */
+    visitorId: text("visitor_id").notNull(),
+  },
+  t => [primaryKey({ columns: [t.date, t.visitorId] })],
+);
+
+/**
  * 自选基金（用户收藏的基金，与持仓无关）。
  *
  * 复合主键 (userId, fundCode) 天然防重复关注，不需要额外唯一约束——
