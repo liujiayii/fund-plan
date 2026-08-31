@@ -27,7 +27,7 @@
     // Cloudflare Web Analytics beacon 的公开 token（-dashboard 建 Web Analytics 站点后复制，
     // 填这里再 deploy 即生效；留空则不渲染 beacon 脚本，页面零开销）。
     // 是「公开」token：本来就会嵌在页面 HTML 里给浏览器用，当 secret 藏没有意义
-    "CF_WEB_ANALYTICS_TOKEN": ""
+    "CF_WEB_ANALYTICS_TOKEN": "c63539926a984899bd70ad490ae17032"
   },
   "d1_databases": [
     {
