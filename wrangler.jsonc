@@ -43,6 +43,17 @@
       "id": "3745d67cb9ce41138809df7a9d3a7d1a"
     }
   ],
+  // 线上入口：Custom Domain 绑定 liujiayii.dpdns.org（NS 委派给 CF 的子域 zone）。
+  // DNS 记录与 HTTPS 证书全由 CF 托管——原先是「手动 A 记录 + zone route」的组合，
+  // 2026-08-31 迁移为 Custom Domain：deploy 幂等保证绑定存在（手滑删了自动恢复），
+  // 同 placement 的理由：dashboard 手改的不是稳定来源，wrangler.jsonc 才是。
+  // ⚠️ 历史教训：此前用 route pattern 写法时，wrangler 按 PSL 把 zone 推断成
+  // dpdns.org（不在本账号），fallback 走 Custom Domain API 撞上既有 A 记录报 100117
+  "routes": [
+    { "pattern": "liujiayii.dpdns.org", "custom_domain": true }
+  ],
+  // 显式保留 workers.dev 备用入口：routes 一出现 wrangler 默认就关它
+  "workers_dev": true,
   "triggers": {
     // Cron 一律用 UTC 书写，注释标注对应北京时间（UTC+8）
     "crons": [
