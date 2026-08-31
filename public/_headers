@@ -1,0 +1,6 @@
+# Workers Static Assets 的 _headers 文件（随 public/ 复制进构建产物）。
+# /assets/* 的文件名带内容 hash（如 root-Dm1z4mVn.js）——内容一变名字就变，
+# 可以让浏览器缓存一年且免 revalidation；回访用户每个资源省一次条件请求
+# （默认的 max-age=0, must-revalidate 在高延迟跨国链路上是白付的往返）。
+/assets/*
+  Cache-Control: public, max-age=31556952, immutable

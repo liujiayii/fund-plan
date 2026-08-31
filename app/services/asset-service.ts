@@ -25,26 +25,42 @@ export async function getAssetTimeline(
   db: Db,
   userId: number,
 ): Promise<{ daily: DailyAsset[]; latest: DailyAsset | null }> {
-  // ── 查询 1：已确认订单 ──────────────────────────────────────────────
-  // 只取 status='confirmed' 且 dealShares 不为 null 的行。
+  // ── 查询 1 & 2：已确认订单 + 现金账本（互相独立，一波并行）──────────
+  // 订单只取 status='confirmed' 且 dealShares 不为 null 的行。
   // pending/failed 没成交，份额没变，不算入重放。
   // orderBy(confirmDate asc, id asc)：保证 domain 前向扫描游标能按序消费。
-  const confirmedRows = await db
-    .select({
-      fundCode: orders.fundCode,
-      side: orders.side,
-      confirmDate: orders.confirmDate,
-      dealShares: orders.dealShares,
-    })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.userId, userId),
-        eq(orders.status, "confirmed"),
-        isNotNull(orders.dealShares),
-      ),
-    )
-    .orderBy(asc(orders.confirmDate), asc(orders.id));
+  // transactions 按 createdAt asc, id asc 取全量，映射成 { date, balance }。
+  // 日期转换是关键：createdAt 是 UTC 毫秒，fund_nav.navDate 是北京日历日，
+  // 必须用 toBeijing 转成北京日期串才能与净值日期对齐（与 checkin-service 同款）。
+  // 两查旧写法串行两跳——Worker 与 D1 跨大区时每跳都是一次百毫秒级往返
+  const [confirmedRows, txRows] = await Promise.all([
+    db
+      .select({
+        fundCode: orders.fundCode,
+        side: orders.side,
+        confirmDate: orders.confirmDate,
+        dealShares: orders.dealShares,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.userId, userId),
+          eq(orders.status, "confirmed"),
+          isNotNull(orders.dealShares),
+        ),
+      )
+      .orderBy(asc(orders.confirmDate), asc(orders.id)),
+    db
+      .select({
+        type: transactions.type,
+        amount: transactions.amount,
+        balance: transactions.balance,
+        createdAt: transactions.createdAt,
+      })
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(asc(transactions.createdAt), asc(transactions.id)),
+  ]);
 
   // 映射成 ReplayInput.confirmedOrders 的形状，同时收集去重基金代码
   const confirmedOrders: ReplayInput["confirmedOrders"] = [];
@@ -60,21 +76,6 @@ export async function getAssetTimeline(
     fundCodeSet.add(row.fundCode);
   }
   const fundCodes = [...fundCodeSet];
-
-  // ── 查询 2：现金账本 ──────────────────────────────────────────────
-  // transactions 按 createdAt asc, id asc 取全量，映射成 { date, balance }。
-  // 日期转换是关键：createdAt 是 UTC 毫秒，fund_nav.navDate 是北京日历日，
-  // 必须用 toBeijing 转成北京日期串才能与净值日期对齐（与 checkin-service 同款）。
-  const txRows = await db
-    .select({
-      type: transactions.type,
-      amount: transactions.amount,
-      balance: transactions.balance,
-      createdAt: transactions.createdAt,
-    })
-    .from(transactions)
-    .where(eq(transactions.userId, userId))
-    .orderBy(asc(transactions.createdAt), asc(transactions.id));
 
   const cashLedger: ReplayInput["cashLedger"] = [];
   // ── 查询 3：净入金按日聚合 ─────────────────────────────────────────
@@ -108,11 +109,16 @@ export async function getAssetTimeline(
   // 收集所有 navDate，后面并进 dateAxis
   const navDates = new Set<string>();
 
-  for (const code of fundCodes) {
-    const series = await getNavSeries(db, code);
+  // 各基金的净值序列互相独立，Promise.all 一波并行——
+  // 旧写法逐基金串行 await，N 只基金就是 N 次串行往返
+  const seriesList = await Promise.all(
+    fundCodes.map(code => getNavSeries(db, code)),
+  );
+  for (let i = 0; i < fundCodes.length; i++) {
+    const series = seriesList[i];
     // 丢掉 growthRate，只留 navDate + unitNav（重放不需要涨跌幅）
     const mapped = series.map(s => ({ navDate: s.navDate, unitNav: s.unitNav }));
-    navSeries.set(code, mapped);
+    navSeries.set(fundCodes[i], mapped);
     for (const s of series) {
       navDates.add(s.navDate);
     }

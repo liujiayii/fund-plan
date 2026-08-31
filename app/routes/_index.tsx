@@ -46,14 +46,17 @@ function fmtStatsSince(date: string): string {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { db, env } = getAppContext(context);
 
-  // stats 与登录态、主理人是否存在都无关，三个查询并行
-  const [me, admin, stats] = await Promise.all([
-    getCurrentUser(request, db),
-    getAdminUser(db, env),
-    getSiteStats(db),
-  ]);
+  // 主理人是后续组合/订单查询的前置（要 admin.id），先单独拿（1 条往返）；
+  // 其余查询（当前用户 / 平台统计 / 组合 / 订单）互相独立，一波全并行。
+  // 旧写法先并行一批、等齐了再并行第二批——Worker 与 D1 跨大区时
+  // 关键路径平白多出一整批往返，首页 TTFB 被拖出数秒
+  const admin = await getAdminUser(db, env);
 
   if (!admin) {
+    const [me, stats] = await Promise.all([
+      getCurrentUser(request, db),
+      getSiteStats(db),
+    ]);
     return {
       me,
       stats,
@@ -62,7 +65,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     } as const;
   }
 
-  const [portfolio, orders] = await Promise.all([
+  const [me, stats, portfolio, orders] = await Promise.all([
+    getCurrentUser(request, db),
+    getSiteStats(db),
     getPortfolio(db, admin.id),
     getOrders(db, admin.id, 8),
   ]);
