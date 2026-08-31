@@ -10,6 +10,7 @@ import {
   Typography,
 } from "antd";
 import { useFetcher } from "react-router";
+import { AssetPnlSummary } from "~/components/AssetPnlSummary";
 import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
@@ -25,7 +26,7 @@ import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getOrders, getPortfolio } from "~/services/portfolio-service";
-import { COLOR, pnlColor } from "~/theme";
+import { COLOR } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -96,23 +97,10 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         <PortfolioSummary portfolio={portfolio} />
       </SectionCard>
 
-      {/* 资产走势：曲线图 + 收益头条（截至 X 日，不写「昨日」——净值同步有延迟） */}
+      {/* 资产走势：收益摘要（单日+累计两格，消除口径误读）+ 曲线图。
+          收益标注「截至 X 日」不写「昨日」——净值同步有延迟 */}
       <SectionCard title="资产走势">
-        {timeline.latest && (() => {
-          // 去前导零：Number("08") → 8，显示「8 月 26 日」而非「08 月 26 日」
-          const [m, d] = timeline.latest.date.slice(5).split("-");
-          const monthLabel = String(Number(m));
-          const dayLabel = String(Number(d));
-          return (
-            <StatBig
-              label={`收益（截至 ${monthLabel} 月 ${dayLabel} 日）`}
-              value={`${timeline.latest.dayPnlCents > 0 ? "+" : ""}${fmtYuan(timeline.latest.dayPnlCents)}`}
-              suffix="元"
-              color={pnlColor(timeline.latest.dayPnlCents)}
-              size={24}
-            />
-          );
-        })()}
+        <AssetPnlSummary daily={timeline.daily} latest={timeline.latest} />
         <AssetTrendChart data={timeline.daily} />
       </SectionCard>
 

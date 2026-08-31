@@ -1,6 +1,8 @@
 import type { Route } from "./+types/master";
 import { Pagination, Space, Tabs, Tag, Typography } from "antd";
 import { useState } from "react";
+import { AssetPnlSummary } from "~/components/AssetPnlSummary";
+import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { OrderList } from "~/components/OrderList";
 import {
@@ -8,9 +10,11 @@ import {
   HoldingListReadonly,
   PortfolioSummary,
 } from "~/components/PortfolioView";
+import { ProfitCalendar } from "~/components/ProfitCalendar";
 import { TxList } from "~/components/TxList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { getAssetTimeline } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { getAdminUser } from "~/services/guard";
 import {
@@ -47,14 +51,15 @@ export async function loader({ context }: Route.LoaderArgs) {
     return { admin: null, adminName: env.ADMIN_USERNAME ?? "未配置" } as const;
   }
 
-  const [portfolio, orders, plans, txs] = await Promise.all([
+  const [portfolio, orders, plans, txs, timeline] = await Promise.all([
     getPortfolio(db, admin.id),
     getOrders(db, admin.id, 50),
     getDcaPlans(db, admin.id),
     getTransactions(db, admin.id, 50),
+    getAssetTimeline(db, admin.id),
   ]);
 
-  return { admin, portfolio, orders, plans, txs } as const;
+  return { admin, portfolio, orders, plans, txs, timeline } as const;
 }
 
 export default function Master({ loaderData }: Route.ComponentProps) {
@@ -74,7 +79,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
     );
   }
 
-  const { admin, portfolio, orders, plans, txs } = loaderData;
+  const { admin, portfolio, orders, plans, txs, timeline } = loaderData;
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -94,6 +99,17 @@ export default function Master({ loaderData }: Route.ComponentProps) {
 
       <SectionCard>
         <PortfolioSummary portfolio={portfolio} />
+      </SectionCard>
+
+      {/* 收益详情：与 /me 完全同款（AssetPnlSummary 单日+累计两格 + 曲线图 + 收益日历），
+          游客围观主理人时也能看到「这个盘到底赚没赚」的完整故事 */}
+      <SectionCard title="资产走势">
+        <AssetPnlSummary daily={timeline.daily} latest={timeline.latest} />
+        <AssetTrendChart data={timeline.daily} />
+      </SectionCard>
+
+      <SectionCard title="收益日历">
+        <ProfitCalendar data={timeline.daily} />
       </SectionCard>
 
       <SectionCard>
