@@ -23,6 +23,26 @@ Cloudflare 免费版对国内用户慢是**结构性问题**（无大陆节点 +
 （东财接口都有 KV 缓存、看起来没有慢后端），于是分析结论是贴着用户入口跑。
 API 实查 `placement_status: SUCCESS` + 请求实际 `local-AMS` 印证了这一点。
 
+### 隐藏病灶：免费版 10ms CPU 上限（error 1102）
+
+部署后验证时发现的**存量问题**（旧代码同样存在，缓存层只是轻微加码）：
+SSR bundle 上传体积 11.7MB，冷启动 isolate 上「模块初始化 + React 渲染」
+贴着免费版 **10ms CPU/请求**的上限，偶发 `error code: 1102`（超 CPU），
+实测约 1/10 的冷路径请求会随机白屏报错。17ce 那次「全节点失败」正是它
+与并发雪崩的混合现场，读法如下：
+
+- 各节点大量 `HTTP 500`：160 节点同时涌入，D1 突发争用让 loader 抛错、
+  走到应用的错误边界——是**应用渲染的 500**，不是 CF 错误页；
+- 大量 `0` / 10s 超时：SSR 排队 + 绕路链路叠加；
+- `error 1102`：冷 isolate 超出 CPU 上限——单用户日常访问偶发白屏的元凶。
+
+**应对**：匿名页缓存已升级为 stale-while-revalidate，`/` 与 `/master` 的
+游客路径不再付 SSR CPU（后台刷新挂掉也只是缓存继续旧，自愈）；但个性化
+页面（/me、/funds/…）仍走实时 SSR，冷 isolate 上依旧可能偶发 1102——
+根治需 Workers 付费版（$5/月，CPU 上限 30s）或瘦身 SSR bundle。
+另注：17ce 的 160 节点并发对 D1 直连 SSR 的站点是自打自压，结果只当
+压力测试看，不代表真实用户体验。
+
 ### 入境 IP 对照实验（本机联通，2026-08-31 午后）
 
 同一路线、同一时刻，`curl --resolve` 强连不同 CF anycast IP（CF 边缘按 SNI
@@ -57,10 +77,12 @@ LAX/SJC 段**。除非走 B2 把 D1 搬去欧洲，那时优选目标才反转�
    - `getPortfolio` / `getAssetTimeline` / 首页 loader：能并行的全并行
    - AMS 入境用户首页 TTFB 预计 4.5s → ~2.5s
 2. **`/assets/*` 上 immutable 长缓存**（`public/_headers`）：回访免条件请求
-3. **匿名页边缘缓存 60s**（`feat(cache)` commit）：`/` 与 `/master` 的游客
-   视角整页缓存在入口机房 Cache API，命中时 SSR 与 D1 查询全省，TTFB ≈
-   单程 RTT。带 `session` cookie 一律旁路；排障看 `x-fp-cache` 响应头
-   （hit / miss / bypass）。
+3. **匿名页边缘缓存（stale-while-revalidate）**（`feat(cache)` / `fix(cache)`
+   commit）：`/` 与 `/master` 的游客视角整页缓存在入口机房 Cache API——
+   fresh（60s 内）直接命中，TTFB ≈ 单程 RTT；stale（60s~1h）先给旧页、
+   后台重渲染覆盖，SSR 永不进用户关键路径（规避上面的 1102）。带
+   `session` cookie 一律旁路；排障看 `x-fp-cache` 响应头
+   （hit / stale / miss / bypass）。
 
 **部署后验证清单**：
 

@@ -14,8 +14,19 @@
 /** 允许整页缓存的匿名页路径（精确匹配，不带查询串） */
 export const ANON_CACHEABLE_PATHS = new Set(["/", "/master"]);
 
-/** 缓存时长（秒）：首页/示范盘的统计数字允许最多迟这一会儿 */
+/** fresh 窗口（秒）：窗口内的副本直接当命中用，统计数字最多迟这一会儿 */
 export const ANON_CACHE_TTL_SEC = 60;
+
+/**
+ * stale 上限（秒）：超过 fresh 窗口但没超过它的副本走「先给旧页、后台刷新」
+ * （stale-while-revalidate）。边缘缓存里存的副本 s-maxage 用这个值，到期淘汰。
+ *
+ * 为什么必须容忍 stale 而不是到期就回源：免费版 Worker 每请求只有 10ms CPU，
+ * 本站 SSR bundle 很大，冷启动 isolate 上渲染本就偶发 1102（超 CPU）。
+ * SSR 一旦挡在用户关键路径上，游客就会随机看到 Cloudflare 错误页；
+ * 而旧页 + 后台刷新的组合里，1102 最多杀掉后台任务，用户永远拿到页面。
+ */
+export const ANON_CACHE_STALE_MAX_SEC = 60 * 60;
 
 /** 判定输入：与 Fetch API 解耦的请求特征，便于单测 */
 export interface AnonCacheRequestInfo {
@@ -40,4 +51,21 @@ export function isAnonCacheablePage(r: AnonCacheRequestInfo): boolean {
     && ANON_CACHEABLE_PATHS.has(r.pathname)
     && !r.hasSessionCookie
   );
+}
+
+/** 缓存副本的新鲜度判定结果 */
+export type AnonCacheFreshness = "fresh" | "stale" | "expired";
+
+/**
+ * 按副本年龄决定怎么用：
+ *  - fresh：直接命中，SSR 与 D1 查询全省
+ *  - stale：立刻把旧页还给用户，同时后台重渲染覆盖缓存
+ *  - expired：太老，视同没有缓存（正常情况下 cache API 已按 s-maxage 淘汰）
+ */
+export function anonCacheFreshness(ageSec: number): AnonCacheFreshness {
+  if (ageSec <= ANON_CACHE_TTL_SEC)
+    return "fresh";
+  if (ageSec <= ANON_CACHE_STALE_MAX_SEC)
+    return "stale";
+  return "expired";
 }
