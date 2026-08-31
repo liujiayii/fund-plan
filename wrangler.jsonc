@@ -23,7 +23,11 @@
   },
   "vars": {
     // 管理员用户名：注册时用户名与此一致者获得 admin 角色，其组合公开展示
-    "ADMIN_USERNAME": "liujiayii"
+    "ADMIN_USERNAME": "liujiayii",
+    // Cloudflare Web Analytics beacon 的公开 token（-dashboard 建 Web Analytics 站点后复制，
+    // 填这里再 deploy 即生效；留空则不渲染 beacon 脚本，页面零开销）。
+    // 是「公开」token：本来就会嵌在页面 HTML 里给浏览器用，当 secret 藏没有意义
+    "CF_WEB_ANALYTICS_TOKEN": ""
   },
   "d1_databases": [
     {

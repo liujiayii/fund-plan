@@ -23,3 +23,14 @@ export function fmtYuan(cents: number): string {
   const grouped = intPart.replace(/\B(?=(\d{3})+$)/g, ",");
   return `${negative ? "-" : ""}${grouped}.${decPart}`;
 }
+
+/**
+ * 整数千分位（人/次/笔这类计数指标），如 12345 → "12,345"。
+ *
+ * 刻意不用 toLocaleString：SSR（workerd）与浏览器两端的 ICU 实现不一致时
+ * 会产生 hydration 文本不匹配，手写分组与 fmtYuan 同款、两端恒一致。
+ * 计数不会为负，不处理符号位。
+ */
+export function fmtInt(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+$)/g, ",");
+}

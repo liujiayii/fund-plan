@@ -275,6 +275,20 @@ export const checkin = sqliteTable(
 );
 
 /**
+ * 每日访问人次统计（一天一行）。
+ *
+ * 为什么单独建表而不是塞 KV：KV 免费额度 1000 写/天是最紧的一环，
+ * 而 D1 免费 10 万写/天，访问计数走 D1 绰绰有余。
+ * 今日访问 = 当天行，累计访问 = SUM(count)，表本身极小（365 行/年）。
+ */
+export const visitDaily = sqliteTable("visit_daily", {
+  /** 统计日 YYYY-MM-DD（北京时间），主键天然按日去重 */
+  date: text("date").primaryKey(),
+  /** 当日访问人次 */
+  count: integer("count").notNull().default(0),
+});
+
+/**
  * 自选基金（用户收藏的基金，与持仓无关）。
  *
  * 复合主键 (userId, fundCode) 天然防重复关注，不需要额外唯一约束——

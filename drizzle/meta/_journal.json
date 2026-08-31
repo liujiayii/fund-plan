@@ -15,6 +15,13 @@
       "when": 1787745767259,
       "tag": "0001_petite_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788139263186,
+      "tag": "0002_shiny_silk_fever",
+      "breakpoints": true
     }
   ]
 }
