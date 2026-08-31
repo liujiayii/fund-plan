@@ -1,4 +1,5 @@
 import type { Db } from "~/db/client";
+import type { FundRow } from "~/db/schema";
 import type { HoldingValuation, PortfolioValuation } from "~/domain/portfolio";
 import type { RedeemTier, ShareLotInput } from "~/domain/redeem";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -48,31 +49,33 @@ export async function latestNavMap(
   if (codes.length === 0)
     return map;
 
-  // 每只基金取 nav_date 最大的那条
+  // 一条 SQL 直接取出每只基金的最新净值行：外层过滤「nav_date 恰为该基金最大值」，
+  // 相关子查询命中 (fund_code, nav_date) 主键索引。
+  // 旧写法是「groupBy max + 逐基金串行 findFirst」的 1+N 次往返——
+  // Worker 与 D1 跨大区部署时（如国内流量入欧、D1 在美西）每条往返 100~300ms，
+  // 首页十来条持仓就能把 SSR 拖出数秒，这里是查询优化的重点
   const rows = await db
     .select({
       fundCode: fundNav.fundCode,
-      navDate: sql<string>`max(${fundNav.navDate})`,
+      navDate: fundNav.navDate,
+      unitNav: fundNav.unitNav,
+      growthRate: fundNav.growthRate,
     })
     .from(fundNav)
-    .where(inArray(fundNav.fundCode, codes))
-    .groupBy(fundNav.fundCode);
-
-  for (const r of rows) {
-    const nav = await db.query.fundNav.findFirst({
-      where: and(
-        eq(fundNav.fundCode, r.fundCode),
-        eq(fundNav.navDate, r.navDate),
+    .where(
+      and(
+        inArray(fundNav.fundCode, codes),
+        sql`(select max(f2.nav_date) from fund_nav f2 where f2.fund_code = ${fundNav.fundCode}) = ${fundNav.navDate}`,
       ),
+    );
+
+  for (const nav of rows) {
+    // 同时带 growthRate，供自选列表的日涨跌展示复用同一份净值口径
+    map.set(nav.fundCode, {
+      navDate: nav.navDate,
+      unitNav: nav.unitNav,
+      growthRate: nav.growthRate,
     });
-    if (nav) {
-      // 同时带 growthRate，供自选列表的日涨跌展示复用同一份净值口径
-      map.set(r.fundCode, {
-        navDate: nav.navDate,
-        unitNav: nav.unitNav,
-        growthRate: nav.growthRate,
-      });
-    }
   }
   return map;
 }
@@ -86,25 +89,26 @@ export async function getPortfolio(
   db: Db,
   userId: number,
 ): Promise<PortfolioView> {
-  const acc = await db.query.account.findFirst({
-    where: eq(account.userId, userId),
-  });
+  // 账户（现金）与持仓两查互相独立，一波并行——
+  // 旧写法串行两跳，Worker 与 D1 跨大区时每跳都是一次百毫秒级往返
+  const [acc, rows] = await Promise.all([
+    db.query.account.findFirst({
+      where: eq(account.userId, userId),
+    }),
+    db.select().from(holding).where(eq(holding.userId, userId)),
+  ]);
   const cash = acc?.cash ?? 0;
-
-  const rows = await db
-    .select()
-    .from(holding)
-    .where(eq(holding.userId, userId));
   // 过滤掉已清仓的记录（份额为 0）
   const active = rows.filter(r => r.totalShares > 0);
 
   const codes = active.map(r => r.fundCode);
-  const navMap = await latestNavMap(db, codes);
-
-  const funds
-    = codes.length > 0
-      ? await db.select().from(fund).where(inArray(fund.code, codes))
-      : [];
+  // 最新净值与基金档案同样互相独立，再一波并行
+  const [navMap, funds] = await Promise.all([
+    latestNavMap(db, codes),
+    codes.length > 0
+      ? db.select().from(fund).where(inArray(fund.code, codes))
+      : Promise.resolve([] as FundRow[]),
+  ]);
   const fundMap = new Map(funds.map(f => [f.code, f]));
 
   const holdings: HoldingView[] = active.map((r) => {

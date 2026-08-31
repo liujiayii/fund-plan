@@ -104,6 +104,13 @@ Cloudflare Dashboard → Workers & Pages → 你的 Worker → Settings → Trig
 
 如果 KV 写入不够用，把 `app/services/fund-data.ts` 里 `CACHE_TTL` 的值调大即可。
 
+## 国内访问速度
+
+国内用户访问慢是免费版的结构性问题（无大陆节点 + anycast 绕路），
+诊断证据、优选 IP 施工图（Cloudflare for SaaS 路线）与匿名页边缘缓存的
+说明见 `docs/china-access.md`。部署后记得按其中的验证清单抽查
+`x-fp-cache` 响应头与 `/assets/*` 的 immutable 缓存。
+
 ## 更新部署
 
 ```bash
