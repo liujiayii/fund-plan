@@ -126,12 +126,29 @@ stale-while-revalidate 与裸 GET 缓存两个修复。
 2. **剩下的延迟 100% 是「国内 → CF 入境」的网络路径**。最惨的是电信：
    64% 的节点绕 AMS（欧洲），入境 RTT 中位 431ms——首页再怎么缓存，
    光握手就要烧掉 1.5s。
-3. `curl --resolve` 强制美西入境（104.16.132.229 → LAX）实测：**完整 SSR
-   的 TTFB 仅 0.56~0.60s**。这就是优选 IP 的目标体验，对比当前三家
-   中位 1.68~2.87s 有 3~5 倍差距。
+3. 优选 IP 实测：**合格 IP 上缓存命中 TTFB 0.42~1.0s**（新加坡段
+   `104.18.32.115` 最快，本线 TCP 仅 ~85ms）。⚠️ 实测时务必确认响应
+   是本站内容（看 `x-fp-cache` 头）而非错误页——只看 CF-RAY 和耗时，
+   会把 403 错误页的响应时间误读成「优选 IP 很快」，踩过这个坑。
 
 → **走 B1（SaaS 优选 IP）**。B2 救不了入境 RTT 本身，且会把已团聚的
 Worker 与 D1 拆散，否决。
+
+### 优选 IP 的资格门槛：error 1034（Edge IP Restricted）
+
+CF 边缘**并非「任意 anycast IP 都伺候任意 zone」**：部分 IP 是专用的
+（如 `104.16.132.229` / `104.16.133.229`——cloudflare.com 自用的优质对，
+国内路由极佳但只回 403 `error code: 1034`）。所以优选 IP 要过双门槛：
+①能伺候本 zone（请求返回本站内容或 404 才算合格；403/1034 = 禁用）
+②国内路由快。2026-08-31 本机联通实测：
+
+| IP                        | 入境 | TCP RTT | 首页 TTFB（命中） | 资格 |
+| ------------------------- | ---- | ------- | ----------------- | ---- |
+| 104.18.32.115             | SIN  | ~85ms   | 0.42~0.87s        | ✅ 本线路最优 |
+| 103.21.244.1              | LAX  | ~185ms  | ~1.0s             | ✅ 稳 |
+| 104.16.160.1              | LAX  | ~190ms  | 1.3~1.8s          | ✅ 晚高峰抖 |
+| 104.16.132.229 / .133.229 | LAX  | ~195ms  | —                 | ❌ 1034 禁用（CF 自留） |
+| 172.64.32.1 / 108.162.192.1 | SIN | ~85ms  | —                 | ❌ 1034 禁用 |
 
 > 注意：Smart Placement 的落点会随流量重新分析而漂移（本日就经历了
 > local → remote-SJC 的变化）。上线 B1 后若发现 `Cf-Placement` 离开
@@ -152,16 +169,20 @@ DNS 在国内服务商（DNSPod）还能**分线路解析**：境内走优选 IP
 ### 施工步骤
 
 1. **再注册一个免费子域**（dpdns.org 同现有流程，注意账号域名数量上限），
-   如 `liujiayii-fast.dpdns.org`，NS 委派给 CF。此 zone 专职做 SaaS 提供方，
-   自身 IP 对的质量无所谓。
-   - **顺手一测（免费试签）**：zone 激活后 `dig liujiayii-fast.dpdns.org`
-     看分到的 IP 对，用上面的 `curl --resolve` 手法测本线路由。若抽到
-     LAX/SJC 段的好签，可以**跳过整个 SaaS**：直接把它作为 Worker 的第二个
-     custom domain 用（`wrangler.jsonc` 的 routes 加一条
-     `{ "pattern": "liujiayii-fast.dpdns.org", "custom_domain": true }`）。
-     代价是：不能分线路、IP 对不可控，且换签要重注册域名。
-2. **启用 SaaS**：该 zone → SSL/TLS → Custom Hostnames → Enable。设
-   fallback origin 为如 `service.liujiayii-fast.dpdns.org`，并在 DNS 里给它
+   NS 委派给 CF。此 zone 专职做 SaaS 提供方，自身 IP 对的质量无所谓。
+   - **顺手一测（免费试签）**：把新域名以 custom domain 形式挂到 Worker
+     （`wrangler.jsonc` 的 routes 加
+     `{ "pattern": "<新域名>", "custom_domain": true }`），逼出它分到的
+     IP 对再 `curl --resolve` 实测。**已实测（2026-08-31）**：新域名
+     `liujiayi.dpdns.org` 抽到 `104.21.47.129 / 172.67.171.38`，本机
+     联通线依然绕 AMS（TCP 553ms）——但 anycast 因 ISP 而异（主 pair
+     联通 52% 走 SJC、电信 64% 走 AMS），新 pair 的真实成色要用 17ce
+     分 ISP 实测：若电信显著改善，可直接把新域名当国内入口用，
+     **免去整套 SaaS 与绑卡**。
+2. **启用 SaaS**：该 zone → SSL/TLS → Custom Hostnames → Enable。
+   ⚠️ **需先给 CF 账号绑支付方式**（100 个 custom hostname 内免费，超出
+   才 $0.10/个/月——本站只用 1 个，不会产生扣费；但绑卡是开通门槛）。
+   设 fallback origin 为如 `service.liujiayi.dpdns.org`，并在 DNS 里给它
    建一条 **originless 记录：`AAAA 100::`**（流量由 Worker 接，不需要真源站）。
 3. **绑 Worker 路由**：zone → Workers Routes 添加
    `cn.liujiayii.dpdns.org/*` → `fund-plan`（或 `*/*` 全捕，此 zone 专用）。
@@ -192,15 +213,16 @@ DNS 在国内服务商（DNSPod）还能**分线路解析**：境内走优选 IP
 
 ### 优选 IP 怎么选
 
-- 起手用实测过的美西段（2026-08-31 本机联通验证，全部入境 LAX、完整
-  SSR TTFB 0.56~0.60s）：`104.16.132.229`、`104.16.133.229`、
-  `104.16.160.1`、`103.21.244.1`。**用前必重测**——anycast 路由会漂移。
-- **别选 SIN 段**（172.64.32.1 / 108.162.192.1 虽然首跳 85ms 最快，但
-  17ce 实测 SEA 入境节点体验并不好，且 Worker 与 D1 都在美西，进新加坡
-  反而多一跳转发）。
+- **双门槛**：先过 1034 资格关（`curl --resolve 域名:443:IP https://域名/`，
+  返回本站内容/404 才合格，403 即禁用），再比路由快慢。
+- 起手候选（2026-08-31 本机联通实测，**用前必重测**——路由会漂移）：
+  `104.18.32.115`（SIN，TCP ~85ms，命中 TTFB 0.42~0.87s）、
+  `103.21.244.1`（LAX，TCP ~185ms，命中 ~1.0s）、`104.16.160.1`（LAX）。
+- ⚠️ `104.16.132.229`、`104.16.133.229`、`172.64.32.1`、`108.162.192.1`
+  路由虽好但被 1034 禁用，测了也是白测。
 - 系统性筛选：[CloudflareSpeedTest](https://github.com/XIU2/CloudflareSpeedTest)
-  （GitHub 需走代理下载）对 CF 全段测延迟+丢包，取前几名；再用 17ce 验证
-  各 ISP 的实际路由——三家的好 IP 未必相同，DNSPod 按 ISP 分线路各配各的。
+  （GitHub 需走代理下载）先按延迟粗筛，再逐个过 1034 资格关；三家的最优
+  IP 未必相同，DNSPod 按 ISP 分线路各配各的。
 
 ### 维护
 

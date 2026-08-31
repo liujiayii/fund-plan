@@ -50,7 +50,14 @@
   // ⚠️ 历史教训：此前用 route pattern 写法时，wrangler 按 PSL 把 zone 推断成
   // dpdns.org（不在本账号），fallback 走 Custom Domain API 撞上既有 A 记录报 100117
   "routes": [
-    { "pattern": "liujiayii.dpdns.org", "custom_domain": true }
+    { "pattern": "liujiayii.dpdns.org", "custom_domain": true },
+    // 国内提速「试签」：第二个免费子域 zone，独立分到一对 anycast IP。
+    // 主 zone 的 IP 对（104.21.73.133/172.67.145.12）国内绕 AMS 入境
+    //（17ce 实测电信 64% 绕欧洲，RTT 中位 431ms）。这对新签若直连美西，
+    // 整站对国内即可亚秒级——好签留作国内入口域名，烂签撤掉再走 SaaS 路线。
+    // 挂 custom domain 是为了逼出这对 IP（自动建 proxied 记录），见
+    // docs/china-access.md「B1 · SaaS 优选 IP → 免费试签」。
+    { "pattern": "liujiayi.dpdns.org", "custom_domain": true }
   ],
   // 显式保留 workers.dev 备用入口：routes 一出现 wrangler 默认就关它
   "workers_dev": true,
