@@ -1,8 +1,9 @@
 import { createContext, createRequestHandler, RouterContextProvider } from "react-router";
 import { getDb } from "../app/db/client";
+import { ANON_CACHE_TTL_SEC, isAnonCacheablePage } from "../app/domain/anon-page-cache";
 import { isPageVisit, parseVisitorId, visitorCookie } from "../app/domain/visit";
 import { scanDcaPlans } from "../app/services/dca-service";
-import { purgeExpiredSessions } from "../app/services/session";
+import { purgeExpiredSessions, readTokenFromRequest } from "../app/services/session";
 import { settlePendingOrders, syncNav } from "../app/services/settle";
 import { recordVisit } from "../app/services/stats-service";
 
@@ -38,6 +39,103 @@ function extractVisitInfo(request: Request) {
   };
 }
 
+/**
+ * 页面请求出站收尾：
+ *  - 对浏览器永远 no-store——登录后立刻回首页不能看到游客版残影；
+ *  - 新访客补发 fp_vid（老访客 ID 没变，不重复 Set）；
+ *  - x-fp-cache 标注本请求走了哪条缓存路径，线上排障用。
+ * SSR 返回的 Response headers 可能不可变，复制一份再追加；
+ * body 是流，用 new Response(body, init) 原样转交不缓冲。
+ */
+function finalizePageResponse(
+  response: Response,
+  cacheState: "hit" | "miss" | "bypass",
+  existingVid: string | null,
+  vid: string,
+): Response {
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "private, no-store");
+  headers.set("x-fp-cache", cacheState);
+  if (!existingVid) {
+    headers.append("Set-Cookie", visitorCookie(vid));
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+/**
+ * 页面请求处理：匿名页（/ 与 /master 的游客视角，判定见 domain/anon-page-cache）
+ * 先查入口机房的 Cache API，命中直接返回——SSR 与全部 D1 查询都省掉，
+ * 绕路入境的国内游客 TTFB 从数秒降到约等于单程 RTT。
+ * 未命中照常 SSR，并把 200 的流式响应 tee 一份写进缓存（60s，副本剥离 Set-Cookie）。
+ * 命中与否都会照常计数访问统计、给新访客补发 fp_vid——被缓存的只有 HTML 本体。
+ */
+async function servePage(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  vid: string,
+  existingVid: string | null,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const cacheable = isAnonCacheablePage({
+    method: request.method,
+    pathname: url.pathname,
+    search: url.search,
+    hasSessionCookie: readTokenFromRequest(request) !== "",
+  });
+  // caches.default 是 Cloudflare 扩展（Workers 运行时存在），但生成的
+  // worker-configuration.d.ts 里 CacheStorage 是标准接口、没有这个属性，需断言
+  const cache = (caches as unknown as { default: Cache }).default;
+  const cacheKey = new Request(url.toString(), { method: "GET" });
+
+  if (cacheable) {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      // 缓存副本写入时已剥离 Set-Cookie，新访客的 fp_vid 在收尾时补发
+      return finalizePageResponse(cached, "hit", existingVid, vid);
+    }
+  }
+
+  const context = new RouterContextProvider();
+  context.set(CloudflareContext, { env, ctx });
+  const response = await requestHandler(request, context);
+
+  // 非 200（重定向/错误页）或不可缓存的请求：不写缓存，直接收尾
+  if (!cacheable || response.status !== 200 || !response.body) {
+    return finalizePageResponse(response, "bypass", existingVid, vid);
+  }
+
+  // 流式响应 tee 一支给缓存（cache.put 需要完整 body），一支照常还给客户端。
+  // 存档副本显式带 s-maxage 控制边缘侧 TTL；对客户端的 no-store 在收尾统一设置
+  const [forClient, forCache] = response.body.tee();
+  ctx.waitUntil(
+    (async () => {
+      const copy = new Response(forCache, {
+        status: response.status,
+        headers: new Headers(response.headers),
+      });
+      copy.headers.delete("Set-Cookie");
+      copy.headers.set("Cache-Control", `public, s-maxage=${ANON_CACHE_TTL_SEC}`);
+      await cache.put(cacheKey, copy);
+    })().catch(err => console.error("[cache] 匿名页写缓存失败：", err)),
+  );
+
+  return finalizePageResponse(
+    new Response(forClient, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    }),
+    "miss",
+    existingVid,
+    vid,
+  );
+}
+
 export default {
   /** HTTP 请求入口：把 Cloudflare env/ctx 注入 RouterContext，再交给 React Router */
   async fetch(request, env, ctx) {
@@ -54,23 +152,7 @@ export default {
           console.error("[stats] 访问计数失败：", err)),
       );
 
-      const context = new RouterContextProvider();
-      context.set(CloudflareContext, { env, ctx });
-      const response = await requestHandler(request, context);
-
-      // 新访客才需要下发 cookie（老访客 ID 没变，不重复 Set）。
-      // SSR 返回的 Response headers 可能不可变，复制一份再追加；
-      // body 是流，用 new Response(body, init) 原样转交不缓冲
-      if (!existingVid) {
-        const headers = new Headers(response.headers);
-        headers.append("Set-Cookie", visitorCookie(vid));
-        return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-        });
-      }
-      return response;
+      return servePage(request, env, ctx, vid, existingVid);
     }
 
     const context = new RouterContextProvider();
