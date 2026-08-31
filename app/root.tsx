@@ -36,14 +36,15 @@ const { Header, Content } = AntLayout;
  * 根 loader：把当前登录用户带给全站，用于导航栏显示登录态。
  * 游客返回 null，页面照常渲染（公开内容都能看）。
  *
- * 顺带带出 CF Web Analytics 的公开 token（wrangler vars 配置）——
- * 未配置时为 null，beacon 脚本不渲染，页面零额外请求。
+ * ⚠️ 不要在这里重新接 CF Web Analytics beacon（PR #26 加过、PR #29 撤了）：
+ * 线上域名 liujiayii.dpdns.org 在 CF zone 内走橙云代理，Web Analytics 的
+ * 自动注入默认开启——页面手动再嵌一份会双上报，dashboard 的 pageview 翻倍。
+ * 自动注入从 zone 接入起就在收集，历史数据与 CWV 都在，手动嵌入零收益。
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const { db, env } = getAppContext(context);
+  const { db } = getAppContext(context);
   const user = await getCurrentUser(request, db);
-  const cfAnalyticsToken = env.CF_WEB_ANALYTICS_TOKEN || null;
-  return { user, cfAnalyticsToken };
+  return { user };
 }
 
 // 一级导航项定义已迁至 ~/domain/nav（顶栏与移动端底部 TabBar 共用，顺序敏感）
@@ -72,8 +73,6 @@ export default function App() {
   const data = useLoaderData<typeof loader>();
   const location = useLocation();
   const user = data?.user ?? null;
-  // CF Web Analytics beacon 的公开 token；未配置为 null，脚本不渲染
-  const cfAnalyticsToken = data?.cfAnalyticsToken ?? null;
 
   // 登出表单引用：Dropdown 的菜单项点击后触发 submit，走 POST /logout。
   // 仍用 form post 而非 client fetch，是为了沿用服务端清 session + 重定向的标准链路。
@@ -90,153 +89,140 @@ export default function App() {
 
   return (
     // antd 全局配置：中文语言包 + 视觉 token（见 app/theme.ts）
-    <>
-      <ConfigProvider
-        locale={zhCN}
-        theme={{ algorithm: theme.defaultAlgorithm, ...ANTD_TOKEN }}
-      >
-        <AntLayout style={{ minHeight: "100vh" }}>
-          {/* Header 由 antd 默认的深色改为白底 + 底部细线，
+    <ConfigProvider
+      locale={zhCN}
+      theme={{ algorithm: theme.defaultAlgorithm, ...ANTD_TOKEN }}
+    >
+      <AntLayout style={{ minHeight: "100vh" }}>
+        {/* Header 由 antd 默认的深色改为白底 + 底部细线，
             这是「后台管理系统」与「消费级理财 App」观感的分水岭 */}
-          <Header
+        <Header
           // fp-header：窄屏 space-between 让登录态回到右侧（responsive.css）
-            className="fp-header"
+          className="fp-header"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 24,
+            paddingInline: 24,
+            background: COLOR.card,
+            borderBottom: `1px solid ${COLOR.border}`,
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+          }}
+        >
+          <a
+            href="/"
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 24,
-              paddingInline: 24,
-              background: COLOR.card,
-              borderBottom: `1px solid ${COLOR.border}`,
-              position: "sticky",
-              top: 0,
-              zIndex: 10,
+              color: COLOR.primary,
+              fontWeight: 700,
+              fontSize: "clamp(16px, 4vw, 18px)",
+              whiteSpace: "nowrap",
             }}
           >
-            <a
-              href="/"
-              style={{
-                color: COLOR.primary,
-                fontWeight: 700,
-                fontSize: "clamp(16px, 4vw, 18px)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              模拟基金
-            </a>
-            {/* 桌面顶栏导航。窄屏整体隐藏（display:none），职责移交底部 TabBar ——
+            模拟基金
+          </a>
+          {/* 桌面顶栏导航。窄屏整体隐藏（display:none），职责移交底部 TabBar ——
               用 CSS 隐藏而非条件渲染：条件渲染需要 JS 断点，SSR 下必闪一帧（spec §6.2）。
               隐藏的 DOM 还在，代价是几个 <li>，可接受 */}
-            <div className="fp-desktop" style={{ flex: 1, minWidth: 0 }}>
-              <Menu
-                mode="horizontal"
-                selectedKeys={selectedKey ? [selectedKey] : []}
-                items={NAV_ITEMS.map(i => ({
-                  key: i.key,
-                  label: <a href={i.key}>{i.label}</a>,
-                }))}
-                style={{ minWidth: 0, borderBottom: "none" }}
-              />
-            </div>
-            {/* 登录态区域：已登录显示头像+用户名 Dropdown（登出入口收进菜单），
+          <div className="fp-desktop" style={{ flex: 1, minWidth: 0 }}>
+            <Menu
+              mode="horizontal"
+              selectedKeys={selectedKey ? [selectedKey] : []}
+              items={NAV_ITEMS.map(i => ({
+                key: i.key,
+                label: <a href={i.key}>{i.label}</a>,
+              }))}
+              style={{ minWidth: 0, borderBottom: "none" }}
+            />
+          </div>
+          {/* 登录态区域：已登录显示头像+用户名 Dropdown（登出入口收进菜单），
               游客显示登录/注册。用 Dropdown 取代原先「昵称 + 登出按钮」并排，
               避免操作按钮贴着昵称的别扭观感，也更贴近消费级 App 习惯。 */}
-            {user
-              ? (
-                  <Dropdown
-                    placement="bottomRight"
-                    menu={{
-                      items: [
-                        {
-                          key: "logout",
-                          icon: <LogoutOutlined />,
-                          label: "登出",
-                          // 菜单项点击 → 触发隐藏的登出表单 submit
-                          onClick: () => logoutFormRef.current?.requestSubmit(),
-                        },
-                      ],
-                    }}
-                  >
-                    <Space style={{ cursor: "pointer" }} size={8}>
-                      <Avatar
-                        size={28}
-                        style={{ background: COLOR.primary, verticalAlign: "middle" }}
-                      >
-                        {avatarText}
-                      </Avatar>
-                      <span style={{ color: COLOR.textPrimary }}>
-                        {user.username}
-                        {user.role === "admin" ? "（主理人）" : ""}
-                      </span>
-                    </Space>
-                  </Dropdown>
-                )
-              : (
-                  <Space>
-                    <Button size="small" href="/login">
-                      登录
-                    </Button>
-                    <Button size="small" type="primary" href="/register">
-                      注册
-                    </Button>
+          {user
+            ? (
+                <Dropdown
+                  placement="bottomRight"
+                  menu={{
+                    items: [
+                      {
+                        key: "logout",
+                        icon: <LogoutOutlined />,
+                        label: "登出",
+                        // 菜单项点击 → 触发隐藏的登出表单 submit
+                        onClick: () => logoutFormRef.current?.requestSubmit(),
+                      },
+                    ],
+                  }}
+                >
+                  <Space style={{ cursor: "pointer" }} size={8}>
+                    <Avatar
+                      size={28}
+                      style={{ background: COLOR.primary, verticalAlign: "middle" }}
+                    >
+                      {avatarText}
+                    </Avatar>
+                    <span style={{ color: COLOR.textPrimary }}>
+                      {user.username}
+                      {user.role === "admin" ? "（主理人）" : ""}
+                    </span>
                   </Space>
-                )}
-            {/* 登出表单：视觉上隐藏，仅供 Dropdown 菜单项触发 submit 用 */}
-            <form
-              ref={logoutFormRef}
-              method="post"
-              action="/logout"
-              style={{ display: "none" }}
-            />
-          </Header>
-          <Content
-            className="fp-content"
-            style={{
-              padding: "24px 24px 48px",
-              maxWidth: 1120,
-              margin: "0 auto",
-              width: "100%",
-            }}
-          >
-            <Outlet />
-          </Content>
-          {/* 移动端底部导航（768px 以下显示）。放 Content 外保证固定定位不受内容影响 */}
-          <MobileTabBar />
-          {/* Pro 系标准 Footer：上行 links（GitHub），下行 © + 声明。
-            用 DefaultFooter 取代手写 Footer，省去自维护链接样式，视觉与 antd Pro 一致。 */}
-          <DefaultFooter
-            className="fp-footer"
-            copyright="模拟盘 · 数据来自公开接口 · 仅供学习，不构成投资建议"
-            links={[
-              {
-                key: "github",
-                // GitHub 文字前置图标，免得链接孤零零一行不好看
-                title: (
-                  <Space size={4}>
-                    <GithubOutlined />
-                    GitHub
-                  </Space>
-                ),
-                href: "https://github.com/liujiayii/fund-plan",
-                // 新窗口打开（等价 target="_blank" rel="noreferrer"）
-                blankTarget: true,
-              },
-            ]}
+                </Dropdown>
+              )
+            : (
+                <Space>
+                  <Button size="small" href="/login">
+                    登录
+                  </Button>
+                  <Button size="small" type="primary" href="/register">
+                    注册
+                  </Button>
+                </Space>
+              )}
+          {/* 登出表单：视觉上隐藏，仅供 Dropdown 菜单项触发 submit 用 */}
+          <form
+            ref={logoutFormRef}
+            method="post"
+            action="/logout"
+            style={{ display: "none" }}
           />
-        </AntLayout>
-      </ConfigProvider>
-      {/* Cloudflare Web Analytics beacon（隐私优先：无 cookie 无指纹）。
-          只在 wrangler vars 配了 token 时渲染；spa:true 让它兼容
-          history API 的客户端路由（当前站内导航是全页跳转，开了无害）。
-          数据只进 CF dashboard（独立访客/来源/国家），站内展示用的是 D1 计数。 */}
-      {cfAnalyticsToken && (
-        <script
-          defer
-          src="https://static.cloudflareinsights.com/beacon.min.js"
-          data-cf-beacon={JSON.stringify({ token: cfAnalyticsToken, spa: true })}
+        </Header>
+        <Content
+          className="fp-content"
+          style={{
+            padding: "24px 24px 48px",
+            maxWidth: 1120,
+            margin: "0 auto",
+            width: "100%",
+          }}
+        >
+          <Outlet />
+        </Content>
+        {/* 移动端底部导航（768px 以下显示）。放 Content 外保证固定定位不受内容影响 */}
+        <MobileTabBar />
+        {/* Pro 系标准 Footer：上行 links（GitHub），下行 © + 声明。
+            用 DefaultFooter 取代手写 Footer，省去自维护链接样式，视觉与 antd Pro 一致。 */}
+        <DefaultFooter
+          className="fp-footer"
+          copyright="模拟盘 · 数据来自公开接口 · 仅供学习，不构成投资建议"
+          links={[
+            {
+              key: "github",
+              // GitHub 文字前置图标，免得链接孤零零一行不好看
+              title: (
+                <Space size={4}>
+                  <GithubOutlined />
+                  GitHub
+                </Space>
+              ),
+              href: "https://github.com/liujiayii/fund-plan",
+              // 新窗口打开（等价 target="_blank" rel="noreferrer"）
+              blankTarget: true,
+            },
+          ]}
         />
-      )}
-    </>
+      </AntLayout>
+    </ConfigProvider>
   );
 }
 
