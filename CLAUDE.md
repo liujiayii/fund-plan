@@ -250,6 +250,8 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 **给人看的（长期有效，改动相关代码前该读）：**
 
 - 部署指南 `docs/deployment.md`（含免费版额度分析，**KV 写入 1000 次/天是最紧的一环**）
+- 国内访问优化 `docs/china-access.md`（诊断证据、SaaS 优选 IP 施工图；`/` 与
+  `/master` 的游客视图走 `workers/app.ts` 的边缘缓存，排障看 `x-fp-cache` 头）
 - 开发指南 `docs/development.md`（踩坑记录的完整版）
 
 **设计文档 `docs/superpowers/specs/`（记录「为什么这样设计」，git diff 答不出的那部分）：**
