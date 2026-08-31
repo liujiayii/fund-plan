@@ -1,8 +1,10 @@
 import { createContext, createRequestHandler, RouterContextProvider } from "react-router";
 import { getDb } from "../app/db/client";
+import { isPageVisit } from "../app/domain/visit";
 import { scanDcaPlans } from "../app/services/dca-service";
 import { purgeExpiredSessions } from "../app/services/session";
 import { settlePendingOrders, syncNav } from "../app/services/settle";
+import { recordVisit } from "../app/services/stats-service";
 
 /**
  * Cloudflare 运行时上下文键。React Router 8 的 loader/action 通过
@@ -23,9 +25,31 @@ const requestHandler = createRequestHandler(
 const CRON_DCA_SCAN = "0 2 * * *"; // 北京 10:00
 const CRON_SETTLE = "30 12 * * *"; // 北京 20:30
 
+/**
+ * 从 Request 抽出访问判定所需的方法与三个请求头，喂给纯函数 isPageVisit。
+ * 抽取层留在这里、判定逻辑留在 domain——domain 保持零 Fetch API 依赖，单测不用模拟 Request。
+ */
+function extractVisitInfo(request: Request) {
+  return {
+    method: request.method,
+    secFetchDest: request.headers.get("sec-fetch-dest"),
+    accept: request.headers.get("accept"),
+    userAgent: request.headers.get("user-agent"),
+  };
+}
+
 export default {
   /** HTTP 请求入口：把 Cloudflare env/ctx 注入 RouterContext，再交给 React Router */
   async fetch(request, env, ctx) {
+    // 访问人次计数：浏览器页面导航（GET + HTML）才算一次，loader/XHR/资源/爬虫全不算。
+    // 放进 waitUntil 异步执行——统计挂了也绝不能拖垮页面响应
+    if (isPageVisit(extractVisitInfo(request))) {
+      ctx.waitUntil(
+        recordVisit(getDb(env.DB)).catch(err =>
+          console.error("[stats] 访问计数失败：", err)),
+      );
+    }
+
     const context = new RouterContextProvider();
     context.set(CloudflareContext, { env, ctx });
     return requestHandler(request, context);

@@ -6,13 +6,15 @@ import {
   HoldingListReadonly,
   PortfolioSummary,
 } from "~/components/PortfolioView";
-import { fmtYuan } from "~/components/ui/format";
+import { fmtInt, fmtYuan } from "~/components/ui/format";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS } from "~/domain/checkin";
 import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
 import { getOrders, getPortfolio } from "~/services/portfolio-service";
+import { getSiteStats } from "~/services/stats-service";
 import { CARD_SHADOW } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
@@ -34,14 +36,17 @@ export function meta(_: Route.MetaArgs) {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { db, env } = getAppContext(context);
 
-  const [me, admin] = await Promise.all([
+  // stats 与登录态、主理人是否存在都无关，三个查询并行
+  const [me, admin, stats] = await Promise.all([
     getCurrentUser(request, db),
     getAdminUser(db, env),
+    getSiteStats(db),
   ]);
 
   if (!admin) {
     return {
       me,
+      stats,
       admin: null,
       adminName: env.ADMIN_USERNAME ?? "未配置",
     } as const;
@@ -52,7 +57,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     getOrders(db, admin.id, 8),
   ]);
 
-  return { me, admin, portfolio, orders } as const;
+  return { me, stats, admin, portfolio, orders } as const;
 }
 
 /** 产品卖点，讲清「这不是玩具」 */
@@ -76,7 +81,7 @@ const FEATURES = [
 ];
 
 export default function Index({ loaderData }: Route.ComponentProps) {
-  const { me } = loaderData;
+  const { me, stats } = loaderData;
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -162,6 +167,24 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               )}
             </SectionCard>
           )}
+
+      {/* 平台数据：社交证明。整数为纯计数指标，不含金额，不涉及精度铁律 */}
+      <SectionCard title="平台数据">
+        <Row gutter={[24, 16]}>
+          <Col xs={12} md={6}>
+            <StatBig label="注册用户" value={fmtInt(stats.users)} suffix="人" size={24} />
+          </Col>
+          <Col xs={12} md={6}>
+            <StatBig label="累计成交" value={fmtInt(stats.confirmedOrders)} suffix="笔" size={24} />
+          </Col>
+          <Col xs={12} md={6}>
+            <StatBig label="今日访问" value={fmtInt(stats.todayVisits)} suffix="次" size={24} />
+          </Col>
+          <Col xs={12} md={6}>
+            <StatBig label="累计访问" value={fmtInt(stats.totalVisits)} suffix="次" size={24} />
+          </Col>
+        </Row>
+      </SectionCard>
 
       {/* 排行榜引流：游客与已登录都给入口（移动端底栏进不去排行榜，这是移动端唯一入口） */}
       <SectionCard
