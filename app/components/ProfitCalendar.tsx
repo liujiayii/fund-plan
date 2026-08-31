@@ -59,17 +59,21 @@ function cellBgColor(dayPnlCents: number, dayPnlRate: number): string {
 }
 
 /**
- * 格内收益金额的简短展示。
+ * 格内收益金额的简短展示：保留两位小数（与全站 fmtYuan 的分→元口径一致），
+ * 如 "+11.40"、"-6.98"。
  *
- * fmtYuan 会输出带千分位的完整金额（如 "+1,234.56"），在 40px 宽的格子里
- * 很容易溢出。收益日历的信息密度优先级是「色块深浅 > 有无数据 > 数字」，
- * 所以只取整数元部分 + 正负号，如 "+1234"、"-56"。
- * 损失的小数部分（几毛几分）在日历视图里无阅读价值。
+ * 刻意不加千分位：日历格子要的是紧凑（"+1234.56" 而非 "+1,234.56"），
+ * 桌面格子宽约 145px、NUM_FONT 等宽 11px，8 字符绰绰有余；
+ * 移动端方形格子（10px）多数情况放得下，超长靠样式层 ellipsis 截断。
+ *
+ * 整数拼法零浮点：元整数部分与小数两位分别取，不经 cents/100 除法。
  */
 function fmtPnlShort(cents: number): string {
-  const yuan = Math.trunc(cents / 100);
-  const sign = yuan > 0 ? "+" : "";
-  return `${sign}${yuan}`;
+  const sign = cents > 0 ? "+" : "-";
+  const abs = Math.abs(cents);
+  const yuan = Math.floor(abs / 100);
+  const fen = abs % 100;
+  return `${sign}${yuan}.${String(fen).padStart(2, "0")}`;
 }
 
 // ─────────────────────────────────────────────────────────────
