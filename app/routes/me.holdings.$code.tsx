@@ -6,9 +6,10 @@
  * 设计对用户可见，并提供加仓/卖出/该基金交易流水三个入口。
  */
 import type { Route } from "./+types/me.holdings.$code";
-import { Button, message, Space, Table, Tag, Typography } from "antd";
+import { Button, message, Space, Table, Tabs, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { BuyPanel } from "~/components/BuyPanel";
 import { OrderActions } from "~/components/OrderActions";
 import { OrderList } from "~/components/OrderList";
@@ -104,6 +105,21 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
   const handleSuccess = (msg: string) => {
     message.success(msg);
     setTick(t => t + 1);
+  };
+
+  // 页签状态进 URL（?tab=trade|dca|orders，默认 trade）：
+  // 持仓列表「卖出」深链、外链直达订单页签都靠它。replace 避免每次切页签堆历史
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get("tab") ?? "trade";
+  const setTab = (key: string) => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set("tab", key);
+        return p;
+      },
+      { replace: true },
+    );
   };
 
   return (
@@ -213,57 +229,78 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         </Paragraph>
       </SectionCard>
 
-      {/* 加仓·卖出·定投 三入口 */}
-      {d.navScaled > 0 && (
-        <SectionCard title="加仓">
-          <BuyPanel
-            key={`buy-${tick}`}
-            fundCode={d.fundCode}
-            fundName={d.fundName}
-            purchaseRate={d.purchaseRate}
-            minPurchaseCents={d.minPurchase}
-            navScaled={d.navScaled}
-            navDate={d.navDate}
-            cashCents={cash}
-            action={actionUrl}
-            onSuccess={handleSuccess}
-          />
-        </SectionCard>
-      )}
-
-      {d.availableShares > 0 && d.lots.length > 0 && (
-        <SectionCard title="卖出">
-          <SellPanel
-            key={`sell-${tick}`}
-            fundCode={d.fundCode}
-            fundName={d.fundName}
-            availableSharesScaled={d.availableShares}
-            navScaled={d.navScaled}
-            navDate={d.navDate}
-            lots={d.lots}
-            tiers={d.tiers}
-            confirmDate={confirmDate}
-            action={actionUrl}
-            onSuccess={handleSuccess}
-          />
-        </SectionCard>
-      )}
-
       <Button href="/me/dca">设置/管理定投 →</Button>
 
-      {/* 该基金交易流水 */}
-      <SectionCard title={`该基金交易（${orders.length} 笔）`}>
-        {orders.length === 0
-          ? <EmptyState description="还没有该基金的交易记录" />
-          : (
-              <OrderList
-                orders={orders}
-                detailed
-                // 待确认行内挂撤单/改单；提交走 /me/orders 的 action
-                renderActions={o => <OrderActions order={o} />}
-              />
-            )}
-      </SectionCard>
+      {/* 交易 / 订单 两页签（定投页签 Task 4 接入）。
+          页签纯 UI 状态，loader 数据一次性全量返回，切换不发请求 */}
+      <Tabs
+        activeKey={tab}
+        onChange={setTab}
+        items={[
+          {
+            key: "trade",
+            label: "交易",
+            children: (
+              <Space direction="vertical" size="large" style={{ width: "100%" }}>
+                {/* 加仓·卖出·定投 三入口 */}
+                {d.navScaled > 0 && (
+                  <SectionCard title="加仓">
+                    <BuyPanel
+                      key={`buy-${tick}`}
+                      fundCode={d.fundCode}
+                      fundName={d.fundName}
+                      purchaseRate={d.purchaseRate}
+                      minPurchaseCents={d.minPurchase}
+                      navScaled={d.navScaled}
+                      navDate={d.navDate}
+                      cashCents={cash}
+                      action={actionUrl}
+                      onSuccess={handleSuccess}
+                    />
+                  </SectionCard>
+                )}
+
+                {d.availableShares > 0 && d.lots.length > 0 && (
+                  <SectionCard title="卖出">
+                    <SellPanel
+                      key={`sell-${tick}`}
+                      fundCode={d.fundCode}
+                      fundName={d.fundName}
+                      availableSharesScaled={d.availableShares}
+                      navScaled={d.navScaled}
+                      navDate={d.navDate}
+                      lots={d.lots}
+                      tiers={d.tiers}
+                      confirmDate={confirmDate}
+                      action={actionUrl}
+                      onSuccess={handleSuccess}
+                    />
+                  </SectionCard>
+                )}
+              </Space>
+            ),
+          },
+          {
+            key: "orders",
+            label: "订单",
+            children: (
+              /* 该基金交易流水 */
+              <SectionCard title={`该基金交易（${orders.length} 笔）`}>
+                {orders.length === 0
+                  ? <EmptyState description="还没有该基金的交易记录" />
+                  : (
+                      <OrderList
+                        orders={orders}
+                        detailed
+                        // 待确认行内挂撤单/改单；提交走 /me/orders 的 action
+                        renderActions={o => <OrderActions order={o} />}
+                      />
+                    )}
+              </SectionCard>
+            ),
+          },
+        ]}
+      />
     </Space>
   );
 }
