@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "~/db/client";
 import {
@@ -18,7 +18,7 @@ import {
 import { calcPurchase } from "~/domain/purchase";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { registerUser } from "~/services/auth";
-import { settlePendingOrders } from "~/services/settle";
+import { failOrder, settleBuyOrder, settlePendingOrders, settleSellOrder } from "~/services/settle";
 import { amendOrder, cancelOrder, placeBuyOrder, placeSellOrder } from "~/services/trade";
 
 /**
@@ -524,5 +524,137 @@ describe("撤单/改单与撮合的交互", () => {
       where: eq(account.userId, userId),
     });
     expect(acc!.cash).toBe(10_000_000 - 93600);
+  });
+
+  it("买单改单竞态：撮合读到旧快照后落改单——过期快照不成交，下轮按新值撮合", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const userId = await seedUser();
+    const { orderId } = await placeBuyOrder(db, env, {
+      userId,
+      fundCode: "000001",
+      amountCents: 97300,
+      now: NOW,
+    });
+
+    // 模拟竞态：撮合先读到 pending 快照（amount=97300），随后用户改单到 93600
+    const staleRow = (await db.query.orders.findFirst({
+      where: eq(orders.id, orderId),
+    }))!;
+    await amendOrder(db, userId, orderId, { amountCents: 93600 });
+
+    // 撮合拿着过期快照去翻转——守卫必须让路
+    const settleTime = new Date("2026-08-24T12:30:00Z");
+    const won = await settleBuyOrder(db, staleRow, 15000, settleTime);
+    expect(won).toBe(false);
+
+    // 订单保持 pending、金额是改后的新值；不产生批次与持仓
+    const o = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
+    expect(o!.status).toBe("pending");
+    expect(o!.amount).toBe(93600);
+    expect(await db.select().from(shareLot)).toHaveLength(0);
+    expect(await db.select().from(holding)).toHaveLength(0);
+
+    // 现金只扣了新金额（改单时已退差额 3700）
+    const acc = await db.query.account.findFirst({
+      where: eq(account.userId, userId),
+    });
+    expect(acc!.cash).toBe(10_000_000 - 93600);
+
+    // 下一轮 cron 正常跑：按新金额 93600 成交
+    await seedNav("2026-08-24", 15000);
+    const r = await settlePendingOrders(db, env, settleTime);
+    expect(r.confirmed).toBe(1);
+    const calc = calcPurchase({ amountCents: 93600, navScaled: 15000, purchaseRate: 150 });
+    const o2 = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
+    expect(o2!.status).toBe("confirmed");
+    expect(o2!.dealShares).toBe(calc.sharesScaled);
+    const lot = await db.query.shareLot.findFirst({
+      where: eq(shareLot.orderId, orderId),
+    });
+    expect(lot!.cost).toBe(93600);
+  });
+
+  it("failOrder 双重退款竞态：改单差额已退后失败——不再按旧金额全额退款", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const userId = await seedUser();
+    const { orderId } = await placeBuyOrder(db, env, {
+      userId,
+      fundCode: "000001",
+      amountCents: 50000,
+      now: NOW,
+    });
+
+    // 竞态：失败路径拿到旧快照（amount=50000）后用户改大到 80000（补扣 30000）
+    const staleRow = (await db.query.orders.findFirst({
+      where: eq(orders.id, orderId),
+    }))!;
+    await amendOrder(db, userId, orderId, { amountCents: 80000 });
+
+    // 若守卫失效，这里会按旧金额 50000 全额退款 → 与改单的差额调整叠加成双退
+    await failOrder(db, staleRow, "测试失败", NOW);
+
+    // 守卫生效：翻转 0 行，订单保持 pending（改后金额），等下一轮 cron 处置
+    const o = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
+    expect(o!.status).toBe("pending");
+    expect(o!.amount).toBe(80000);
+
+    // 现金分文未动：只扣了改后的 80000，无退款流水
+    const acc = await db.query.account.findFirst({
+      where: eq(account.userId, userId),
+    });
+    expect(acc!.cash).toBe(10_000_000 - 80000);
+    const txTypes = (await db.select().from(transactions)).map(t => t.type);
+    expect(txTypes).toEqual(["init", "buy", "amend"]); // 没有 buy 退款
+  });
+
+  it("卖单改单竞态：撮合读到旧份额后改单——过期快照不消耗批次、不动持仓", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const userId = await seedUser();
+    await seedHolding(userId); // 1000 份
+
+    const { orderId } = await placeSellOrder(db, env, {
+      userId,
+      fundCode: "000001",
+      sharesScaled: 4_000_000, // 原委托 400 份
+      now: NOW,
+    });
+
+    // 竞态：撮合先读到 pending 快照（shares=400 份），随后用户改到 700 份
+    const staleRow = (await db.query.orders.findFirst({
+      where: eq(orders.id, orderId),
+    }))!;
+    await amendOrder(db, userId, orderId, { sharesScaled: 7_000_000 });
+
+    const settleTime = new Date("2026-08-24T12:30:00Z");
+    const won = await settleSellOrder(db, staleRow, 15000, settleTime);
+    expect(won).toBe(false);
+
+    // 订单保持 pending、份额是改后新值
+    const o = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
+    expect(o!.status).toBe("pending");
+    expect(o!.shares).toBe(7_000_000);
+
+    // 持仓与批次分毫未动，现金也不入账
+    const h = await db.query.holding.findFirst({
+      where: and(eq(holding.userId, userId), eq(holding.fundCode, "000001")),
+    });
+    expect(h!.totalShares).toBe(10_000_000);
+    expect(h!.totalCost).toBe(150000);
+    const lots = await db.select().from(shareLot);
+    expect(lots).toHaveLength(1);
+    expect(lots[0].shares).toBe(10_000_000);
+    const acc = await db.query.account.findFirst({
+      where: eq(account.userId, userId),
+    });
+    expect(acc!.cash).toBe(10_000_000);
+    // 赎回单本无流水，失败竞态也不该有
+    const txs = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.orderId, orderId));
+    expect(txs).toHaveLength(0);
   });
 });

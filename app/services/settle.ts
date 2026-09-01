@@ -21,12 +21,30 @@ import { fetchNavHistory } from "./fund-data";
 /**
  * 撮合引擎：净值同步 + T+1 确认。
  *
- * 幂等是硬要求——Cron 会重试，同一订单被撮合两次就是重复成交。
- * 实现方式：只处理 status='pending' 的订单，确认后立刻置为 confirmed；
- * 所有写操作在同一个 db.batch() 里原子提交。
+ * ## 两段式原子仲裁（the two-phase arbiter）
  *
- * 另一条铁律：拉不到净值时订单**保持 pending 顺延**，绝不判失败。
- * 网络抖动不该让用户的单子凭空消失。
+ * 单笔订单的确认不是一个大 `db.batch()`，而是两段：
+ *
+ * 1. **第一段·原子裁判**：带守卫的 `UPDATE orders ... WHERE status='pending'
+ *    AND amount/shares=读到时的旧值` + `.returning()`。守卫同时防三类竞争——
+ *    撤单（status 已翻 cancelled）、改单（amount/shares 已变）、并发撮合
+ *    （status 已翻 confirmed）。读到 0 行说明有人抢先，本次整体让路，
+ *    分文不动；订单保持 pending，下一轮 cron 按最新值重试。
+ * 2. **第二段·资金与份额写入**：赢得裁判后才在 `db.batch()` 里写
+ *    share_lot / holding / account / transactions。
+ *
+ * ## 已知且有意接受的崩溃窗口
+ *
+ * 第一段翻转成功与第二段 batch 落库之间若 Worker 崩溃，会留下
+ * 「已 confirmed 但没记份额」或「已 cancelled 但没退款」的中间态。
+ * 这是有意的方向性取舍：宁可用户受损（可人工补录退款），绝不让系统
+ * 双花（多记份额 / 重复退款）。两个方向都只损坏单边账，可修复。
+ *
+ * ## 铁律
+ *
+ * - 幂等：Cron 会重试，同一订单撮合两次就是重复成交——守卫翻转天然挡住。
+ * - 拉不到净值时订单**保持 pending 顺延**，绝不判失败；网络抖动不该让
+ *   用户的单子凭空消失。
  */
 
 export interface SettleResult {
@@ -168,12 +186,14 @@ export async function settlePendingOrders(
 
 /**
  * 确认买单：算份额、建批次、累加持仓。
- * 两段式：先带 pending 守卫翻转 confirmed（原子裁判，撤单与并发撮合
+ * 两段式：先带守卫翻转 confirmed（原子裁判，撤单/改单/并发撮合
  * 抢不过这道 UPDATE），赢了才写批次与持仓——否则可能出现
- * 「已撤单还记份额 + 用户还拿到退款」的双花。
- * @returns false = 订单已被撤单/改动抢先，本次不成交
+ * 「已撤单还记份额 + 用户还拿到退款」的双花，或「已改单还按旧金额
+ * 成交」凭空创造的份额。
+ * @returns false = 订单已被撤单/改单抢先，本次不成交
+ * @internal
  */
-async function settleBuyOrder(
+export async function settleBuyOrder(
   db: Db,
   order: OrderRow,
   navScaled: number,
@@ -197,7 +217,9 @@ async function settleBuyOrder(
   // 该批次成本 = 全部申购金额（含手续费）——这才是用户真金白银的投入
   const lotCost = order.amount;
 
-  // 第一段：原子裁判——只有仍 pending 才能确认并回填成交信息
+  // 第一段：原子裁判——只有仍 pending 且金额未变（防撤单/改单/并发撮合）
+  // 才能确认并回填成交信息。改单保持 pending 但改 amount，仅查 status
+  // 挡不住——必须带金额乐观锁，否则会用过期快照按旧金额成交
   const flipped = await db
     .update(orders)
     .set({
@@ -207,10 +229,17 @@ async function settleBuyOrder(
       dealAmount: calc.netAmountCents,
       fee: calc.feeCents,
     })
-    .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+    .where(
+      and(
+        eq(orders.id, order.id),
+        eq(orders.status, "pending"),
+        eq(orders.amount, order.amount),
+      ),
+    )
     .returning({ id: orders.id });
   if (flipped.length === 0) {
-    return false; // 被撤单/改动抢先
+    // 被撤单/改单抢先：整体让路，订单保持 pending，下一轮 cron 按新值撮合
+    return false;
   }
 
   const existing = await db.query.holding.findFirst({
@@ -258,8 +287,11 @@ async function settleBuyOrder(
   return true;
 }
 
-/** 确认卖单：FIFO 消耗批次、扣费、现金入账。两段式同 settleBuyOrder（见其注释） */
-async function settleSellOrder(
+/**
+ * 确认卖单：FIFO 消耗批次、扣费、现金入账。两段式同 settleBuyOrder（见其注释）
+ * @internal
+ */
+export async function settleSellOrder(
   db: Db,
   order: OrderRow,
   navScaled: number,
@@ -339,7 +371,9 @@ async function settleSellOrder(
 
   const ts = now.getTime();
 
-  // 第一段：原子裁判——只有仍 pending 才能确认（防撤单/改动抢先）
+  // 第一段：原子裁判——只有仍 pending 且份额未变（防撤单/改单/并发撮合）
+  // 才能确认。改单保持 pending 但改 shares，仅查 status 挡不住——必须带
+  // 份额乐观锁，否则会按旧份额消耗批次、减持仓，账目就此错乱
   const flipped = await db
     .update(orders)
     .set({
@@ -349,10 +383,17 @@ async function settleSellOrder(
       dealAmount: calc.totalNetCents,
       fee: calc.totalFeeCents,
     })
-    .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+    .where(
+      and(
+        eq(orders.id, order.id),
+        eq(orders.status, "pending"),
+        eq(orders.shares, order.shares),
+      ),
+    )
     .returning({ id: orders.id });
   if (flipped.length === 0) {
-    return false; // 被撤单/改动抢先
+    // 被撤单/改单抢先：整体让路，订单保持 pending，下一轮 cron 按新值撮合
+    return false;
   }
 
   const writes: unknown[] = [
@@ -411,22 +452,33 @@ async function settleSellOrder(
 /**
  * 标记订单失败。买单需退还此前冻结的现金，
  * 否则用户的钱会凭空消失。
- * 带_pending 守卫：订单已被撤单/撮合抢先处理时整体跳过，不重复退钱。
+ * 带_pending + amount/shares 守卫：订单已被撤单/撮合/改单抢先处理时
+ * 整体跳过，不重复退钱。尤其要防改单：改单已按差额调整过现金
+ * （改小便已退差额），若这里再按旧 amount 全额退款就是双重退款。
+ * @internal
  */
-async function failOrder(
+export async function failOrder(
   db: Db,
   order: OrderRow,
   reason: string,
   now: Date,
 ): Promise<void> {
-  // 第一段：原子裁判——只有仍 pending 才能置 failed
+  // 第一段：原子裁判——只有仍 pending 且金额/份额未变才能置 failed。
+  // 注意 order.amount 对卖单是 null，而 SQL 的 = null 永远不成立，
+  // 所以买单才追加金额守卫；drizzle 的 and() 会忽略 undefined
+  const amountGuard
+    = order.side === "buy" && order.amount !== null
+      ? eq(orders.amount, order.amount)
+      : undefined;
   const flipped = await db
     .update(orders)
     .set({ status: "failed", failReason: reason })
-    .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+    .where(
+      and(eq(orders.id, order.id), eq(orders.status, "pending"), amountGuard),
+    )
     .returning({ id: orders.id });
   if (flipped.length === 0) {
-    return; // 已被撤单/撮合抢先，不属于本次失败处置
+    return; // 已被撤单/撮合/改单抢先，不属于本次失败处置
   }
 
   if (order.side === "buy" && order.amount !== null) {
