@@ -245,6 +245,12 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 兜底：撮合时把 `fund_nav` 的净值日期序列作为 `knownTradingDays` 传入——
 有净值的那天必然是交易日，可反向校正遗漏。
 
+## 上线流程
+
+改动要上线（push / 建 PR / 合并）时，**先读 `docs/release-workflow.md` 并严格照办**：
+分支纪律（绝不在 main 直接提交、内容命名的专题分支）、本地两套测试全绿才能 push、
+CodeRabbit 评审处理方式、合并即自动部署的完整规约都在里面。
+
 ## 文档
 
 **给人看的（长期有效，改动相关代码前该读）：**
