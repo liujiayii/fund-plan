@@ -3,7 +3,8 @@
  *
  * 与 `/me/holdings` 列表同源估值（都走 `getHoldingDetail`/`getPortfolio` 背后的
  * `valuateHolding`），额外展示份额批次明细——把 FIFO 阶梯费率这个系统最独特的
- * 设计对用户可见，并提供加仓/卖出/该基金交易流水三个入口。
+ * 设计对用户可见，并以「交易 / 定投 / 订单」三页签覆盖加仓、卖出、
+ * 该基金定投计划与交易流水（定投与全局 /me/dca 同协议，service 层复用）。
  */
 import type { Route } from "./+types/me.holdings.$code";
 import { Button, message, Space, Table, Tabs, Tag, Typography } from "antd";
@@ -11,6 +12,7 @@ import { eq } from "drizzle-orm";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { BuyPanel } from "~/components/BuyPanel";
+import { DcaFundPanel } from "~/components/DcaFundPanel";
 import { OrderActions } from "~/components/OrderActions";
 import { OrderList } from "~/components/OrderList";
 import { SellPanel } from "~/components/SellPanel";
@@ -24,8 +26,9 @@ import { navToDisplay, rateToPercent, SHARE_SCALE, sharesToDisplay, yuanToCents 
 import { findRedeemRate } from "~/domain/redeem";
 import { countDays, resolveConfirmDate, toBeijing } from "~/domain/trading-calendar";
 import { getAppContext } from "~/services/context";
+import { createDcaPlan, deleteDcaPlan, toggleDcaPlan } from "~/services/dca-service";
 import { requireUser } from "~/services/guard";
-import { getHoldingDetail, getOrdersByFund } from "~/services/portfolio-service";
+import { getDcaPlans, getHoldingDetail, getOrdersByFund } from "~/services/portfolio-service";
 import { placeBuyOrder, placeSellOrder } from "~/services/trade";
 import { pnlColor } from "~/theme";
 
@@ -48,11 +51,14 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 
   const acc = await db.query.account.findFirst({ where: eq(account.userId, user.id) });
   const orders = await getOrdersByFund(db, user.id, code);
+  // 该基金的定投计划（定投页签）
+  const plans = await getDcaPlans(db, user.id, code);
 
   return {
     detail,
     cash: acc?.cash ?? 0,
     orders,
+    plans,
     // 现在下单会落到哪个确认日（卖出试算持有天数用）
     confirmDate: resolveConfirmDate(new Date()),
     // 批次「持有天数」列的参照日；server 算好传下去，组件内不 new Date()
@@ -69,6 +75,44 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   const intent = String(fd.get("intent") ?? "");
 
   try {
+    // ===== 定投（与 /me/dca 同协议，create 的基金代码取路由参数） =====
+    if (intent === "create") {
+      const amount = String(fd.get("amount") ?? "");
+      const frequency = String(fd.get("frequency") ?? "monthly") as
+        | "daily"
+        | "weekly"
+        | "monthly";
+      const dayOfWeek = fd.get("dayOfWeek") ? Number(fd.get("dayOfWeek")) : null;
+      const dayOfMonth = fd.get("dayOfMonth") ? Number(fd.get("dayOfMonth")) : null;
+
+      const n = Number(amount);
+      if (!Number.isFinite(n) || n <= 0)
+        return { error: "请输入正确的金额" };
+
+      await createDcaPlan(db, {
+        userId: user.id,
+        fundCode,
+        amountCents: yuanToCents(amount),
+        frequency,
+        dayOfWeek,
+        dayOfMonth,
+      });
+      return { ok: true, message: "定投计划已创建" };
+    }
+
+    if (intent === "toggle") {
+      const id = Number(fd.get("id"));
+      const status = String(fd.get("status")) as "active" | "paused";
+      await toggleDcaPlan(db, user.id, id, status);
+      return { ok: true, message: status === "active" ? "已启用" : "已暂停" };
+    }
+
+    if (intent === "delete") {
+      const id = Number(fd.get("id"));
+      await deleteDcaPlan(db, user.id, id);
+      return { ok: true, message: "计划已删除" };
+    }
+
     if (intent === "buy") {
       const amount = String(fd.get("amount") ?? "");
       const n = Number(amount);
@@ -93,7 +137,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 }
 
 export default function MeHoldingDetail({ loaderData, params }: Route.ComponentProps) {
-  const { detail: d, cash, orders, confirmDate, today } = loaderData;
+  const { detail: d, cash, orders, plans, confirmDate, today } = loaderData;
   // tick：提交成功后自增，作为 key 强制 BuyPanel/SellPanel 重新挂载，清空输入框
   const [tick, setTick] = useState(0);
   const actionUrl = `/me/holdings/${params.code}`;
@@ -110,7 +154,8 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
   // 页签状态进 URL（?tab=trade|dca|orders，默认 trade）：
   // 持仓列表「卖出」深链、外链直达订单页签都靠它。replace 避免每次切页签堆历史
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") ?? "trade";
+  // ?tab= 非法值兜底成 trade：否则 Tabs activeKey 对不上任何页签会渲染空白
+  const tab = ["trade", "dca", "orders"].includes(searchParams.get("tab") ?? "") ? (searchParams.get("tab") as string) : "trade";
   const setTab = (key: string) => {
     setSearchParams(
       (prev) => {
@@ -229,9 +274,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         </Paragraph>
       </SectionCard>
 
-      <Button href="/me/dca">设置/管理定投 →</Button>
-
-      {/* 交易 / 订单 两页签（定投页签 Task 4 接入）。
+      {/* 交易 / 定投 / 订单 三页签。
           页签纯 UI 状态，loader 数据一次性全量返回，切换不发请求 */}
       <Tabs
         activeKey={tab}
@@ -242,7 +285,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
             label: "交易",
             children: (
               <Space direction="vertical" size="large" style={{ width: "100%" }}>
-                {/* 加仓·卖出·定投 三入口 */}
+                {/* 加仓与卖出面板（原三入口注释已过时：定投有了自己的页签） */}
                 {d.navScaled > 0 && (
                   <SectionCard title="加仓">
                     <BuyPanel
@@ -278,6 +321,18 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
                   </SectionCard>
                 )}
               </Space>
+            ),
+          },
+          {
+            key: "dca",
+            label: "定投",
+            children: (
+              <DcaFundPanel
+                fundCode={d.fundCode}
+                fundName={d.fundName}
+                plans={plans}
+                action={actionUrl}
+              />
             ),
           },
           {
