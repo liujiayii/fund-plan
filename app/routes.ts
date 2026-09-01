@@ -30,4 +30,5 @@ export default [
 
   // ==== 管理（admin 专属，loader 里 requireAdmin 把门）====
   route("admin", "routes/admin.tsx"),
+  route("admin/users/:id", "routes/admin.users.$id.tsx"),
 ] satisfies RouteConfig;
