@@ -1,12 +1,16 @@
 import type { Route } from "./+types/me.orders";
-import { Alert, Pagination, Space, Typography } from "antd";
+import { Pagination, Space, Typography } from "antd";
 import { useState } from "react";
+import { OrderActions } from "~/components/OrderActions";
+import { OrderList } from "~/components/OrderList";
 import { OrderTimeline } from "~/components/OrderTimeline";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { SHARE_SCALE, yuanToCents } from "~/domain/money";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getOrders } from "~/services/portfolio-service";
+import { amendOrder, cancelOrder } from "~/services/trade";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -27,9 +31,61 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { orders };
 }
 
+/**
+ * 撤单 / 改单的统一入口。持仓详情页的订单列表也 post 到这里
+ * （订单按 id 寻址，与所在页面无关），返回约定与面板下单一致：
+ * { ok, message } 或 { error }。
+ */
+export async function action({ request, context }: Route.ActionArgs) {
+  const { db } = getAppContext(context);
+  const user = await requireUser(request, db);
+
+  const fd = await request.formData();
+  const intent = String(fd.get("intent") ?? "");
+  const orderId = Number(fd.get("orderId"));
+
+  try {
+    if (intent === "cancel") {
+      await cancelOrder(db, user.id, orderId);
+      return { ok: true, message: "已撤销，冻结资金/占用份额即时释放" };
+    }
+
+    if (intent === "amend") {
+      if (fd.get("amount") !== null) {
+        const amount = String(fd.get("amount"));
+        const n = Number(amount);
+        if (!Number.isFinite(n) || n <= 0)
+          return { error: "请输入正确的金额" };
+        await amendOrder(db, user.id, orderId, {
+          amountCents: yuanToCents(amount),
+        });
+        return { ok: true, message: "改单成功，差额已调整" };
+      }
+      if (fd.get("shares") !== null) {
+        const shares = String(fd.get("shares"));
+        const n = Number(shares);
+        if (!Number.isFinite(n) || n <= 0)
+          return { error: "请输入正确的份额" };
+        await amendOrder(db, user.id, orderId, {
+          sharesScaled: Math.round(n * SHARE_SCALE),
+        });
+        return { ok: true, message: "改单成功" };
+      }
+      return { error: "缺少改单参数" };
+    }
+
+    return { error: "未知操作" };
+  }
+  catch (err) {
+    return { error: err instanceof Error ? err.message : "操作失败" };
+  }
+}
+
 export default function MeOrders({ loaderData }: Route.ComponentProps) {
   const { orders } = loaderData;
-  const pendingCount = orders.filter(o => o.status === "pending").length;
+  // 待确认委托独立成区：委托管理的主战场，撤单/改单按钮就在眼前，
+  // 不再和已成交历史混在一条时间线里（主人反馈「撤单改单难发现」）
+  const pendingOrders = orders.filter(o => o.status === "pending");
   // 客户端分页：loader 已经把 200 条全取回来了，翻页不用再请求服务端
   const [page, setPage] = useState(1);
 
@@ -39,13 +95,14 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
         我的订单
       </Title>
 
-      {pendingCount > 0 && (
-        <Alert
-          type="info"
-          showIcon
-          message={`有 ${pendingCount} 笔订单待确认`}
-          description="真实基金是 T+1 成交：交易日 15:00 前下单按当日净值，之后顺延至下一交易日。系统每晚 20:30 拉取当日净值并撮合。"
-        />
+      {pendingOrders.length > 0 && (
+        <SectionCard title={`待确认委托（${pendingOrders.length} 笔）`}>
+          <OrderList orders={pendingOrders} renderActions={o => <OrderActions order={o} />} />
+          <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
+            真实基金是 T+1 成交：交易日 15:00 前下单按当日净值，之后顺延至下一交易日。
+            系统每晚 20:30 拉取当日净值并撮合，此前均可撤单或改单。
+          </Paragraph>
+        </SectionCard>
       )}
 
       <SectionCard title={`全部订单（${orders.length} 笔）`}>
@@ -57,6 +114,8 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
               <>
                 <OrderTimeline
                   orders={orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+                  // 待确认行内挂撤单/改单（OrderActions 自行判断 pending 才渲染）
+                  renderActions={o => <OrderActions order={o} />}
                 />
                 {orders.length > PAGE_SIZE && (
                   // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片

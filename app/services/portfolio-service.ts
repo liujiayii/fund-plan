@@ -145,7 +145,7 @@ export interface OrderView {
   fundCode: string;
   fundName: string;
   side: "buy" | "sell";
-  status: "pending" | "confirmed" | "failed";
+  status: "pending" | "confirmed" | "failed" | "cancelled";
   source: "manual" | "dca";
   amount: number | null;
   shares: number | null;
@@ -201,15 +201,20 @@ export interface DcaPlanView {
   createdAt: number;
 }
 
-/** 读取用户的定投计划 */
+/** 读取用户的定投计划。fundCode 传入时只返回该基金的计划（持仓详情页定投页签用） */
 export async function getDcaPlans(
   db: Db,
   userId: number,
+  fundCode?: string,
 ): Promise<DcaPlanView[]> {
   const rows = await db
     .select()
     .from(dcaPlan)
-    .where(eq(dcaPlan.userId, userId))
+    .where(
+      fundCode
+        ? and(eq(dcaPlan.userId, userId), eq(dcaPlan.fundCode, fundCode))
+        : eq(dcaPlan.userId, userId),
+    )
     .orderBy(desc(dcaPlan.createdAt));
 
   const codes = [...new Set(rows.map(r => r.fundCode))];
@@ -228,7 +233,7 @@ export async function getDcaPlans(
 /** 资金流水视图 */
 export interface TransactionView {
   id: number;
-  type: "checkin" | "buy" | "sell" | "fee" | "init";
+  type: "checkin" | "buy" | "sell" | "fee" | "init" | "cancel" | "amend";
   amount: number;
   balance: number;
   orderId: number | null;

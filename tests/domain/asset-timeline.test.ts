@@ -10,6 +10,7 @@ function buildInput(over: Partial<ReplayInput> = {}): ReplayInput {
     netDepositByDate: new Map(),
     confirmedOrders: [],
     navSeries: new Map(),
+    transitEvents: [],
     ...over,
   };
 }
@@ -81,6 +82,129 @@ describe("replayDailyAssets 账本重放", () => {
       expect(r[1].dayPnlCents).toBe(0);
       // 08-03：无变化，前一日已扣过签到 → dayPnl=0（不会把签到再算一次）
       expect(r[2].dayPnlCents).toBe(0);
+    });
+  });
+
+  describe("在途申购：冻结现金计为资产，不当亏损（核心）", () => {
+    /**
+     * 背景bug：买单下单即冻结现金、T+1 撮合才长份额。重放只算
+     * 「现金 + 已确认市值」，在途窗口里钱已扣、份额未有 → 单日收益
+     * 显示为 -申购总额 的假亏损（2026-09-01 主理人实测 -8942 元）。
+     * 修法：在途申购金额（transitEvents 维护的 level）计入总资产。
+     */
+
+    it("下单日冻结不计亏损：dayPnl=0，在途=委托金额", () => {
+      // 08-01 init 1000 元并买 500 元（当日 pending，尚未撮合）
+      const input = buildInput({
+        dateAxis: ["2026-08-01", "2026-08-02"],
+        cashLedger: [
+          { date: "2026-08-01", balance: 50000 }, // 1000 − 500 冻结
+          { date: "2026-08-02", balance: 50000 },
+        ],
+        netDepositByDate: new Map([["2026-08-01", 100000]]),
+        confirmedOrders: [],
+        navSeries: new Map(),
+        // 下单冻结 +500 元在途；订单还 pending，没有归零事件
+        transitEvents: [{ date: "2026-08-01", deltaCents: 50000 }],
+      });
+      const r = replayDailyAssets(input);
+      // 08-01：现金 50000 + 在途 50000 = 100000，与 init 后一致 → dayPnl=0
+      expect(r[0].transitCents).toBe(50000);
+      expect(r[0].totalAssetCents).toBe(100000);
+      expect(r[0].dayPnlCents).toBe(0);
+      // 08-02：在途持续（未撮合），资产持平
+      expect(r[1].transitCents).toBe(50000);
+      expect(r[1].totalAssetCents).toBe(100000);
+      expect(r[1].dayPnlCents).toBe(0);
+    });
+
+    it("确认日在途归零换市值，dayPnl 恰好等于 −申购费（内扣法）", () => {
+      // 08-01 init 1000 元买 500 元（15:00 后下单 → 确认日 08-02）
+      // 净值 1.0、费率 0 → 简化为全额 500 元转份额。申购费 15 元版：
+      // 份额 = (500−15)/1.0 = 485 份，市值 485 元
+      const input = buildInput({
+        dateAxis: ["2026-08-01", "2026-08-02"],
+        cashLedger: [
+          { date: "2026-08-01", balance: 50000 }, // 1000 − 500 冻结
+          { date: "2026-08-02", balance: 50000 },
+        ],
+        netDepositByDate: new Map([["2026-08-01", 100000]]),
+        confirmedOrders: [
+          { fundCode: "A", side: "buy", confirmDate: "2026-08-02", dealShares: 4850000 }, // 485 份
+        ],
+        navSeries: new Map([
+          ["A", [
+            { navDate: "2026-08-02", unitNav: 10000 }, // 1.0
+          ]],
+        ]),
+        // 下单日 +500 在途；确认日 −500 归零（换 485 元市值）
+        transitEvents: [
+          { date: "2026-08-01", deltaCents: 50000 },
+          { date: "2026-08-02", deltaCents: -50000 },
+        ],
+      });
+      const r = replayDailyAssets(input);
+      // 08-01：50000 + 50000 在途 = 100000，dayPnl=0
+      expect(r[0].totalAssetCents).toBe(100000);
+      expect(r[0].dayPnlCents).toBe(0);
+      // 08-02：在途 0 + 现金 50000 + 市值 48500 = 98500
+      //   dayPnl = 98500 − 100000 = −1500，恰好是 15 元申购费
+      expect(r[1].transitCents).toBe(0);
+      expect(r[1].totalAssetCents).toBe(98500);
+      expect(r[1].dayPnlCents).toBe(-1500);
+    });
+
+    it("撤销日在途归零、现金退回，dayPnl=0", () => {
+      // 08-01 买 500（冻结）；08-02 撤单退 500
+      const input = buildInput({
+        dateAxis: ["2026-08-01", "2026-08-02"],
+        cashLedger: [
+          { date: "2026-08-01", balance: 50000 },
+          { date: "2026-08-02", balance: 100000 }, // 撤单退款 +500
+        ],
+        netDepositByDate: new Map([["2026-08-01", 100000]]),
+        confirmedOrders: [],
+        navSeries: new Map(),
+        transitEvents: [
+          { date: "2026-08-01", deltaCents: 50000 }, // 下单冻结
+          { date: "2026-08-02", deltaCents: -50000 }, // 撤销归零
+        ],
+      });
+      const r = replayDailyAssets(input);
+      // 08-01：50000 + 50000 = 100000
+      expect(r[0].totalAssetCents).toBe(100000);
+      expect(r[0].dayPnlCents).toBe(0);
+      // 08-02：现金 100000 + 在途 0 = 100000，dayPnl=0（退款不是收益）
+      expect(r[1].transitCents).toBe(0);
+      expect(r[1].totalAssetCents).toBe(100000);
+      expect(r[1].dayPnlCents).toBe(0);
+    });
+
+    it("改单差额同步调整在途：973→936 后在途=93600", () => {
+      // 下单 +973，当日改单退 37 → 在途 936
+      const input = buildInput({
+        dateAxis: ["2026-08-01", "2026-08-02"],
+        cashLedger: [
+          { date: "2026-08-01", balance: 2700 }, // 100000 − 97300 冻结
+          { date: "2026-08-02", balance: 6400 }, // 改单退 37
+        ],
+        netDepositByDate: new Map([["2026-08-01", 100000]]),
+        confirmedOrders: [],
+        navSeries: new Map(),
+        transitEvents: [
+          { date: "2026-08-01", deltaCents: 97300 }, // 下单冻结 973
+          { date: "2026-08-02", deltaCents: -3700 }, // 改单 −37
+        ],
+      });
+      const r = replayDailyAssets(input);
+      // 08-01：2700 + 97300 = 100000，与 init 持平
+      expect(r[0].transitCents).toBe(97300);
+      expect(r[0].totalAssetCents).toBe(100000);
+      expect(r[0].dayPnlCents).toBe(0);
+      // 08-02：6400 + 93600 = 100000，改单多退少补不产生损益
+      expect(r[1].transitCents).toBe(93600);
+      expect(r[1].totalAssetCents).toBe(100000);
+      expect(r[1].dayPnlCents).toBe(0);
     });
   });
 

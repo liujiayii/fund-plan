@@ -10,6 +10,8 @@ const TX_TYPE_MAP: Record<TransactionView["type"], { color: string; text: string
   buy: { color: "geekblue", text: "申购" },
   sell: { color: "cyan", text: "赎回到账" },
   fee: { color: "volcano", text: "手续费" },
+  cancel: { color: "orange", text: "撤单退款" },
+  amend: { color: "purple", text: "改单" },
 };
 
 export interface TxListProps {

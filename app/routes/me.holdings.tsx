@@ -91,6 +91,19 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
                 renderNote={h => `${sharesAndNavNote(h)} · 成本 ${fmtYuan(h.costCents)} 元`}
                 // 行点进单只持仓详情，不再链到 /funds/{code}
                 getHref={h => `/me/holdings/${h.fundCode}`}
+                // 行内「详情 / 卖出」：卖出深链直达交易页签（?tab=trade）。
+                // 每行按钮一致（FundListItem 的 actions 宽度契约），不加买入——
+                // 买入入口在自选页/基金详情页，这里再加就回到「到处都是」
+                renderActions={h => (
+                  <Space size={8}>
+                    <Button size="small" href={`/me/holdings/${h.fundCode}`}>
+                      详情
+                    </Button>
+                    <Button size="small" type="primary" href={`/me/holdings/${h.fundCode}?tab=trade`}>
+                      卖出
+                    </Button>
+                  </Space>
+                )}
               />
             )}
         <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
