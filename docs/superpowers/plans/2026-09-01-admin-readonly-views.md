@@ -1,5 +1,7 @@
 # Admin 只读后台 Implementation Plan
 
+> 状态：已完成 · 2026-09-01
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 给 admin 开一个只读后台：`/admin` 用户列表 + 全局统计卡，`/admin/users/:id` 单用户的持仓组合 + 全量订单。
