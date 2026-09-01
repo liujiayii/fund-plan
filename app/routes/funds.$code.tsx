@@ -2,8 +2,9 @@ import type { Route } from "./+types/funds.$code";
 import type { RedeemTier } from "~/domain/redeem";
 import { Alert, Button, Space, Table, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
+import { useState } from "react";
 import { useFetcher } from "react-router";
-import { BuyPanel } from "~/components/BuyPanel";
+import { BuyDrawer } from "~/components/BuyDrawer";
 import { NavChart } from "~/components/NavChart";
 import { PeriodReturnTable } from "~/components/PeriodReturnTable";
 import { DataRow } from "~/components/ui/DataRow";
@@ -181,6 +182,8 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
   const { fund: f, series, latest, cash, isLoggedIn } = loaderData;
   // 加自选表单提交器：post 到 /me/watchlist，靠 fetcher.data 回显成功/失败
   const fetcher = useFetcher();
+  // 买入抽屉开合（与自选页共用 BuyDrawer 壳）
+  const [buyOpen, setBuyOpen] = useState(false);
 
   const risk = RISK_MAP[f.riskLevel] ?? RISK_MAP[3];
   // 日涨跌率存的是万分之，转成百分比展示
@@ -371,7 +374,8 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         />
       )}
 
-      {/* 买入区：登录且有净值时内嵌 BuyPanel；未登录引导注册；登录但暂无净值时提示 */}
+      {/* 买入区：登录且有净值时按钮 + BuyDrawer（与自选页共用壳，费率/起购/现金
+          等明细在抽屉里的 BuyPanel 展示）；未登录引导注册；登录但暂无净值时提示 */}
       <SectionCard title="买入">
         {!isLoggedIn
           ? (
@@ -381,16 +385,23 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             )
           : latest
             ? (
-                <BuyPanel
-                  fundCode={f.code}
-                  fundName={f.name}
-                  purchaseRate={f.purchaseRate}
-                  minPurchaseCents={f.minPurchase}
-                  navScaled={latest.unitNav}
-                  navDate={latest.navDate}
-                  cashCents={cash}
-                  action={`/funds/${f.code}`}
-                />
+                <>
+                  <Button type="primary" size="large" block onClick={() => setBuyOpen(true)}>
+                    买入
+                  </Button>
+                  <BuyDrawer
+                    open={buyOpen}
+                    onClose={() => setBuyOpen(false)}
+                    fundCode={f.code}
+                    fundName={f.name}
+                    purchaseRate={f.purchaseRate}
+                    minPurchaseCents={f.minPurchase}
+                    navScaled={latest.unitNav}
+                    navDate={latest.navDate}
+                    cashCents={cash}
+                    action={`/funds/${f.code}`}
+                  />
+                </>
               )
             : (
                 // 既有页面级 !latest Alert 已醒目提示「暂无净值数据…无法下单」，
