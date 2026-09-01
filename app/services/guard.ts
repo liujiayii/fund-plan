@@ -81,6 +81,25 @@ export async function getAdminUser(
 }
 
 /**
+ * 要求管理员。未登录与普通用户都抛 403。
+ *
+ * 与 requireUser 的语义刻意不同：requireUser 未登录时重定向到 /login
+ * （那是「你还没登录」的善意引导）；/admin 是管理后台，对非 admin
+ * 一视同仁地拒绝，不暴露「这里有个后台」的信息。
+ * 语义与 assertOwnership 的 403 一致。
+ */
+export async function requireAdmin(
+  request: Request,
+  db: Db,
+): Promise<CurrentUser> {
+  const u = await getCurrentUser(request, db);
+  if (!u || u.role !== "admin") {
+    throw new Response("仅管理员可访问", { status: 403 });
+  }
+  return u;
+}
+
+/**
  * 校验某项资源是否属于当前用户。
  * 所有「改自己数据」的 action 都要过这一关，防越权。
  */

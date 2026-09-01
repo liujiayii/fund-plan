@@ -7,6 +7,7 @@ import {
   assertOwnership,
   getAdminUser,
   getCurrentUser,
+  requireAdmin,
   requireUser,
 } from "~/services/guard";
 import { createSession, sessionCookie } from "~/services/session";
@@ -115,6 +116,48 @@ describe("assertOwnership 越权防护", () => {
   it("操作他人资源抛 403", () => {
     try {
       assertOwnership(1, 2);
+      expect.unreachable("应该抛出 403");
+    }
+    catch (thrown) {
+      expect(thrown).toBeInstanceOf(Response);
+      expect((thrown as Response).status).toBe(403);
+    }
+  });
+});
+
+describe("requireAdmin 管理员守门", () => {
+  it("admin 通过", async () => {
+    const db = getDb(env.DB);
+    // 测试环境 ADMIN_USERNAME = 'testadmin'
+    const reg = await registerUser(db, env, "testadmin", "hunter2");
+    const token = await createSession(db, reg.id);
+
+    const u = await requireAdmin(requestWithToken(token), db);
+    expect(u.id).toBe(reg.id);
+    expect(u.role).toBe("admin");
+  });
+
+  it("普通用户抛 403", async () => {
+    const db = getDb(env.DB);
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const token = await createSession(db, reg.id);
+
+    try {
+      await requireAdmin(requestWithToken(token), db);
+      expect.unreachable("应该抛出 403");
+    }
+    catch (thrown) {
+      expect(thrown).toBeInstanceOf(Response);
+      expect((thrown as Response).status).toBe(403);
+    }
+  });
+
+  it("未登录抛 403（不是重定向——/admin 的存在本身就不该对游客暴露）", async () => {
+    const db = getDb(env.DB);
+    const req = new Request("https://x.dev/admin");
+
+    try {
+      await requireAdmin(req, db);
       expect.unreachable("应该抛出 403");
     }
     catch (thrown) {
