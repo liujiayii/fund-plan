@@ -145,7 +145,7 @@ export interface OrderView {
   fundCode: string;
   fundName: string;
   side: "buy" | "sell";
-  status: "pending" | "confirmed" | "failed";
+  status: "pending" | "confirmed" | "failed" | "cancelled";
   source: "manual" | "dca";
   amount: number | null;
   shares: number | null;
@@ -228,7 +228,7 @@ export async function getDcaPlans(
 /** 资金流水视图 */
 export interface TransactionView {
   id: number;
-  type: "checkin" | "buy" | "sell" | "fee" | "init";
+  type: "checkin" | "buy" | "sell" | "fee" | "init" | "cancel" | "amend";
   amount: number;
   balance: number;
   orderId: number | null;

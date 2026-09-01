@@ -10,6 +10,7 @@ import { Button, message, Space, Table, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useState } from "react";
 import { BuyPanel } from "~/components/BuyPanel";
+import { OrderActions } from "~/components/OrderActions";
 import { OrderList } from "~/components/OrderList";
 import { SellPanel } from "~/components/SellPanel";
 import { DataRow } from "~/components/ui/DataRow";
@@ -252,7 +253,16 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
 
       {/* 该基金交易流水 */}
       <SectionCard title={`该基金交易（${orders.length} 笔）`}>
-        {orders.length === 0 ? <EmptyState description="还没有该基金的交易记录" /> : <OrderList orders={orders} detailed />}
+        {orders.length === 0
+          ? <EmptyState description="还没有该基金的交易记录" />
+          : (
+              <OrderList
+                orders={orders}
+                detailed
+                // 待确认行内挂撤单/改单；提交走 /me/orders 的 action
+                renderActions={o => <OrderActions order={o} />}
+              />
+            )}
       </SectionCard>
     </Space>
   );

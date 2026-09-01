@@ -164,8 +164,10 @@ export const orders = sqliteTable(
     fundCode: text("fund_code").notNull(),
     /** buy=申购 | sell=赎回 */
     side: text("side", { enum: ["buy", "sell"] }).notNull(),
-    /** pending → confirmed | failed */
-    status: text("status", { enum: ["pending", "confirmed", "failed"] })
+    /** pending → confirmed | failed | cancelled（撤单） */
+    status: text("status", {
+      enum: ["pending", "confirmed", "failed", "cancelled"],
+    })
       .notNull()
       .default("pending"),
     /** manual=手动 | dca=定投触发 */
@@ -237,9 +239,12 @@ export const transactions = sqliteTable(
     userId: integer("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    /** checkin=签到入金 | buy=申购出金 | sell=赎回入金 | fee=手续费 | init=初始本金 */
+    /**
+     * checkin=签到入金 | buy=申购出金 | sell=赎回入金 | fee=手续费 | init=初始本金
+     * | cancel=撤单冲正 | amend=改单差额
+     */
     type: text("type", {
-      enum: ["checkin", "buy", "sell", "fee", "init"],
+      enum: ["checkin", "buy", "sell", "fee", "init", "cancel", "amend"],
     }).notNull(),
     /** 金额（分，正=入账，负=出账） */
     amount: integer("amount").notNull(),

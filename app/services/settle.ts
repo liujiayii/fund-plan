@@ -139,10 +139,19 @@ export async function settlePendingOrders(
       }
 
       if (order.side === "buy") {
-        await settleBuyOrder(db, order, nav.unitNav, now);
+        const won = await settleBuyOrder(db, order, nav.unitNav, now);
+        if (!won) {
+          // 撮合读到 pending 之后订单被撤单/改动抢先翻转——跳过，不当成交
+          result.skipped++;
+          continue;
+        }
       }
       else {
-        await settleSellOrder(db, order, nav.unitNav, now);
+        const won = await settleSellOrder(db, order, nav.unitNav, now);
+        if (!won) {
+          result.skipped++;
+          continue;
+        }
       }
       result.confirmed++;
     }
@@ -157,13 +166,19 @@ export async function settlePendingOrders(
   return result;
 }
 
-/** 确认买单：算份额、建批次、累加持仓 */
+/**
+ * 确认买单：算份额、建批次、累加持仓。
+ * 两段式：先带 pending 守卫翻转 confirmed（原子裁判，撤单与并发撮合
+ * 抢不过这道 UPDATE），赢了才写批次与持仓——否则可能出现
+ * 「已撤单还记份额 + 用户还拿到退款」的双花。
+ * @returns false = 订单已被撤单/改动抢先，本次不成交
+ */
 async function settleBuyOrder(
   db: Db,
   order: OrderRow,
   navScaled: number,
   now: Date,
-): Promise<void> {
+): Promise<boolean> {
   if (order.amount === null) {
     throw new Error("买单缺少申购金额");
   }
@@ -182,6 +197,22 @@ async function settleBuyOrder(
   // 该批次成本 = 全部申购金额（含手续费）——这才是用户真金白银的投入
   const lotCost = order.amount;
 
+  // 第一段：原子裁判——只有仍 pending 才能确认并回填成交信息
+  const flipped = await db
+    .update(orders)
+    .set({
+      status: "confirmed",
+      dealNav: navScaled,
+      dealShares: calc.sharesScaled,
+      dealAmount: calc.netAmountCents,
+      fee: calc.feeCents,
+    })
+    .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+    .returning({ id: orders.id });
+  if (flipped.length === 0) {
+    return false; // 被撤单/改动抢先
+  }
+
   const existing = await db.query.holding.findFirst({
     where: and(
       eq(holding.userId, order.userId),
@@ -189,19 +220,9 @@ async function settleBuyOrder(
     ),
   });
 
+  // 第二段：批次与持仓（赢得裁判后写入）
   const writes = [
-    // 1. 订单转 confirmed 并回填成交信息
-    db
-      .update(orders)
-      .set({
-        status: "confirmed",
-        dealNav: navScaled,
-        dealShares: calc.sharesScaled,
-        dealAmount: calc.netAmountCents,
-        fee: calc.feeCents,
-      })
-      .where(eq(orders.id, order.id)),
-    // 2. 新增份额批次（FIFO 赎回的依据）
+    // 1. 新增份额批次（FIFO 赎回的依据）
     db.insert(shareLot).values({
       userId: order.userId,
       fundCode: order.fundCode,
@@ -210,7 +231,7 @@ async function settleBuyOrder(
       confirmDate: order.confirmDate,
       orderId: order.id,
     }),
-    // 3. 维护持仓汇总
+    // 2. 维护持仓汇总
     existing
       ? db
           .update(holding)
@@ -234,15 +255,16 @@ async function settleBuyOrder(
 
   await runBatch(db, writes);
   void now;
+  return true;
 }
 
-/** 确认卖单：FIFO 消耗批次、扣费、现金入账 */
+/** 确认卖单：FIFO 消耗批次、扣费、现金入账。两段式同 settleBuyOrder（见其注释） */
 async function settleSellOrder(
   db: Db,
   order: OrderRow,
   navScaled: number,
   now: Date,
-): Promise<void> {
+): Promise<boolean> {
   if (order.shares === null) {
     throw new Error("卖单缺少赎回份额");
   }
@@ -316,19 +338,25 @@ async function settleSellOrder(
   }
 
   const ts = now.getTime();
+
+  // 第一段：原子裁判——只有仍 pending 才能确认（防撤单/改动抢先）
+  const flipped = await db
+    .update(orders)
+    .set({
+      status: "confirmed",
+      dealNav: navScaled,
+      dealShares: order.shares,
+      dealAmount: calc.totalNetCents,
+      fee: calc.totalFeeCents,
+    })
+    .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+    .returning({ id: orders.id });
+  if (flipped.length === 0) {
+    return false; // 被撤单/改动抢先
+  }
+
   const writes: unknown[] = [
-    // 1. 订单确认，dealAmount 记「到账净额」
-    db
-      .update(orders)
-      .set({
-        status: "confirmed",
-        dealNav: navScaled,
-        dealShares: order.shares,
-        dealAmount: calc.totalNetCents,
-        fee: calc.totalFeeCents,
-      })
-      .where(eq(orders.id, order.id)),
-    // 2. 批次增减
+    // 1. 批次增减
     ...updates,
     // 3. 持仓递减
     db
@@ -377,11 +405,13 @@ async function settleSellOrder(
   }
 
   await runBatch(db, writes);
+  return true;
 }
 
 /**
  * 标记订单失败。买单需退还此前冻结的现金，
  * 否则用户的钱会凭空消失。
+ * 带_pending 守卫：订单已被撤单/撮合抢先处理时整体跳过，不重复退钱。
  */
 async function failOrder(
   db: Db,
@@ -389,12 +419,15 @@ async function failOrder(
   reason: string,
   now: Date,
 ): Promise<void> {
-  const writes: unknown[] = [
-    db
-      .update(orders)
-      .set({ status: "failed", failReason: reason })
-      .where(eq(orders.id, order.id)),
-  ];
+  // 第一段：原子裁判——只有仍 pending 才能置 failed
+  const flipped = await db
+    .update(orders)
+    .set({ status: "failed", failReason: reason })
+    .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+    .returning({ id: orders.id });
+  if (flipped.length === 0) {
+    return; // 已被撤单/撮合抢先，不属于本次失败处置
+  }
 
   if (order.side === "buy" && order.amount !== null) {
     const acc = await db.query.account.findFirst({
@@ -402,7 +435,7 @@ async function failOrder(
     });
     if (acc) {
       const refunded = acc.cash + order.amount;
-      writes.push(
+      await runBatch(db, [
         db
           .update(account)
           .set({ cash: refunded })
@@ -416,9 +449,7 @@ async function failOrder(
           note: `申购失败退款：${reason}`,
           createdAt: now.getTime(),
         }),
-      );
+      ]);
     }
   }
-
-  await runBatch(db, writes);
 }

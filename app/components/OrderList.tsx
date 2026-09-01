@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { OrderView } from "~/services/portfolio-service";
 import { Tag, Tooltip } from "antd";
 import { fmtYuan } from "~/components/ui/format";
@@ -8,13 +9,14 @@ import { COLOR, NUM_FONT } from "~/theme";
 /**
  * 状态标签。
  *
- * ⚠️ 只有 pending / failed 才贴 Tag —— 「已确认」是常态，
+ * ⚠️ 只有 pending / failed / cancelled 才贴 Tag —— 「已确认」是常态，
  * 给每一行都贴一个绿色「已确认」等于没有信息，只是噪音。
  * 无 Tag 即代表已成交。
  */
 const STATUS_TAG: Partial<Record<OrderView["status"], { color: string; text: string }>> = {
   pending: { color: "orange", text: "待确认" },
   failed: { color: "red", text: "失败" },
+  cancelled: { color: "default", text: "已撤单" },
 };
 
 export interface OrderListProps {
@@ -27,6 +29,8 @@ export interface OrderListProps {
    * 两处都是五行概览，要的是方向和委托金额。
    */
   detailed?: boolean;
+  /** 行内操作（撤单/改单），渲染在 note 行。只读页不传 */
+  renderActions?: (o: OrderView) => ReactNode;
 }
 
 /**
@@ -37,7 +41,7 @@ export interface OrderListProps {
  *  - 「已确认」不贴 Tag，只有待确认/失败才贴
  *  - 方向用蓝色/默认色，不占用红绿（红绿是涨跌的）
  */
-export function OrderList({ orders, detailed }: OrderListProps) {
+export function OrderList({ orders, detailed, renderActions }: OrderListProps) {
   return (
     <div>
       {orders.map((o, i) => {
@@ -81,6 +85,10 @@ export function OrderList({ orders, detailed }: OrderListProps) {
                   {" 下单 · 确认日 "}
                   {o.confirmDate}
                 </span>
+                {/* 待确认行的行内操作（撤单/改单）。放 note 行而非
+                    FundListItem 的 actions 槽：actions 槽会挤压右侧主值
+                    的对齐基准，只给 pending 行挂按钮会错位（见其注释警告） */}
+                {renderActions && <span style={{ marginLeft: 8 }}>{renderActions(o)}</span>}
               </>
             )}
             primary={(

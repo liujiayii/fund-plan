@@ -1,17 +1,21 @@
+import type { ReactNode } from "react";
 import type { OrderView } from "~/services/portfolio-service";
 import { Tag, Timeline, Tooltip } from "antd";
 import { fmtYuan } from "~/components/ui/format";
 import { navToDisplay, sharesToDisplay } from "~/domain/money";
 import { COLOR } from "~/theme";
 
-/** 与 OrderList 同款降噪：只有 pending/failed 贴 Tag，confirmed 是常态不贴 */
+/** 与 OrderList 同款降噪：只有 pending/failed/cancelled 贴 Tag，confirmed 是常态不贴 */
 const STATUS_TAG: Partial<Record<OrderView["status"], { color: string; text: string }>> = {
   pending: { color: "orange", text: "待确认" },
   failed: { color: "red", text: "失败" },
+  cancelled: { color: "default", text: "已撤单" },
 };
 
 export interface OrderTimelineProps {
   orders: OrderView[];
+  /** 行内操作（撤单/改单）。只读页不传 */
+  renderActions?: (o: OrderView) => ReactNode;
 }
 
 /**
@@ -19,7 +23,7 @@ export interface OrderTimelineProps {
  * pending 蓝（进行中）+「T+1 确认中」突出、confirmed 灰（常态）、failed 红。
  * 把 T+1 目标日（confirmDate）与成交明细按时间线呈现，比平铺列表更接近支付宝的「订单状态流」。
  */
-export function OrderTimeline({ orders }: OrderTimelineProps) {
+export function OrderTimeline({ orders, renderActions }: OrderTimelineProps) {
   if (orders.length === 0)
     return null;
   return (
@@ -51,6 +55,8 @@ export function OrderTimeline({ orders }: OrderTimelineProps) {
                 {o.status === "pending" && (
                   <span style={{ color: COLOR.primary }}>（T+1 确认中）</span>
                 )}
+                {/* 待确认行的行内操作（撤单/改单），与委托信息同一行 */}
+                {renderActions && <span style={{ marginLeft: 8 }}>{renderActions(o)}</span>}
               </div>
               {o.status === "confirmed" && o.dealNav !== null && (
                 <div style={{ fontSize: 12, color: COLOR.textSecondary, marginTop: 2 }}>
