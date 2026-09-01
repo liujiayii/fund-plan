@@ -1,9 +1,14 @@
 import type { Route } from "./+types/me.watchlist";
-import { Alert, Button, Dropdown, Space, Typography } from "antd";
+import type { WatchItem } from "~/services/watchlist-service";
+import { Alert, Button, Dropdown, Space, Tooltip, Typography } from "antd";
+import { eq } from "drizzle-orm";
+import { useState } from "react";
 import { useFetcher } from "react-router";
+import { BuyDrawer } from "~/components/BuyDrawer";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { PnlText } from "~/components/ui/PnlText";
+import { account } from "~/db/schema";
 import { navToDisplay } from "~/domain/money";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
@@ -20,10 +25,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
   const items = await listWatch(db, user.id);
-  return { items };
+  // 行内买入抽屉要显示可用现金（本页 requireUser 把关，登录用户必有账户）
+  const acc = await db.query.account.findFirst({
+    where: eq(account.userId, user.id),
+  });
+  return { items, cash: acc?.cash ?? 0 };
 }
 
-/** 加自选/取消自选 action（详情页的加自选也 post 到这里） */
+/** 行内买入 / 加自选 / 取消自选 action（详情页的加自选也 post 到这里） */
 export async function action({ request, context }: Route.ActionArgs) {
   const { db, env } = getAppContext(context);
   const user = await requireUser(request, db);
@@ -36,6 +45,23 @@ export async function action({ request, context }: Route.ActionArgs) {
     return { error: "请输入 6 位基金代码" };
 
   try {
+    if (intent === "buy") {
+      // 行内买入抽屉提交（buyTarget 那只基金）。金额校验与 funds.$code 的
+      // 买入 action 同口径；起购/现金不足等业务错误由 placeBuyOrder 抛出，
+      // 走下方 catch 回给抽屉内的错误 Alert 展示
+      const amount = String(fd.get("amount") ?? "");
+      const n = Number(amount);
+      if (!Number.isFinite(n) || n <= 0)
+        return { error: "请输入正确的金额" };
+      const { yuanToCents } = await import("~/domain/money");
+      const { placeBuyOrder } = await import("~/services/trade");
+      await placeBuyOrder(db, env, {
+        userId: user.id,
+        fundCode,
+        amountCents: yuanToCents(amount),
+      });
+      return { ok: true, message: "下单成功，待 T+1 确认" };
+    }
     if (intent === "add") {
       // 动态 import：loader 只需 listWatch，action 这里才用到 addWatch/removeWatch，
       // 按需加载保持路由模块轻量
@@ -55,9 +81,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeWatchlist({ loaderData }: Route.ComponentProps) {
-  const { items } = loaderData;
+  const { items, cash } = loaderData;
   // useFetcher<typeof action>：拿到 action 的返回类型，fetcher.data 才有 ok/error 的窄化
   const fetcher = useFetcher<typeof action>();
+
+  // 行内买入：开合（buyOpen）与买入目标（buyTarget）分两个 state——
+  // 关闭动画播放期间 buyTarget 保持不变，抽屉退场时仍有数据可画，
+  // 不会闪成空壳；面板输入的重置由 BuyDrawer 的 destroyOnHidden 兜底
+  const [buyOpen, setBuyOpen] = useState(false);
+  const [buyTarget, setBuyTarget] = useState<WatchItem | null>(null);
+
+  const openBuy = (it: WatchItem) => {
+    setBuyTarget(it);
+    setBuyOpen(true);
+  };
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -97,16 +134,28 @@ export default function MeWatchlist({ loaderData }: Route.ComponentProps) {
                   )}
                   secondary={<PnlText rate={it.growthRate / 10000} size={12} />}
                   actions={(
-                    /* 混合形态（Task 10）：「查看」保链接语义留在行内（高频操作，
-                       href 直达基金详情）；「取消自选」收进「···」Dropdown——
-                       原两按钮约 112px，375px 下挤兑左侧名称列，收进后 actions
-                       区约 76px（链接按钮 40 + Dropdown 28 + gap 8）放得下。
-                       ⚠️ 各行 actions 宽度一致（FundListItem 契约）：
-                       本列表所有行渲染同一结构，天然满足 */
+                    /* 混合形态：「买入」主色按钮直达行内抽屉（本页最高频、也是唯一的
+                       花钱动作，值得全行唯一强调）；「取消自选」收进「···」Dropdown。
+                       进基金详情页靠点行首基金名（FundListItem 整块可点），原「查看」
+                       按钮由此退役——76px 宽度契约不变（FundListItem ⚠️ 各行 actions
+                       宽度一致：主色按钮 40 + Dropdown 28 + gap 8，与旧「查看」同尺寸） */
                     <Space size={8}>
-                      <Button size="small" href={`/funds/${it.fundCode}`}>
-                        查看
-                      </Button>
+                      <Tooltip
+                        title={it.unitNav === null ? "暂无净值，暂时无法下单" : undefined}
+                      >
+                        {/* span 包一层：disabled 按钮不触发鼠标事件，Tooltip 直接套会失效 */}
+                        <span>
+                          <Button
+                            size="small"
+                            type="primary"
+                            // 无净值禁用：与基金详情页「没有净值时无法下单」口径一致
+                            disabled={it.unitNav === null}
+                            onClick={() => openBuy(it)}
+                          >
+                            买入
+                          </Button>
+                        </span>
+                      </Tooltip>
                       <Dropdown
                         menu={{
                           items: [
@@ -130,6 +179,22 @@ export default function MeWatchlist({ loaderData }: Route.ComponentProps) {
               ))}
             </div>
           )}
+
+      {/* 行内买入抽屉：提交 post 到本页 action 的 buy 分支，成功 toast + 自动关
+          （onSuccess 由 BuyDrawer 接管）；现金余额随 loader revalidate 自动刷新。
+          buyTarget 为 null 的兜底值只在抽屉关闭时出现（destroyOnHidden 下无渲染） */}
+      <BuyDrawer
+        open={buyOpen}
+        onClose={() => setBuyOpen(false)}
+        action="/me/watchlist"
+        cashCents={cash}
+        fundCode={buyTarget?.fundCode ?? ""}
+        fundName={buyTarget?.fundName ?? ""}
+        purchaseRate={buyTarget?.purchaseRate ?? 0}
+        minPurchaseCents={buyTarget?.minPurchase ?? 0}
+        navScaled={buyTarget?.unitNav ?? 0}
+        navDate={buyTarget?.navDate ?? null}
+      />
     </Space>
   );
 }
