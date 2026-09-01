@@ -9,8 +9,8 @@ import { COLOR, NUM_FONT, pnlColor } from "~/theme";
 // 常量
 // ─────────────────────────────────────────────────────────────
 
-/** 表头：周一始，国内日历习惯 */
-const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"] as const;
+/** 表头：周日始 */
+const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"] as const;
 
 /**
  * 收益率绝对值 → 背景色透明度分档（hex8 后缀）。
@@ -119,9 +119,9 @@ function ProfitCalendarInner({
   // ── 月算术：全部从 currentMonth 串派生，确定性，SSR 安全 ──
   const firstDay = dayjs(`${currentMonth}-01`);
   const daysInMonth = firstDay.daysInMonth();
-  // dayjs .day()：0=周日 1=周一 … 6=周六 → 转成周一始偏移
-  const w = firstDay.day();
-  const startOffset = w === 0 ? 6 : w - 1;
+  // dayjs .day()：0=周日 1=周一 … 6=周六 —— 周日始的网格里这恰好就是
+  // 月初空位数（周日落在第 0 列），无需再换算
+  const startOffset = firstDay.day();
 
   // 月导航
   const prevMonth = dayjs(`${currentMonth}-01`).subtract(1, "month").format("YYYY-MM");
@@ -143,7 +143,7 @@ function ProfitCalendarInner({
         </Button>
       </div>
 
-      {/* 日历网格：7 列，周一始 */}
+      {/* 日历网格：7 列，周日始 */}
       <div
         style={{
           display: "grid",
@@ -152,7 +152,7 @@ function ProfitCalendarInner({
           gap: 4,
         }}
       >
-        {/* 表头：一二三四五六日 */}
+        {/* 表头：日一二三四五六 */}
         {WEEKDAY_LABELS.map(label => (
           <div
             key={label}

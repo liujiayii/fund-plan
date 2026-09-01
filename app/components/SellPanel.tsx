@@ -8,7 +8,7 @@ import {
   Table,
   Typography,
 } from "antd";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
@@ -37,6 +37,11 @@ export interface SellPanelProps {
   /** 预计确认日（用于算持有天数） */
   confirmDate: string;
   action: string;
+  /**
+   * 提交成功回调（拿到 action 返回的 message）。与 BuyPanel 同款：
+   * 提交走本组件内部的 fetcher，宿主页面拿不到结果，成功只能从这里通知出去。
+   */
+  onSuccess?: (message: string) => void;
 }
 
 /**
@@ -54,11 +59,23 @@ export function SellPanel(props: SellPanelProps) {
     tiers,
     confirmDate,
     action,
+    onSuccess,
   } = props;
 
   const [sharesInput, setSharesInput] = useState("");
   const fetcher = useFetcher();
   const submitting = fetcher.state === "submitting";
+
+  // 提交成功后通知宿主，判重逻辑与 BuyPanel 相同（notifiedRef 按 data 对象
+  // 判重，同一份结果只回调一次，防内联回调引用变化导致重复触发）
+  const notifiedRef = useRef<{ ok?: boolean; message?: string } | null>(null);
+  useEffect(() => {
+    const d = fetcher.data as { ok?: boolean; message?: string } | undefined;
+    if (d?.ok && d !== notifiedRef.current) {
+      notifiedRef.current = d;
+      onSuccess?.(d.message ?? "下单成功");
+    }
+  }, [fetcher.data, onSuccess]);
 
   const sharesScaled = useMemo(() => {
     const n = Number(sharesInput);

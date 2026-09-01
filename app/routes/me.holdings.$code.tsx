@@ -6,10 +6,9 @@
  * 设计对用户可见，并提供加仓/卖出/该基金交易流水三个入口。
  */
 import type { Route } from "./+types/me.holdings.$code";
-import { Alert, Button, Space, Table, Tag, Typography } from "antd";
+import { Button, message, Space, Table, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
-import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { useState } from "react";
 import { BuyPanel } from "~/components/BuyPanel";
 import { OrderList } from "~/components/OrderList";
 import { SellPanel } from "~/components/SellPanel";
@@ -93,20 +92,18 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 
 export default function MeHoldingDetail({ loaderData, params }: Route.ComponentProps) {
   const { detail: d, cash, orders, confirmDate, today } = loaderData;
-  const fetcher = useFetcher<typeof action>();
   // tick：提交成功后自增，作为 key 强制 BuyPanel/SellPanel 重新挂载，清空输入框
   const [tick, setTick] = useState(0);
   const actionUrl = `/me/holdings/${params.code}`;
 
-  // 提交成功后强制重挂面板清空输入。同 me.dca.tsx 的定向豁免：
-  // 这是「异步提交完成后触发副作用」而非「用 effect 同步派生状态」，
-  // effect 正是该用的工具。
-  useEffect(() => {
-    if (fetcher.data?.ok) {
-      // eslint-disable-next-line react/set-state-in-effect
-      setTick(t => t + 1);
-    }
-  }, [fetcher.data]);
+  // 提交成功：toast 反馈 + tick 重挂面板清空输入。
+  // ⚠️ 成功信号从面板的 onSuccess 回调来——提交走的是面板内部私建的 fetcher，
+  // 页面级 fetcher 拿不到结果。此前版本看守的正是页面级 fetcher.data（从不
+  // submit、data 恒空），「成功提示 + 清空输入」从未触发过——本 commit 修复
+  const handleSuccess = (msg: string) => {
+    message.success(msg);
+    setTick(t => t + 1);
+  };
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -119,8 +116,8 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         <Button size="small" href="/me/holdings">← 返回持仓</Button>
       </Space>
 
-      {fetcher.data?.ok && <Alert type="success" showIcon message={fetcher.data.message} closable />}
-      {fetcher.data?.error && <Alert type="error" showIcon message={fetcher.data.error} closable />}
+      {/* 提交成功/失败的反馈：成功走 message.success（见 handleSuccess），
+          失败由面板内部自己的 Alert 渲染，页面级不再重复挂 Alert */}
 
       {/* 持仓概览：与 /me/holdings 列表同源估值 */}
       <SectionCard title="持仓概览">
@@ -228,6 +225,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
             navDate={d.navDate}
             cashCents={cash}
             action={actionUrl}
+            onSuccess={handleSuccess}
           />
         </SectionCard>
       )}
@@ -245,6 +243,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
             tiers={d.tiers}
             confirmDate={confirmDate}
             action={actionUrl}
+            onSuccess={handleSuccess}
           />
         </SectionCard>
       )}

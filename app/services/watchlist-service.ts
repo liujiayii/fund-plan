@@ -22,6 +22,10 @@ export interface WatchItem {
   unitNav: number | null;
   /** 日涨跌率 ×10000（万分之）；无净值时 0（展示层用 PnlText 判色） */
   growthRate: number;
+  /** 申购费率（万分之）——行内买入抽屉的费率试算与展示用 */
+  purchaseRate: number;
+  /** 起购金额（分）——行内买入抽屉校验起购下限用 */
+  minPurchase: number;
 }
 
 /**
@@ -106,6 +110,10 @@ export async function listWatch(db: Db, userId: number): Promise<WatchItem[]> {
       navDate: nav?.navDate ?? null,
       unitNav: nav?.unitNav ?? null,
       growthRate: nav?.growthRate ?? 0,
+      // 兜底与 fund 表列默认值一致。正常到不了这里：addWatch 时 ensureFund
+      // 已保证档案在库——兜底只为类型完备性（f 可能是 undefined）
+      purchaseRate: f?.purchaseRate ?? 0,
+      minPurchase: f?.minPurchase ?? 1000,
     };
   });
 }

@@ -1,5 +1,5 @@
 import { Alert, Button, Form, Input, Space, Typography } from "antd";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
@@ -23,6 +23,12 @@ export interface BuyPanelProps {
   cashCents: number | null;
   /** 提交到哪个 action */
   action: string;
+  /**
+   * 提交成功回调（拿到 action 返回的 message）。
+   * BuyDrawer 靠它自动关抽屉；me.holdings 靠它重挂面板清空输入。
+   * 不传则仅面板内部表现（提交按钮复位）。
+   */
+  onSuccess?: (message: string) => void;
 }
 
 /**
@@ -39,11 +45,26 @@ export function BuyPanel(props: BuyPanelProps) {
     navDate,
     cashCents,
     action,
+    onSuccess,
   } = props;
 
   const [amountYuan, setAmountYuan] = useState("");
   const fetcher = useFetcher();
   const submitting = fetcher.state === "submitting";
+
+  // 提交成功后通知宿主。⚠️ 成功信号只能从本组件的 fetcher 出：
+  // 提交走的是这里的 fetcher.Form，宿主页面自建的 fetcher 拿不到结果
+  // （me.holdings 曾因此踩过「成功无提示、输入不清空」的静默 bug）。
+  // notifiedRef 按 data 对象判重：同一份结果只回调一次——onSuccess 多为
+  // 内联箭头函数（每次渲染新引用），只靠 deps 判变化会重复触发 toast。
+  const notifiedRef = useRef<{ ok?: boolean; message?: string } | null>(null);
+  useEffect(() => {
+    const d = fetcher.data as { ok?: boolean; message?: string } | undefined;
+    if (d?.ok && d !== notifiedRef.current) {
+      notifiedRef.current = d;
+      onSuccess?.(d.message ?? "下单成功");
+    }
+  }, [fetcher.data, onSuccess]);
 
   // 试算：金额合法且有净值时，按内扣法算费用与份额
   const estimate = useMemo(() => {
