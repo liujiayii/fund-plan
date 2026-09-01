@@ -53,8 +53,12 @@ app/routes/admin.users.$id.tsx    # 单用户组合 + 订单
 
 ## 数据流
 
-- `/admin`：service 层新增 `listUsersOverview(db)` 聚合 user + account +
-  portfolio 汇总。用户量小，逐人算可接受（N+1 暂不优化）
+- `/admin`：service 层新增 `listUsersOverview(db)` 批量聚合——一次批量取
+  user / account / holding / 最新净值 + 一条 groupBy 订单数，固定 ~5 条查询
+  与用户数无关（D1 免费版每请求 50 条查询硬顶，早期逐人调 getPortfolio 的
+  N+1 写法在用户过 ~10 人时会直接 500，已消除）。持仓估值口径与
+  `getPortfolio` 完全一致：`valuateHolding` + 无净值时 `costBasisNavScaled`
+  成本兜底，汇总走 `valuatePortfolio`
 - `/admin/users/:id`：
   - `getPortfolio(db, userId)` 换 userId 复用现有 service
   - 组合渲染复用 `PortfolioView`（当初渲染/取数分离的红利）

@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "~/db/client";
 import {
@@ -14,9 +15,11 @@ import {
   transactions,
   user,
 } from "~/db/schema";
+import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getAdminStats, getUserDetail, listUsersOverview } from "~/services/admin-service";
 import { registerUser } from "~/services/auth";
+import { getPortfolio } from "~/services/portfolio-service";
 
 async function resetAll() {
   const db = getDb(env.DB);
@@ -79,6 +82,90 @@ describe("listUsersOverview 用户列表", () => {
 
     const rows = await listUsersOverview(db);
     expect(rows.map(r => r.username)).toEqual(["bob", "alice"]);
+  });
+
+  it("多用户批量聚合与 getPortfolio 同口径（对拍校验，不手算金额）", async () => {
+    const db = getDb(env.DB);
+    const admin = await registerUser(db, env, "testadmin", "hunter2");
+    const alice = await registerUser(db, env, "alice", "hunter2");
+
+    // alice 建仓：基金档案 + 当日净值（fund_nav 主键是 (fundCode, navDate)）+ 一笔持仓
+    const code = "000001";
+    await db.insert(fund).values({
+      code,
+      name: "测试成长混合",
+      type: "混合型",
+      purchaseRate: 150,
+      redeemTiers: DEFAULT_REDEEM_TIERS,
+      minPurchase: 1000,
+      updatedAt: Date.now(),
+    });
+    const navDate = toBeijing(new Date()).format("YYYY-MM-DD");
+    await db.insert(fundNav).values({
+      fundCode: code,
+      navDate,
+      unitNav: 12345, // 净值 1.2345（×10000 整数口径）
+      accNav: 12345,
+      growthRate: 0,
+    });
+    await db.insert(holding).values({
+      userId: alice.id,
+      fundCode: code,
+      totalShares: 6568133, // 656.8133 份（×10000）
+      totalCost: 800000, // 8000 元（分）
+    });
+
+    // 直接对拍 getPortfolio 的 summary——精度铁律：绝不在测试里手算金额
+    const rows = await listUsersOverview(db);
+    const alicePortfolio = await getPortfolio(db, alice.id);
+    const a = rows.find(r => r.username === "alice")!;
+    expect(a.marketValueCents).toBe(alicePortfolio.summary.marketValueCents);
+    expect(a.totalPnlCents).toBe(alicePortfolio.summary.totalPnlCents);
+
+    // admin 无持仓：市值 0，现金直接来自 account 行
+    const adm = rows.find(r => r.username === "testadmin")!;
+    expect(adm.marketValueCents).toBe(0);
+    const acc = await db.query.account.findFirst({ where: eq(account.userId, admin.id) });
+    expect(adm.cashCents).toBe(acc!.cash);
+  });
+
+  it("无净值成本兜底 + 多持仓汇总 + 清仓行过滤与 getPortfolio 同口径", async () => {
+    const db = getDb(env.DB);
+    await registerUser(db, env, "testadmin", "hunter2");
+    const alice = await registerUser(db, env, "alice", "hunter2");
+
+    // 两只基金：000001 有净值行；000002 只有档案没有净值行（走成本兜底路径）
+    await db.insert(fund).values([
+      { code: "000001", name: "有净值混合", type: "混合型", purchaseRate: 150, redeemTiers: DEFAULT_REDEEM_TIERS, minPurchase: 1000, updatedAt: Date.now() },
+      { code: "000002", name: "无净值混合", type: "混合型", purchaseRate: 150, redeemTiers: DEFAULT_REDEEM_TIERS, minPurchase: 1000, updatedAt: Date.now() },
+    ]);
+    // unitNav 与 accNav 刻意不同：实现若误用累计净值（accNav）估值，对拍立刻抓出
+    const navDate = toBeijing(new Date()).format("YYYY-MM-DD");
+    await db.insert(fundNav).values({
+      fundCode: "000001",
+      navDate,
+      unitNav: 12345,
+      accNav: 23456,
+      growthRate: 0,
+    });
+
+    // alice 三行持仓：有净值的 / 无净值走兜底的 / 清仓行（份额 0 但成本非 0，
+    // 若不过滤会把 -成本 的假亏损灌进汇总，对拍能抓出）
+    await db.insert(holding).values([
+      { userId: alice.id, fundCode: "000001", totalShares: 6568133, totalCost: 800000 },
+      { userId: alice.id, fundCode: "000002", totalShares: 1234567, totalCost: 2000000 },
+      { userId: alice.id, fundCode: "000003", totalShares: 0, totalCost: 500000 },
+    ]);
+
+    const rows = await listUsersOverview(db);
+    const alicePortfolio = await getPortfolio(db, alice.id);
+    const a = rows.find(r => r.username === "alice")!;
+    expect(a.marketValueCents).toBe(alicePortfolio.summary.marketValueCents);
+    expect(a.totalPnlCents).toBe(alicePortfolio.summary.totalPnlCents);
+    // 防假绿：两条持仓都被计入才有非零市值；有净值那只的成本与市值差得远，
+    // 盈亏必然非零——若持仓全被漏掉，两边都空转成 0=0 的对拍就失去意义
+    expect(a.marketValueCents).toBeGreaterThan(0);
+    expect(a.totalPnlCents).not.toBe(0);
   });
 });
 
