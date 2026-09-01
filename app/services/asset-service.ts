@@ -1,6 +1,6 @@
 import type { Db } from "~/db/client";
 import type { DailyAsset, ReplayInput } from "~/domain/asset-timeline";
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { orders, transactions } from "~/db/schema";
 import { replayDailyAssets } from "~/domain/asset-timeline";
 import { toBeijing } from "~/domain/trading-calendar";
@@ -25,56 +25,59 @@ export async function getAssetTimeline(
   db: Db,
   userId: number,
 ): Promise<{ daily: DailyAsset[]; latest: DailyAsset | null }> {
-  // ── 查询 1 & 2：已确认订单 + 现金账本（互相独立，一波并行）──────────
-  // 订单只取 status='confirmed' 且 dealShares 不为 null 的行。
-  // pending/failed 没成交，份额没变，不算入重放。
-  // orderBy(confirmDate asc, id asc)：保证 domain 前向扫描游标能按序消费。
+  // ── 查询 1 & 2：全部订单 + 现金账本（互相独立，一波并行）──────────
+  // 订单取全量（不只 confirmed）：份额重放只用 confirmed，但「在途申购」
+  // 事件流需要每笔买单的完整生命周期（下单/改单/撤销/失败）。
   // transactions 按 createdAt asc, id asc 取全量，映射成 { date, balance }。
   // 日期转换是关键：createdAt 是 UTC 毫秒，fund_nav.navDate 是北京日历日，
   // 必须用 toBeijing 转成北京日期串才能与净值日期对齐（与 checkin-service 同款）。
-  // 两查旧写法串行两跳——Worker 与 D1 跨大区时每跳都是一次百毫秒级往返
-  const [confirmedRows, txRows] = await Promise.all([
+  const [orderRows, txRows] = await Promise.all([
     db
       .select({
+        id: orders.id,
         fundCode: orders.fundCode,
         side: orders.side,
+        status: orders.status,
+        amount: orders.amount,
+        placeDate: orders.placeDate,
         confirmDate: orders.confirmDate,
         dealShares: orders.dealShares,
       })
       .from(orders)
-      .where(
-        and(
-          eq(orders.userId, userId),
-          eq(orders.status, "confirmed"),
-          isNotNull(orders.dealShares),
-        ),
-      )
-      .orderBy(asc(orders.confirmDate), asc(orders.id)),
+      .where(eq(orders.userId, userId))
+      .orderBy(asc(orders.placeDate), asc(orders.id)),
     db
       .select({
         type: transactions.type,
         amount: transactions.amount,
         balance: transactions.balance,
         createdAt: transactions.createdAt,
+        orderId: transactions.orderId,
       })
       .from(transactions)
       .where(eq(transactions.userId, userId))
       .orderBy(asc(transactions.createdAt), asc(transactions.id)),
   ]);
 
-  // 映射成 ReplayInput.confirmedOrders 的形状，同时收集去重基金代码
+  // 映射成 ReplayInput.confirmedOrders 的形状（份额重放只用已成交单）。
+  // 上面主排序是 placeDate，这里必须按 (confirmDate, id) 重排——
+  // domain 前向扫描游标要求按确认日有序
   const confirmedOrders: ReplayInput["confirmedOrders"] = [];
   const fundCodeSet = new Set<string>();
-  for (const row of confirmedRows) {
+  for (const row of orderRows) {
+    if (row.status !== "confirmed" || row.dealShares === null)
+      continue;
     confirmedOrders.push({
       fundCode: row.fundCode,
       side: row.side,
       confirmDate: row.confirmDate,
-      // isNotNull 过滤保证运行时非 null，TypeScript 类型不一定收窄，用 !
-      dealShares: row.dealShares!,
+      dealShares: row.dealShares,
     });
     fundCodeSet.add(row.fundCode);
   }
+  confirmedOrders.sort((a, b) =>
+    a.confirmDate < b.confirmDate ? -1 : a.confirmDate > b.confirmDate ? 1 : 0,
+  );
   const fundCodes = [...fundCodeSet];
 
   const cashLedger: ReplayInput["cashLedger"] = [];
@@ -85,6 +88,13 @@ export async function getAssetTimeline(
   const netDepositByDate = new Map<string, number>();
   // 收集现金账本日期，后面并进 dateAxis
   const cashDates = new Set<string>();
+
+  // ── 在途事件流的辅助索引（同批流水的二次消费）─────────────────────
+  // 改单流水（type='amend'）：amount = −差额，在途变化 = +差额 = −amount。
+  // 撤销（type='cancel'）/失败退款（type='buy' 且 amount>0——下单流水
+  // 只会是负数，正数 buy 必是 failOrder 的退款）的流水日期 = 在途归零日。
+  const amendEventsByOrderId = new Map<number, { date: string; deltaCents: number }[]>();
+  const closeDateByOrderId = new Map<number, string>();
 
   for (const row of txRows) {
     // createdAt 是 UTC 毫秒，转北京日期串对齐净值日历
@@ -98,7 +108,44 @@ export async function getAssetTimeline(
       const prev = netDepositByDate.get(date) ?? 0;
       netDepositByDate.set(date, prev + row.amount);
     }
+
+    if (row.orderId == null)
+      continue;
+    if (row.type === "amend") {
+      const list = amendEventsByOrderId.get(row.orderId) ?? [];
+      list.push({ date, deltaCents: -row.amount });
+      amendEventsByOrderId.set(row.orderId, list);
+    }
+    else if (row.type === "cancel" || (row.type === "buy" && row.amount > 0)) {
+      closeDateByOrderId.set(row.orderId, date);
+    }
   }
+
+  // ── 在途事件流：每笔买单的生命周期 ────────────────────────────────
+  //   下单日 +初始委托额（= 终值 − Σ改单差额），改单日 ±差额，
+  //   确认日 −终值（换成市值）、撤销/失败日 −终值（现金已退回）。
+  // pending 单不归零：它真正成交/退回后（状态翻转、流水落库），
+  // 下次重算时间线自然带上归零事件——今天下单今天未撮合，在途持续到今晚。
+  // 没有这条流，在途窗口里「钱已扣、份额未有」，单日收益会把申购额
+  // 误记成亏损（2026-09-01 主理人实测 -8942 元即 9 笔申购总额）。
+  const transitEvents: ReplayInput["transitEvents"] = [];
+  for (const o of orderRows) {
+    if (o.side !== "buy" || o.amount === null)
+      continue;
+    const amends = amendEventsByOrderId.get(o.id) ?? [];
+    const amendSum = amends.reduce((s, e) => s + e.deltaCents, 0);
+    transitEvents.push({ date: o.placeDate, deltaCents: o.amount - amendSum });
+    transitEvents.push(...amends);
+    if (o.status === "confirmed") {
+      transitEvents.push({ date: o.confirmDate, deltaCents: -o.amount });
+    }
+    else if (o.status === "cancelled" || o.status === "failed") {
+      // 归零日 = 退款流水日期；兜底 confirmDate（理论不可达：撤销/失败必留退款流水）
+      const closeDate = closeDateByOrderId.get(o.id) ?? o.confirmDate;
+      transitEvents.push({ date: closeDate, deltaCents: -o.amount });
+    }
+  }
+  transitEvents.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   // ── 查询 4：净值序列 ──────────────────────────────────────────────
   // 对每只有确认订单的基金调 getNavSeries(db, code) 取全部净值。
@@ -146,6 +193,7 @@ export async function getAssetTimeline(
     netDepositByDate,
     confirmedOrders,
     navSeries,
+    transitEvents,
   };
 
   const daily = replayDailyAssets(input);

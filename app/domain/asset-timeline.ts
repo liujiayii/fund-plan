@@ -24,6 +24,14 @@ export interface ReplayInput {
   }[];
   /** 各基金净值序列（升序），键为基金代码 */
   navSeries: Map<string, { navDate: string; unitNav: number }[]>;
+  /**
+   * 在途申购事件流（升序，可乱序由 service 排好）：买单冻结的现金在
+   * 「下单 → 确认/撤销/失败」期间仍属资产。每条 = 该日在途额的增减：
+   *   下单 +amount、改单 ±差额、确认/撤销/失败日 −终值。
+   * 没有它，在途窗口里「钱已扣、份额未有」，单日收益会把申购额
+   * 误记成亏损（2026-09-01 主理人实测 -8942 元即 9 笔申购总额）。
+   */
+  transitEvents: { date: string; deltaCents: number }[];
 }
 
 /** 每日资产快照 */
@@ -33,7 +41,9 @@ export interface DailyAsset {
   cashCents: number;
   /** 当日持仓市值合计（分） */
   marketValueCents: number;
-  /** 当日总资产（分）= 现金 + 市值 */
+  /** 当日在途申购金额（分）：已冻结未成交的钱 */
+  transitCents: number;
+  /** 当日总资产（分）= 现金 + 市值 + 在途 */
   totalAssetCents: number;
   /** 当日收益（分），已扣净入金 */
   dayPnlCents: number;
@@ -44,14 +54,15 @@ export interface DailyAsset {
 /**
  * 账本重放主函数（spec §5.2，单趟扫描，O(天数 + 订单数)）。
  *
- * 沿 dateAxis 前进，维护三个游标：
+ * 沿 dateAxis 前进，维护四个游标：
  *   - 现金账本游标 cashIdx（前向填充：取最后一条 date <= 当日的 balance）
  *   - 订单游标 orderIdx（confirmDate === 当日 则并入份额 Map）
+ *   - 在途事件游标 transitIdx（date <= 当日 全部并入，维护在途 level）
  *   - 各基金净值游标 navIdxMap（前向填充：取最后一条 navDate <= 当日的 unitNav）
  * 持仓份额 Map<fundCode, sharesScaled> 随订单进出。
  */
 export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
-  const { dateAxis, cashLedger, netDepositByDate, confirmedOrders, navSeries } = input;
+  const { dateAxis, cashLedger, netDepositByDate, confirmedOrders, navSeries, transitEvents } = input;
 
   // 空日期轴直接返回空数组
   if (dateAxis.length === 0)
@@ -71,6 +82,8 @@ export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
 
   let cashIdx = 0; // 现金账本游标
   let orderIdx = 0; // 订单游标
+  let transitIdx = 0; // 在途事件游标
+  let transitCents = 0; // 在途申购 level（分）
   let prevTotalAssetCents = 0; // 前一日总资产（首日为 0）
   let isFirstDay = true;
 
@@ -95,6 +108,17 @@ export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
         sharesMap.set(order.fundCode, next);
       }
       orderIdx++;
+    }
+
+    // ── 步骤 1.5：推进在途事件游标（date <= 当日 全部并入，含当日）──
+    // 与现金前向填充同款语义：事件落在不在日期轴上的日子（理论上不该
+    // 发生——下单/改单/撤销日必有流水），也会在下个轴日被消费
+    while (
+      transitIdx < transitEvents.length
+      && transitEvents[transitIdx].date <= date
+    ) {
+      transitCents += transitEvents[transitIdx].deltaCents;
+      transitIdx++;
     }
 
     // ── 步骤 2：推进现金游标，前向填充（取最后一条 date <= 当日的 balance）──
@@ -140,8 +164,8 @@ export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
       marketValueCents += mv;
     }
 
-    // ── 步骤 4：总资产 = 现金 + 市值 ──
-    const totalAssetCents = cashCents + marketValueCents;
+    // ── 步骤 4：总资产 = 现金 + 市值 + 在途 ──
+    const totalAssetCents = cashCents + marketValueCents + transitCents;
 
     // ── 步骤 5：日收益 = 当日总资产 − 前一日总资产 − 当日净入金 ──
     // 首日无前一日 → 0。必须扣净入金：签到不是赚了，买入/赎回不算净入金。
@@ -160,6 +184,7 @@ export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
       date,
       cashCents,
       marketValueCents,
+      transitCents,
       totalAssetCents,
       dayPnlCents,
       dayPnlRate,
