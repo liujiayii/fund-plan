@@ -1,8 +1,9 @@
+import type { OrderView, PortfolioView } from "./portfolio-service";
 import type { Db } from "~/db/client";
 import { desc, eq, sql } from "drizzle-orm";
 import { orders, user } from "~/db/schema";
 import { toBeijing } from "~/domain/trading-calendar";
-import { getPortfolio } from "./portfolio-service";
+import { getOrders, getPortfolio } from "./portfolio-service";
 
 /** /admin 用户列表一行的数据 */
 export interface UserOverview {
@@ -83,5 +84,37 @@ export async function getAdminStats(
     users: users.n,
     pendingOrders: pending.n,
     todayConfirmedOrders: todayConfirmed.n,
+  };
+}
+
+/** /admin/users/:id 页的数据包 */
+export interface AdminUserDetail {
+  user: { id: number; username: string; role: "admin" | "user"; createdAt: number };
+  portfolio: PortfolioView;
+  orders: OrderView[];
+}
+
+/**
+ * 单用户详情（组合 + 订单）。用户不存在返回 null，
+ * 路由层据此抛 404——与 getHoldingDetail 的「查不到 → 404」套路一致。
+ */
+export async function getUserDetail(
+  db: Db,
+  userId: number,
+): Promise<AdminUserDetail | null> {
+  const u = await db.query.user.findFirst({ where: eq(user.id, userId) });
+  if (!u)
+    return null;
+
+  // 组合与订单互不依赖，并行发出（跨大区部署时每跳都是百毫秒级往返）
+  const [portfolio, orderList] = await Promise.all([
+    getPortfolio(db, userId),
+    getOrders(db, userId, 200),
+  ]);
+
+  return {
+    user: { id: u.id, username: u.username, role: u.role, createdAt: u.createdAt },
+    portfolio,
+    orders: orderList,
   };
 }

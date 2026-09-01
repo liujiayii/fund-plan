@@ -15,7 +15,7 @@ import {
   user,
 } from "~/db/schema";
 import { toBeijing } from "~/domain/trading-calendar";
-import { getAdminStats, listUsersOverview } from "~/services/admin-service";
+import { getAdminStats, getUserDetail, listUsersOverview } from "~/services/admin-service";
 import { registerUser } from "~/services/auth";
 
 async function resetAll() {
@@ -63,11 +63,9 @@ describe("listUsersOverview 用户列表", () => {
     expect(a.marketValueCents).toBe(0);
     expect(a.totalPnlCents).toBe(0);
     expect(a.orderCount).toBe(1);
-    const acc = await db.query.account.findFirst({ where: undefined })!;
     // 用注册返回值对表校验（registerUser 建 account 发 10 万初始本金）
     expect(a.cashCents).toBeGreaterThan(0);
     expect(a.role).toBe("user");
-    void acc;
 
     const admin = rows.find(r => r.username === "testadmin")!;
     expect(admin.role).toBe("admin");
@@ -114,5 +112,32 @@ describe("getAdminStats 全局统计", () => {
     const db = getDb(env.DB);
     const s = await getAdminStats(db);
     expect(s).toEqual({ users: 0, pendingOrders: 0, todayConfirmedOrders: 0 });
+  });
+});
+
+describe("getUserDetail 单用户详情", () => {
+  it("返回该用户的组合与订单，别人的订单不混入", async () => {
+    const db = getDb(env.DB);
+    const admin = await registerUser(db, env, "testadmin", "hunter2");
+    const alice = await registerUser(db, env, "alice", "hunter2");
+
+    const today = toBeijing(new Date()).format("YYYY-MM-DD");
+    await db.insert(orders).values([
+      { userId: alice.id, fundCode: "000001", side: "buy", status: "pending", source: "manual", amount: 100000, placeDate: today, confirmDate: today, createdAt: Date.now() },
+      { userId: admin.id, fundCode: "000001", side: "buy", status: "pending", source: "manual", amount: 20000, placeDate: today, confirmDate: today, createdAt: Date.now() },
+    ]);
+
+    const d = await getUserDetail(db, alice.id);
+    expect(d).not.toBeNull();
+    expect(d!.user.username).toBe("alice");
+    expect(d!.user.role).toBe("user");
+    // 隔离断言靠数量：admin 也有一笔单，若查询没按 userId 过滤会查出 2 笔
+    expect(d!.orders).toHaveLength(1);
+    expect(d!.portfolio.summary.cashCents).toBeGreaterThan(0);
+  });
+
+  it("用户不存在返回 null（路由层据此 404）", async () => {
+    const db = getDb(env.DB);
+    expect(await getUserDetail(db, 99999)).toBeNull();
   });
 });
