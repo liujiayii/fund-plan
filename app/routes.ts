@@ -6,6 +6,7 @@ import { index, route } from "@react-router/dev/routes";
  *
  * 公开页（游客可见）：/ /master /leaderboard /funds /funds/:code /login /register
  * 需登录页：/me 系列（鉴权在各自 loader 里用 requireUser 做）
+ * 管理页：/admin 系列（loader 里用 requireAdmin 把门，非 admin 一律 403）
  */
 export default [
   // ==== 公开 ====
@@ -26,4 +27,7 @@ export default [
   route("me/orders", "routes/me.orders.tsx"),
   route("me/dca", "routes/me.dca.tsx"),
   route("me/settings", "routes/me.settings.tsx"),
+
+  // ==== 管理（admin 专属，loader 里 requireAdmin 把门）====
+  route("admin", "routes/admin.tsx"),
 ] satisfies RouteConfig;
