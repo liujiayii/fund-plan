@@ -103,14 +103,13 @@ export function OrderActions({ order }: OrderActionsProps) {
 
   return (
     <>
-      {/* 放 note 行内而非 FundListItem 的 actions 槽：右侧主值按
-          「容器宽 − actions 宽」对齐，只给 pending 行挂按钮会把
-          待确认行与已成交行的数字列错开一截（FundListItem 注释有警告） */}
-      <Space size={0}>
-        <Button type="link" size="small" style={{ paddingInline: 4 }} disabled={submitting} onClick={openAmend}>
+      {/* 实底小按钮：链接小字太隐蔽，主人反馈「撤单改单难发现」。
+          仍放 note 行而非 FundListItem 的 actions 槽（对齐警告见 OrderList 注释） */}
+      <Space size={8}>
+        <Button size="small" disabled={submitting} onClick={openAmend}>
           改单
         </Button>
-        <Button type="link" size="small" danger style={{ paddingInline: 4 }} disabled={submitting} onClick={confirmCancel}>
+        <Button size="small" danger disabled={submitting} onClick={confirmCancel}>
           撤单
         </Button>
       </Space>
