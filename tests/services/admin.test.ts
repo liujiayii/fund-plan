@@ -88,10 +88,13 @@ describe("getAdminStats 全局统计", () => {
     const admin = await registerUser(db, env, "testadmin", "hunter2");
     const alice = await registerUser(db, env, "alice", "hunter2");
 
-    const today = toBeijing(new Date()).format("YYYY-MM-DD");
+    // 固定时间基准：today/yesterday 与 getAdminStats 都从同一个 now 推导，
+    // 避免（北京时间）跨日瞬间跑测试时「今日已确认」被判成昨日（CodeRabbit 指出的竞态）
+    const now = new Date();
+    const today = toBeijing(now).format("YYYY-MM-DD");
     // brief 原稿笔误：yesterday 也写成 today，导致「昨日已确认」计入今日。
     // 这里真正减一天，保证两条 confirmed 单的 confirmDate 有区分。
-    const yesterday = toBeijing(new Date()).subtract(1, "day").format("YYYY-MM-DD");
+    const yesterday = toBeijing(now).subtract(1, "day").format("YYYY-MM-DD");
     await db.insert(orders).values([
       // alice 的两笔 pending（都算待撮合）
       { userId: alice.id, fundCode: "000001", side: "buy", status: "pending", source: "manual", amount: 100000, placeDate: today, confirmDate: today, createdAt: Date.now() },
@@ -102,7 +105,7 @@ describe("getAdminStats 全局统计", () => {
       { userId: admin.id, fundCode: "000001", side: "buy", status: "confirmed", source: "manual", amount: 20000, placeDate: yesterday, confirmDate: yesterday, createdAt: Date.now() },
     ]);
 
-    const s = await getAdminStats(db);
+    const s = await getAdminStats(db, now);
     expect(s.users).toBe(2);
     expect(s.pendingOrders).toBe(2);
     expect(s.todayConfirmedOrders).toBe(1);

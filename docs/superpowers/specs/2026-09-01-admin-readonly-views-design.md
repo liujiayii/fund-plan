@@ -17,8 +17,10 @@
 **目标：**
 
 1. `/admin` 用户列表：用户名、角色、现金、持仓市值、浮动盈亏、订单数、注册时间
-2. `/admin` 顶部全局监控统计卡：总用户数、今日 pending 单数、今日撮合单数
-3. `/admin/users/:id` 单用户视图：持仓组合（复用 `PortfolioView`）+ 全量订单表
+2. `/admin` 顶部全局监控统计卡：总用户数、待撮合订单数（**全部** pending——
+   撮合积压的直接指标，不限当日）、今日已撮合单数（北京时间口径 confirmDate = 今天）
+3. `/admin/users/:id` 单用户视图：持仓组合（复用 `PortfolioView`）+ 最近
+   最多 200 条订单
 4. 订单表展示：时间、基金、方向、金额、份额、确认净值、状态（pending/
    confirmed/failed）、失败原因——排查撮合问题的核心
 
@@ -42,7 +44,7 @@
 
 ## 路由
 
-```
+```text
 app/routes/admin.tsx              # 用户列表 + 全局统计卡
 app/routes/admin.users.$id.tsx    # 单用户组合 + 订单
 ```
