@@ -25,3 +25,4 @@
 .ease{--un-ease:var(--ease-DEFAULT);transition-timing-function:var(--ease-DEFAULT);}
 .relative{position:relative;}
 .sticky{position:sticky;}
+.isolate{isolation:isolate;}

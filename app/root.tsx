@@ -78,8 +78,14 @@ export default function App() {
   // 仍用 form post 而非 client fetch，是为了沿用服务端清 session + 重定向的标准链路。
   const logoutFormRef = useRef<HTMLFormElement>(null);
 
+  // admin 专属导航项：运行时按角色拼接，不加进 domain 的 NAV_ITEMS ——
+  // NAV_ITEMS 是「无角色分叉的公共导航」的单一事实源（顶栏与 TabBar 共用、
+  // 顺序被单测钉死），混入角色逻辑就毁了这个约定。追加在末尾无前缀冲突。
+  const navItems = user?.role === "admin"
+    ? [...NAV_ITEMS, { key: "/admin", label: "管理" }]
+    : NAV_ITEMS;
   // 高亮当前所在的一级导航（顶栏与底部 TabBar 共用同一份纯函数）
-  const selectedKey = resolveSelectedKey(location.pathname, NAV_ITEMS);
+  const selectedKey = resolveSelectedKey(location.pathname, navItems);
 
   // 用户名首字作为头像文字（中文取第一字，英文取首字母大写），
   // 因 DB 未存头像 URL，用品牌蓝底白字字母头像是最接近消费级 App 的做法。
@@ -129,7 +135,7 @@ export default function App() {
             <Menu
               mode="horizontal"
               selectedKeys={selectedKey ? [selectedKey] : []}
-              items={NAV_ITEMS.map(i => ({
+              items={navItems.map(i => ({
                 key: i.key,
                 label: <a href={i.key}>{i.label}</a>,
               }))}
