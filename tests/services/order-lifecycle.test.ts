@@ -593,7 +593,9 @@ describe("撤单/改单与撮合的交互", () => {
     await amendOrder(db, userId, orderId, { amountCents: 80000 });
 
     // 若守卫失效，这里会按旧金额 50000 全额退款 → 与改单的差额调整叠加成双退
-    await failOrder(db, staleRow, "测试失败", NOW);
+    // 返回 false = 失败处置让路（调用方据此打结构化告警，settlePendingOrders 计入 skipped）
+    const flipped = await failOrder(db, staleRow, "测试失败", NOW);
+    expect(flipped).toBe(false);
 
     // 守卫生效：翻转 0 行，订单保持 pending（改后金额），等下一轮 cron 处置
     const o = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });

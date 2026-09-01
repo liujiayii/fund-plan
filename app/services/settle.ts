@@ -176,8 +176,28 @@ export async function settlePendingOrders(
     catch (err) {
       console.error(`[settle] 订单 ${order.id} 撮合失败：`, err);
       // 业务性失败：标记 failed 并退还冻结的现金（买单）
-      await failOrder(db, order, err instanceof Error ? err.message : "撮合失败", now);
-      result.failed++;
+      const flipped = await failOrder(
+        db,
+        order,
+        err instanceof Error ? err.message : "撮合失败",
+        now,
+      );
+      if (flipped) {
+        result.failed++;
+      }
+      else {
+        // 失败处置让路 = 状态已被抢先翻转。若翻转来自本函数先前的
+        // 「确认成功但第二段写份额失败」，订单此刻是 confirmed 却没有
+        // share_lot/holding——cron 只捞 pending，不会再自愈，
+        // 必须留可检索的结构化日志供对账补录（settle.ts 头注释的已知窗口）
+        result.skipped++;
+        console.error(
+          `[settle] 订单 ${order.id} 失败处置让路（状态已被抢先翻转）。`
+          + `若该单此前已确认且份额未落库，需人工补录：`
+          + `SELECT * FROM orders WHERE id = ${order.id} AND status = 'confirmed'`
+          + ` AND id NOT IN (SELECT order_id FROM share_lot);`,
+        );
+      }
     }
   }
 
@@ -455,6 +475,7 @@ export async function settleSellOrder(
  * 带_pending + amount/shares 守卫：订单已被撤单/撮合/改单抢先处理时
  * 整体跳过，不重复退钱。尤其要防改单：改单已按差额调整过现金
  * （改小便已退差额），若这里再按旧 amount 全额退款就是双重退款。
+ * @returns 是否赢得失败处置（false = 状态被抢先，调用方需另行告警）
  * @internal
  */
 export async function failOrder(
@@ -462,7 +483,7 @@ export async function failOrder(
   order: OrderRow,
   reason: string,
   now: Date,
-): Promise<void> {
+): Promise<boolean> {
   // 第一段：原子裁判——只有仍 pending 且金额/份额未变才能置 failed。
   // 注意 order.amount 对卖单是 null，而 SQL 的 = null 永远不成立，
   // 所以买单才追加金额守卫；drizzle 的 and() 会忽略 undefined
@@ -478,7 +499,7 @@ export async function failOrder(
     )
     .returning({ id: orders.id });
   if (flipped.length === 0) {
-    return; // 已被撤单/撮合/改单抢先，不属于本次失败处置
+    return false; // 已被撤单/撮合/改单抢先，不属于本次失败处置
   }
 
   if (order.side === "buy" && order.amount !== null) {
@@ -504,4 +525,6 @@ export async function failOrder(
       ]);
     }
   }
+
+  return true;
 }

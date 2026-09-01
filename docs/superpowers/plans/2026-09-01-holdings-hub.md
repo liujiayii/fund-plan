@@ -6,7 +6,7 @@
 
 **Architecture:** 纯 UI 重排 + 一个新查询函数 + 一个新组件；金融逻辑（下单/撤单/改单/撮合）一行不动。Tabs 状态进 URL search param 支持深链；定投页签复用 dca-service 与 /me/dca 的 intent 协议。
 
-**Tech Stack:** React Router 8（loader/action/useFetcher/useSearchParams）、antd 5（Tabs/Modal/message）、Drizzle + D1、Vitest（workers 池跑 services 测试）。
+**Tech Stack:** React Router 8（loader/action/useFetcher/useSearchParams）、antd 6（Tabs/Modal/message）、Drizzle + D1、Vitest（workers 池跑 services 测试）。
 
 **Spec:** `docs/superpowers/specs/2026-09-01-holdings-hub-design.md`
 
