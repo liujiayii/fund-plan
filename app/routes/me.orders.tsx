@@ -1,7 +1,8 @@
 import type { Route } from "./+types/me.orders";
-import { Alert, Pagination, Space, Typography } from "antd";
+import { Pagination, Space, Typography } from "antd";
 import { useState } from "react";
 import { OrderActions } from "~/components/OrderActions";
+import { OrderList } from "~/components/OrderList";
 import { OrderTimeline } from "~/components/OrderTimeline";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
@@ -82,7 +83,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function MeOrders({ loaderData }: Route.ComponentProps) {
   const { orders } = loaderData;
-  const pendingCount = orders.filter(o => o.status === "pending").length;
+  // 待确认委托独立成区：委托管理的主战场，撤单/改单按钮就在眼前，
+  // 不再和已成交历史混在一条时间线里（主人反馈「撤单改单难发现」）
+  const pendingOrders = orders.filter(o => o.status === "pending");
   // 客户端分页：loader 已经把 200 条全取回来了，翻页不用再请求服务端
   const [page, setPage] = useState(1);
 
@@ -92,13 +95,14 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
         我的订单
       </Title>
 
-      {pendingCount > 0 && (
-        <Alert
-          type="info"
-          showIcon
-          message={`有 ${pendingCount} 笔订单待确认`}
-          description="真实基金是 T+1 成交：交易日 15:00 前下单按当日净值，之后顺延至下一交易日。系统每晚 20:30 拉取当日净值并撮合。"
-        />
+      {pendingOrders.length > 0 && (
+        <SectionCard title={`待确认委托（${pendingOrders.length} 笔）`}>
+          <OrderList orders={pendingOrders} renderActions={o => <OrderActions order={o} />} />
+          <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
+            真实基金是 T+1 成交：交易日 15:00 前下单按当日净值，之后顺延至下一交易日。
+            系统每晚 20:30 拉取当日净值并撮合，此前均可撤单或改单。
+          </Paragraph>
+        </SectionCard>
       )}
 
       <SectionCard title={`全部订单（${orders.length} 笔）`}>
