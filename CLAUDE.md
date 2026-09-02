@@ -118,11 +118,24 @@ FIFO 逐批消耗，每批按各自持有天数查阶梯费率——所以一笔
 多表写入必须用 `db.batch([...])` 一次原子提交。`settle.ts` 里有 `runBatch()` 辅助函数
 处理空数组与元组类型收窄。
 
+### D1 免费版每请求 50 条查询是硬顶
+
+列表/聚合页严禁 N+1。旧版 `/admin` 逐人调 `getPortfolio`（每人 2~4 条查询），
+用户过 ~10 人直接 500。正确姿势见 `listUsersOverview`：并行批量取全表 +
+一条 groupBy 计数 + 去重后一次查净值，查询数与用户数无关，聚合全在内存做。
+新增任何「遍历用户/基金再逐条查」的页面之前，先数一数会发多少条查询。
+
 ### 权限模型
 
-`app/services/guard.ts`。admin **没有独立后台**——主理人的 `/me` 就是被公开的那个盘，
-`/master` 只是它的只读镜像，两者共用 `app/components/PortfolioView.tsx`。
-admin 由环境变量 `ADMIN_USERNAME` 认定（`wrangler.jsonc` 的 `vars`）。
+`app/services/guard.ts`。主理人的 `/me` 就是被公开的那个盘，`/master` 只是它的
+只读镜像，两者共用 `app/components/PortfolioView.tsx`。admin 由环境变量
+`ADMIN_USERNAME` 认定（`wrangler.jsonc` 的 `vars`）。
+
+admin **另有只读后台**（PR #34）：`/admin` 用户列表 + 全局统计，
+`/admin/users/:id` 单用户组合与订单。**只有读，没有任何写操作**——排查问题用，
+不是运营工具。`requireAdmin` 对非 admin 一律 403（刻意不重定向登录页，
+不暴露后台存在）；`listUsersOverview` 必须保持批量聚合写法，
+不得退回逐人 `getPortfolio` 的 N+1（原因见下一条陷阱）。
 
 ### Cron 调度
 

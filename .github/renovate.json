@@ -5,6 +5,14 @@
   ],
   "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
-  "automerge": false,
-  "rangeStrategy": "bump"
+  "automerge": true,
+  "platformAutomerge": true,
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "大版本（major）更新不自动合并——CI 绿不代表没有视觉/行为上的 breaking change，留给人审",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ]
 }
