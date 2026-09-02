@@ -3,7 +3,7 @@
   "type": "module",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.3.0",
+  "packageManager": "pnpm@11.25.0",
   "description": "",
   "directories": {
     "doc": "docs"
@@ -35,7 +35,7 @@
   "dependencies": {
     "@ant-design/charts": "^2.6.7",
     "@ant-design/icons": "^6.2.2",
-    "@ant-design/pro-components": "3.1.14-6",
+    "@ant-design/pro-components": "3.1.14-7",
     "@react-router/node": "^8.3.0",
     "antd": "^6.6.1",
     "dayjs": "^1.11.23",
@@ -55,12 +55,12 @@
     "@react-router/dev": "^8.3.0",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.5",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@unocss/cli": "^66.8.1",
     "@unocss/reset": "^66.8.1",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.9.0",
+    "eslint": "^10.9.1",
     "eslint-plugin-format": "^2.0.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
