@@ -1,8 +1,3 @@
-# pnpm 设置
-# 放行这些依赖的 postinstall 构建脚本：
-#   esbuild / workerd —— 需要下载原生二进制，不放行则 vite 与 wrangler 本地运行时起不来
-#   simple-git-hooks —— 需要往 .git/hooks 写入钩子脚本
-# 注意：pnpm 11 起该配置项名为 allowBuilds（早期版本叫 onlyBuiltDependencies，已废弃）。
 allowBuilds:
   esbuild: true
   simple-git-hooks: true
@@ -31,4 +26,4 @@ trustPolicyExclude:
 # 为什么不用全局 override（"esbuild": "^0.25"）：会把 Vite 用的 0.28.2 一并降级。
 # pnpm 11 的 overrides 只认这里，package.json 的 pnpm 段已不读（踩过：写那儿不生效）。
 overrides:
-  "@esbuild-kit/core-utils>esbuild": ^0.25.0
+  "@esbuild-kit/core-utils>esbuild": ^0.28.2
