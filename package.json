@@ -60,7 +60,7 @@
     "@unocss/cli": "^66.8.1",
     "@unocss/reset": "^66.8.1",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.9.0",
+    "eslint": "^10.9.1",
     "eslint-plugin-format": "^2.0.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
