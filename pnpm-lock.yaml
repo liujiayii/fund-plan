@@ -73,7 +73,7 @@ importers:
         specifier: ^19.2.18
         version: 19.2.18
       '@types/react-dom':
-        specifier: ^19.2.4
+        specifier: ^19.2.5
         version: 19.2.5(@types/react@19.2.18)
       '@typescript/native':
         specifier: npm:typescript@^7.0.2

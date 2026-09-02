@@ -55,7 +55,7 @@
     "@react-router/dev": "^8.3.0",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.5",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@unocss/cli": "^66.8.1",
     "@unocss/reset": "^66.8.1",
