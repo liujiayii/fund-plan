@@ -4,7 +4,7 @@ import { lazy, Suspense, useMemo, useState, useSyncExternalStore } from "react";
 import { CHART_HEIGHT } from "~/components/ui/chart";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
-import { YUAN } from "~/domain/money";
+import { centsToYuan } from "~/domain/money";
 
 /**
  * @ant-design/charts 是纯客户端库（底层 G2 依赖 canvas / DOM）。
@@ -21,6 +21,16 @@ const Line = lazy(async () => {
   const mod = await import("@ant-design/charts");
   return { default: mod.Line };
 });
+
+/**
+ * 口径切换。默认「累计收益」：开局赠送 100 万本金，总资产曲线在百万基数上
+ * 压成一条直线（每日几块~几十块的收益看不出形状），且签到入金 +50 元的跳变
+ * 会被误读成收益。累计收益从 0 起步、已剔除净入金，涨跌一目了然。
+ */
+const MODES = [
+  { key: "pnl", label: "累计收益" },
+  { key: "asset", label: "总资产" },
+] as const;
 
 /** 时间范围选项 */
 const RANGES = [
@@ -69,10 +79,11 @@ function useIsClient(): boolean {
 
 /**
  * 资产走势曲线图。
- * 数据传入时金额是「分」整数，这里除以 YUAN 转成元再画。
+ * 数据传入时金额是「分」整数，这里用 centsToYuan（Decimal）转成元再画。
  */
 export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
   const [range, setRange] = useState<string>("3m");
+  const [mode, setMode] = useState<string>("pnl");
   const mounted = useIsClient();
 
   const chartData = useMemo(() => {
@@ -80,18 +91,39 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
     // data 是正序（旧→新），取最后 N 条即为最近 N 天
     const sliced
       = cfg.days === Number.MAX_SAFE_INTEGER ? data : data.slice(-cfg.days);
-    // totalAssetCents 是分，转成元（保留两位小数）
+
+    // 累计收益口径：先对**全量**数据做前缀和，再截取展示区间——
+    // 这样曲线末点 = 全期累计收益，与上方「累计收益」数字、收益日历完全同口径
+    // （Σ dayPnl，含已实现盈亏与费用，净入金已逐日剔除）。
+    // 累加在「分」整数域进行——JS 整数在 2^53 内精确、此处量级远低于它，
+    // 前缀和零误差，无需 Decimal；分→元换算则统一走 centsToYuan（Decimal）。
+    if (mode === "pnl") {
+      let cum = 0;
+      const cumulative = data.map((d) => {
+        cum += d.dayPnlCents;
+        return { date: d.date, cents: cum };
+      });
+      return cumulative.slice(data.length - sliced.length).map(p => ({
+        date: p.date,
+        asset: Number(centsToYuan(p.cents)),
+      }));
+    }
+
+    // 总资产口径：totalAssetCents 是分，走 centsToYuan 转成元（保留两位小数）
     return sliced.map(d => ({
       date: d.date,
-      asset: Number((d.totalAssetCents / YUAN).toFixed(2)),
+      asset: Number(centsToYuan(d.totalAssetCents)),
     }));
-  }, [data, range]);
+  }, [data, range, mode]);
 
   if (data.length === 0) {
     // 走 EmptyState 而不是裸 Empty：全站空态的留白由它统一
     return <EmptyState description="暂无资产走势数据" />;
   }
 
+  // 累计收益要看盈亏分界，Y 轴必须含 0 基准线；
+  // 总资产波动幅度小，Y 轴不从 0 起，否则曲线压成一条直线
+  const isPnl = mode === "pnl";
   const config: LineConfig = {
     data: chartData,
     xField: "date",
@@ -101,24 +133,42 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
     // 不传时 autoFit 读容器 clientHeight，高度由 responsive.css §6 全权管理
     smooth: true,
     autoFit: true,
-    // 总资产波动幅度小，Y 轴不从 0 起，否则曲线压成一条直线
-    scale: { y: { nice: true, zero: false } },
+    scale: { y: { nice: true, zero: isPnl } },
     axis: {
       x: { labelAutoHide: true, labelAutoRotate: false },
       y: { labelFormatter: (v: number) => v.toFixed(2) },
     },
     tooltip: {
       items: [
-        { channel: "y", name: "总资产（元）", valueFormatter: (v: number) => v.toFixed(2) },
+        {
+          channel: "y",
+          name: isPnl ? "累计收益（元）" : "总资产（元）",
+          valueFormatter: (v: number) => v.toFixed(2),
+        },
       ],
     },
     style: { lineWidth: 2 },
   };
 
   return (
-    // fp-chart-box：图表窄屏高度降档的挂载点（responsive.css §6），包住 PeriodTabs + 图区
+    // fp-chart-box：图表窄屏高度降档的挂载点（responsive.css §6），包住切换行 + 图区
     <div className="fp-chart-box">
-      <div style={{ marginBottom: 16 }}>
+      {/* 口径切换是主叙事放左侧，时间范围靠右；窄屏 flexWrap 换行不顶穿 */}
+      <div
+        style={{
+          marginBottom: 16,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12,
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <PeriodTabs
+          options={MODES.map(m => ({ key: m.key, label: m.label }))}
+          value={mode}
+          onChange={setMode}
+        />
         <PeriodTabs
           options={RANGES.map(r => ({ key: r.key, label: r.label }))}
           value={range}
