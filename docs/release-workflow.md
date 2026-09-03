@@ -43,14 +43,29 @@ pnpm test:workers    # 应用层集成测试（真实 workerd + D1，慢但不�
 
 1. push 分支后在 GitHub 上建 PR，**base: main**，标题用 conventional 格式，
    描述里给出测试证据（跑了什么命令、多少个用例）与已知遗留。
-2. PR 会自动触发两件事：
+2. **建好 PR 后先触发 CodeRabbit 评审**：本仓库 star 数 < 10（免费 OSS），
+   CodeRabbit **不会自动 review**——它会在 PR 里发一条带 `🔍 Trigger review`
+   复选框的评论，勾选后才开始评审（不勾的话 CI 里 CodeRabbit 那行会显示
+   `Review skipped: manual review required for this OSS repository`）。
+   手动：在 PR 页面勾选那个复选框。助手可以等 bot 评论出现后用 API 自动勾：
+
+   ```bash
+   cid=$(gh api repos/liujiayii/fund-plan/issues/<PR号>/comments \
+     --jq '.[] | select(.user.login=="coderabbitai[bot]" and (.body | contains("Trigger review"))) | .id')
+   gh api repos/liujiayii/fund-plan/issues/comments/$cid --jq .body \
+     | sed 's/- \[ \] \(<!-- {"checkboxId"/- [x] \1/' > /tmp/cr-body.md
+   gh api repos/liujiayii/fund-plan/issues/comments/$cid -X PATCH -F body=@/tmp/cr-body.md
+   ```
+
+   （若 API 勾选未生效，在 PR 评论 `/codereview` 兜底触发。）
+3. PR 会自动触发两件事：
    - **Test 流水线**先跑（`.github/workflows/test.yml`：Lint & Typecheck & Build
      + Unit & Workers Tests 两个 job）
-   - **CodeRabbit 机器人**给出 code review 建议
-3. 看 CodeRabbit 的建议，**有则改之，无则加冕**：
+   - CodeRabbit（触发后）给出 code review 建议
+4. 看 CodeRabbit 的建议，**有则改之，无则加冕**：
    - 采纳的建议 → 在同一分支上追加 commit 修正，再 push（PR 自动更新）
    - 不采纳的建议 → 在 PR 里回复说明理由后Resolve掉，不必盲从机器人
-4. Test 全绿 + review 意见处理完毕 → 合并进 main。
+5. Test 全绿 + review 意见处理完毕 → 合并进 main。
 
 ## 5. 合并后：自动部署（无需人工动作）
 
@@ -72,6 +87,9 @@ pnpm test:workers    # 应用层集成测试（真实 workerd + D1，慢但不�
 - **默认在 worktree 里干活**（分支隔离），不碰主 checkout 的未提交改动。
 - 本地 `pnpm verify` + `pnpm test:workers` 全绿是 push 的前置条件。
 - **push / 建 PR / 合并 PR 必须先获得主人显式同意**，一次授权只覆盖当次操作。
+- 建 PR 后**自动勾选 CodeRabbit 的 `🔍 Trigger review` 复选框**（本仓库
+  star < 10 不自动 review，勾选命令见第 4 节步骤 2）；等 bot 评论出现
+  需要几十秒，可用 `gh api .../issues/<PR号>/comments` 轮询。
 - PR 描述写清：做了什么、测试证据、已知遗留——CodeRabbit 之外的第二道人审材料。
 - CodeRabbit 在 PR 上的建议若需跟进：在同一分支追加 commit 修正后 push，
   保持"一个修正主题一个 commit"，不拆细碎 commit。
