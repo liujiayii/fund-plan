@@ -98,6 +98,8 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
       </SectionCard>
 
       {/* 资产走势：收益摘要（单日+累计两格，消除口径误读）+ 曲线图。
+          曲线默认「累计收益」口径（百万本金下总资产曲线压成直线，看不出收益形状），
+          可在图内切回「总资产」。
           收益标注「截至 X 日」不写「昨日」——净值同步有延迟 */}
       <SectionCard title="资产走势">
         <AssetPnlSummary daily={timeline.daily} latest={timeline.latest} />
