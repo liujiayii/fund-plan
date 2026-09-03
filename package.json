@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.7",
-    "@ant-design/icons": "^6.2.2",
+    "@ant-design/icons": "^6.3.4",
     "@ant-design/pro-components": "3.1.14-7",
     "@react-router/node": "^8.3.1",
     "antd": "^6.6.2",
