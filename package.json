@@ -70,7 +70,7 @@
     "unocss": "^66.9.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11",
-    "wrangler": "^4.128.0"
+    "wrangler": "^4.129.0"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged",
