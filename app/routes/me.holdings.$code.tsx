@@ -7,7 +7,7 @@
  * 该基金定投计划与交易流水（定投与全局 /me/dca 同协议，service 层复用）。
  */
 import type { Route } from "./+types/me.holdings.$code";
-import { Button, message, Space, Table, Tabs, Tag, Typography } from "antd";
+import { message, Space, Table, Tabs, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
@@ -19,6 +19,7 @@ import { SellPanel } from "~/components/SellPanel";
 import { DataRow } from "~/components/ui/DataRow";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { account } from "~/db/schema";
@@ -167,7 +168,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         <Title level={3} style={{ margin: 0 }}>{d.fundName}</Title>
         <Text type="secondary">{d.fundCode}</Text>
         {d.fundType && <Tag>{d.fundType}</Tag>}
-        <Button size="small" href="/me/holdings">← 返回持仓</Button>
+        <NavButton size="small" to="/me/holdings">← 返回持仓</NavButton>
       </Space>
 
       {/* 提交成功/失败的反馈：成功走 message.success（见 handleSuccess），

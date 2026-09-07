@@ -9,7 +9,7 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { AssetPnlSummary } from "~/components/AssetPnlSummary";
 import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
@@ -18,6 +18,7 @@ import { PortfolioSummary } from "~/components/PortfolioView";
 import { ProfitCalendar } from "~/components/ProfitCalendar";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_MAX_CENTS } from "~/domain/checkin";
@@ -173,14 +174,14 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         </Row>
       </SectionCard>
 
-      {/* 持仓速览 */}
-      <SectionCard title="我的持仓" extra={<a href="/me/holdings">管理持仓 →</a>}>
+      {/* 持仓速览：extra 文本链接走 SPA 导航（Link） */}
+      <SectionCard title="我的持仓" extra={<Link to="/me/holdings">管理持仓 →</Link>}>
         {holdings.length === 0
           ? (
               <EmptyState description="还没有持仓">
-                <Button type="primary" href="/funds">
+                <NavButton type="primary" to="/funds">
                   去挑一只基金
-                </Button>
+                </NavButton>
               </EmptyState>
             )
           : (
@@ -188,8 +189,8 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
             )}
       </SectionCard>
 
-      {/* 最近订单 */}
-      <SectionCard title="最近订单" extra={<a href="/me/orders">全部订单 →</a>}>
+      {/* 最近订单：extra 文本链接走 SPA 导航（Link） */}
+      <SectionCard title="最近订单" extra={<Link to="/me/orders">全部订单 →</Link>}>
         {orders.length === 0
           ? (
               <EmptyState description="还没有交易记录" />

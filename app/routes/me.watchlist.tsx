@@ -7,6 +7,7 @@ import { useFetcher } from "react-router";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { FundListItem } from "~/components/ui/FundListItem";
+import { NavButton } from "~/components/ui/NavButton";
 import { PnlText } from "~/components/ui/PnlText";
 import { account } from "~/db/schema";
 import { navToDisplay } from "~/domain/money";
@@ -95,9 +96,9 @@ export default function MeWatchlist({ loaderData }: Route.ComponentProps) {
       {items.length === 0
         ? (
             <EmptyState description="还没有自选基金">
-              <Button type="primary" href="/funds">
+              <NavButton type="primary" to="/funds">
                 去发现页挑一只
-              </Button>
+              </NavButton>
             </EmptyState>
           )
         : (

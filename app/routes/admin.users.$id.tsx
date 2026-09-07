@@ -1,7 +1,8 @@
 import type { Route } from "./+types/admin.users.$id";
-import { Button, Space, Tag, Typography } from "antd";
+import { Space, Tag, Typography } from "antd";
 import { OrderList } from "~/components/OrderList";
 import { HoldingListReadonly, PortfolioSummary } from "~/components/PortfolioView";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getUserDetail } from "~/services/admin-service";
@@ -54,7 +55,7 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
       </div>
 
       {/* 返回列表的入口放标题区下方，排查问题时在多个用户间跳转是高频动作 */}
-      <Button href="/admin">← 返回用户列表</Button>
+      <NavButton to="/admin">← 返回用户列表</NavButton>
 
       <SectionCard>
         <PortfolioSummary portfolio={portfolio} />
