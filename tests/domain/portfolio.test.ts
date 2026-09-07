@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { reconcile, valuateHolding, valuatePortfolio } from "~/domain/portfolio";
+import {
+  fundMarketValueCents,
+  reconcile,
+  valuateHolding,
+  valuatePortfolio,
+} from "~/domain/portfolio";
 
 /**
  * 组合估值与持仓对账。
@@ -125,5 +130,20 @@ describe("portfolio 组合估值", () => {
         reconcile([], { totalSharesScaled: 0, totalCostCents: 0 }),
       ).toBe(true);
     });
+  });
+});
+
+describe("fundMarketValueCents 共享市值函数", () => {
+  it("1 份 × 净值 1.0 = 1 元（100 分）", () => {
+    expect(fundMarketValueCents(10000, 10000)).toBe(100);
+  });
+
+  it("656.8133 份 × 净值 1.2345 = 810.84 元（HALF_UP 取整）", () => {
+    // 656.8133 × 1.2345 = 810.83601885 元 → 81084 分
+    expect(fundMarketValueCents(6568133, 12345)).toBe(81084);
+  });
+
+  it("零份额返回 0", () => {
+    expect(fundMarketValueCents(0, 12345)).toBe(0);
   });
 });

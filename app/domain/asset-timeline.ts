@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { navToDecimal, roundInt, sharesToDecimal, YUAN } from "./money";
+import { fundMarketValueCents } from "./portfolio";
 
 /**
  * 账本重放：沿日期轴逐日回放现金流水与确认订单，算出每日资产快照。
@@ -156,11 +156,8 @@ export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
       if (lastNav < 0)
         continue;
 
-      // 市值公式与 valuateHolding 一致：
-      //   roundInt(sharesToDecimal(shares).mul(navToDecimal(nav)).mul(YUAN))
-      const mv = roundInt(
-        sharesToDecimal(sharesScaled).mul(navToDecimal(lastNav)).mul(YUAN),
-      );
+      // 市值公式与 valuateHolding 同源（fundMarketValueCents 是唯一取整入口）
+      const mv = fundMarketValueCents(sharesScaled, lastNav);
       marketValueCents += mv;
     }
 
