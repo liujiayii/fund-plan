@@ -9,13 +9,15 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { Link, useFetcher } from "react-router";
+import { useMemo, useState } from "react";
+import { useFetcher } from "react-router";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { QuickEntries } from "~/components/QuickEntries";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
+import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_MAX_CENTS } from "~/domain/checkin";
@@ -64,10 +66,22 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
   const { user, portfolio, checkinStatus, timeline } = loaderData;
-  // 这里只需要持仓列表；总览数字全部交给 AssetOverviewCard
-  const { holdings } = portfolio;
+  // summary 的合计市值供持仓卡标题用；其余总览数字全部交给 AssetOverviewCard
+  const { summary, holdings } = portfolio;
   const fetcher = useFetcher<typeof action>();
   const signing = fetcher.state === "submitting";
+
+  // 持仓排序：持有金额（市值）/ 持有收益两键切换，降序；默认持有金额。
+  // 客户端排——持仓数据 loader 已全量带回，几十只以内零成本
+  const [sortKey, setSortKey] = useState<"amount" | "pnl">("amount");
+  const sortedHoldings = useMemo(
+    () =>
+      [...holdings].sort((a, b) =>
+        sortKey === "amount"
+          ? b.marketValueCents - a.marketValueCents
+          : b.pnlCents - a.pnlCents),
+    [holdings, sortKey],
+  );
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -166,8 +180,22 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         </Row>
       </SectionCard>
 
-      {/* 持仓速览：extra 文本链接走 SPA 导航（Link） */}
-      <SectionCard title="我的持仓" extra={<Link to="/me/holdings">管理持仓 →</Link>}>
+      {/* 我的持仓：原 /me/holdings 列表页的职能全部并入——
+          标题带只数与合计市值（总资产−可用余额可推导，但直接给更省脑），
+          行内详情/卖出深链，底部批次说明 */}
+      <SectionCard
+        title={`我的持仓（${holdings.length} 只 · 市值 ${fmtYuan(summary.marketValueCents)} 元）`}
+        extra={(
+          <PeriodTabs
+            options={[
+              { key: "amount", label: "持有金额" },
+              { key: "pnl", label: "持有收益" },
+            ]}
+            value={sortKey}
+            onChange={v => setSortKey(v as "amount" | "pnl")}
+          />
+        )}
+      >
         {holdings.length === 0
           ? (
               <EmptyState description="还没有持仓">
@@ -177,7 +205,30 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
               </EmptyState>
             )
           : (
-              <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />
+              <>
+                <HoldingList
+                  holdings={sortedHoldings}
+                  // 份额 + 估值时点 + 成本（批次数/待赎回在单只详情页）
+                  renderNote={h => `${sharesAndNavNote(h)} · 成本 ${fmtYuan(h.costCents)} 元`}
+                  // 行点进单只持仓详情，不链基金详情页
+                  getHref={h => `/me/holdings/${h.fundCode}`}
+                  // 行内「详情 / 卖出」：卖出深链直达交易页签（?tab=trade）
+                  renderActions={h => (
+                    <Space size={8}>
+                      <NavButton size="small" to={`/me/holdings/${h.fundCode}`}>
+                        详情
+                      </NavButton>
+                      <NavButton size="small" type="primary" to={`/me/holdings/${h.fundCode}?tab=trade`}>
+                        卖出
+                      </NavButton>
+                    </Space>
+                  )}
+                />
+                <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
+                  「批次」是同一只基金分次买入形成的份额批，赎回时按买入时间先进先出消耗，
+                  每批按各自持有天数计赎回费。
+                </Paragraph>
+              </>
             )}
       </SectionCard>
     </Space>
