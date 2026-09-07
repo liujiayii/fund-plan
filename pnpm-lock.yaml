@@ -15,7 +15,7 @@ importers:
         specifier: ^2.6.7
         version: 2.6.7(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@ant-design/icons':
-        specifier: 6.3.4
+        specifier: ^6.3.4
         version: 6.3.4(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@ant-design/pro-components':
         specifier: 3.1.14-7
