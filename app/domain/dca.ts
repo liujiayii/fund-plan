@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import { isTradingDay, nextTradingDay } from "./trading-calendar";
 
 /** 定投频率 */
 export type Frequency = "daily" | "weekly" | "monthly";
@@ -14,10 +15,21 @@ export interface NextRunInput {
 }
 
 /**
- * 计算下次定投执行日，返回值**严格晚于** from。
+ * 把候选执行日校准到交易日：非交易日（周末/节假日）顺延到下一交易日。
+ * 三个频率共用——定投在休市日执行没有意义，订单只会堆积到开市日确认。
+ */
+function adjustToTradingDay(date: string): string {
+  return isTradingDay(date) ? date : nextTradingDay(date);
+}
+
+/**
+ * 计算下次定投执行日，返回值**严格晚于** from 且**是交易日**。
  *
  * 「严格晚于」很关键：定投扫描任务把 next_run <= 今天 的计划触发后，
  * 会用本函数推进 next_run。若返回值可能等于 from，同一期会被反复触发。
+ *
+ * 「是交易日」同样关键（2026-09-07 修复）：此前纯日历推进，daily 定投
+ * 周末/节假日照常下单，订单堆积到开市日集中确认、成本口径错乱。
  */
 export function nextRunDate(input: NextRunInput): string {
   const { frequency, dayOfWeek, dayOfMonth, from } = input;
@@ -29,7 +41,8 @@ export function nextRunDate(input: NextRunInput): string {
 
   switch (frequency) {
     case "daily":
-      return base.add(1, "day").format("YYYY-MM-DD");
+      // 次日若非交易日（周末/节假日）顺延到下一交易日
+      return adjustToTradingDay(base.add(1, "day").format("YYYY-MM-DD"));
 
     case "weekly": {
       if (dayOfWeek == null) {
@@ -41,10 +54,10 @@ export function nextRunDate(input: NextRunInput): string {
       // dayjs 的 day() 是 0=周日，这里把 7（周日）映射回 0
       const targetDow = dayOfWeek === 7 ? 0 : dayOfWeek;
       let cursor = base.add(1, "day");
-      // 最多找 7 天必然命中
+      // 最多找 7 天必然命中；命中后仍要过交易日滤网（如目标日撞国庆）
       for (let i = 0; i < 7; i++) {
         if (cursor.day() === targetDow)
-          return cursor.format("YYYY-MM-DD");
+          return adjustToTradingDay(cursor.format("YYYY-MM-DD"));
         cursor = cursor.add(1, "day");
       }
       throw new Error("未能计算下次周定投日期");
@@ -59,12 +72,12 @@ export function nextRunDate(input: NextRunInput): string {
           `dayOfMonth 必须在 1-28 之间（规避 2 月问题），收到 ${dayOfMonth}`,
         );
       }
-      // 先试本月的目标日；若不晚于 from 则取下月
+      // 先试本月的目标日；若不晚于 from 则取下月；命中后过交易日滤网
       const thisMonth = base.date(dayOfMonth);
-      if (thisMonth.isAfter(base, "day")) {
-        return thisMonth.format("YYYY-MM-DD");
-      }
-      return base.add(1, "month").date(dayOfMonth).format("YYYY-MM-DD");
+      const candidate = thisMonth.isAfter(base, "day")
+        ? thisMonth
+        : base.add(1, "month").date(dayOfMonth);
+      return adjustToTradingDay(candidate.format("YYYY-MM-DD"));
     }
 
     default: {
