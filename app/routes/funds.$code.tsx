@@ -26,7 +26,6 @@ import {
 } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
 import { getNavSeries } from "~/services/portfolio-service";
-import { placeBuyOrder } from "~/services/trade";
 import { isWatched } from "~/services/watchlist-service";
 import { pnlColor } from "~/theme";
 
@@ -136,32 +135,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   };
 }
 
-/** 买入下单 */
-export async function action({ request, params, context }: Route.ActionArgs) {
-  const { db, env } = getAppContext(context);
-  const user = await getCurrentUser(request, db);
-  if (!user)
-    return { error: "请先登录" };
-
-  const fd = await request.formData();
-  const amountYuan = String(fd.get("amount") ?? "");
-  const n = Number(amountYuan);
-  if (!Number.isFinite(n) || n <= 0)
-    return { error: "请输入正确的金额" };
-
-  try {
-    const { yuanToCents } = await import("~/domain/money");
-    await placeBuyOrder(db, env, {
-      userId: user.id,
-      fundCode: params.code,
-      amountCents: yuanToCents(amountYuan),
-    });
-    return { ok: true, message: "下单成功，待 T+1 确认" };
-  }
-  catch (err) {
-    return { error: err instanceof Error ? err.message : "下单失败" };
-  }
-}
+// 买入下单已统一迁移到 POST /me/trade 资源路由（BuyDrawer 的 action prop 直指它）
 
 /**
  * 风险等级对应的颜色与说明。
@@ -399,7 +373,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
                     navScaled={latest.unitNav}
                     navDate={latest.navDate}
                     cashCents={cash}
-                    action={`/funds/${f.code}`}
+                    action="/me/trade" // 统一提交到 /me/trade 资源路由
                   />
                 </>
               )

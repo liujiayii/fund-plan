@@ -29,7 +29,7 @@ import { getAppContext } from "~/services/context";
 import { createDcaPlan, deleteDcaPlan, toggleDcaPlan } from "~/services/dca-service";
 import { requireUser } from "~/services/guard";
 import { getDcaPlans, getHoldingDetail, getOrdersByFund } from "~/services/portfolio-service";
-import { placeBuyOrder, placeSellOrder } from "~/services/trade";
+import { placeSellOrder } from "~/services/trade";
 import { pnlColor } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
@@ -66,7 +66,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   };
 }
 
-/** 加仓与赎回共用 action，intent 区分（从 me.holdings 原样迁来） */
+/** 赎回与定投共用 action，intent 区分（买入已统一提交到 /me/trade 资源路由） */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const { db, env } = getAppContext(context);
   const user = await requireUser(request, db);
@@ -113,14 +113,6 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       return { ok: true, message: "计划已删除" };
     }
 
-    if (intent === "buy") {
-      const amount = String(fd.get("amount") ?? "");
-      const n = Number(amount);
-      if (!Number.isFinite(n) || n <= 0)
-        return { error: "请输入正确的金额" };
-      await placeBuyOrder(db, env, { userId: user.id, fundCode, amountCents: yuanToCents(amount) });
-      return { ok: true, message: "加仓下单成功，待 T+1 确认" };
-    }
     if (intent === "sell") {
       const shares = String(fd.get("shares") ?? "");
       const n = Number(shares);
@@ -297,7 +289,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
                       navScaled={d.navScaled}
                       navDate={d.navDate}
                       cashCents={cash}
-                      action={actionUrl}
+                      action="/me/trade" // 统一提交到 /me/trade 资源路由
                       onSuccess={handleSuccess}
                     />
                   </SectionCard>
