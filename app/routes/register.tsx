@@ -1,6 +1,6 @@
 import type { Route } from "./+types/register";
 import { Alert, Button, Form, Input, Typography } from "antd";
-import { redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
+import { Link, redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { registerUser } from "~/services/auth";
 import { getAppContext } from "~/services/context";
@@ -113,7 +113,7 @@ export default function Register() {
 
         <Paragraph style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
           已有账号？
-          <a href="/login">去登录</a>
+          <Link to="/login">去登录</Link>
         </Paragraph>
         <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
           提示：本站不发邮件，忘记密码需联系管理员重置，请记好密码。

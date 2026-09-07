@@ -1,5 +1,6 @@
 import type { Route } from "./+types/_index";
 import { Button, Card, Col, Row, Space, Tag, Typography } from "antd";
+import { Link } from "react-router";
 import { OrderList } from "~/components/OrderList";
 import {
   AdminNotReady,
@@ -7,6 +8,7 @@ import {
   PortfolioSummary,
 } from "~/components/PortfolioView";
 import { fmtInt, fmtYuan } from "~/components/ui/format";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS } from "~/domain/checkin";
@@ -131,19 +133,20 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           {me
             ? (
                 <>
-                  <Button type="primary" size="large" href="/me">
+                  <NavButton type="primary" size="large" to="/me">
                     去我的盘
-                  </Button>
-                  <Button size="large" href="/funds">
+                  </NavButton>
+                  <NavButton size="large" to="/funds">
                     挑只基金
-                  </Button>
+                  </NavButton>
                 </>
               )
             : (
                 <>
-                  <Button type="primary" size="large" href="/register">
+                  <NavButton type="primary" size="large" to="/register">
                     免费注册，领 10 万本金
-                  </Button>
+                  </NavButton>
+                  {/* 目标为 /master：刻意保持原生 <a>（游客态走边缘缓存，SPA 跳转反而绕开缓存），勿换 NavButton */}
                   <Button size="large" href="/master">
                     先围观主理人的盘
                   </Button>
@@ -222,15 +225,15 @@ export default function Index({ loaderData }: Route.ComponentProps) {
       {/* 排行榜引流：游客与已登录都给入口（移动端底栏进不去排行榜，这是移动端唯一入口） */}
       <SectionCard
         title="收益排行榜"
-        extra={<a href="/leaderboard">看完整榜单 →</a>}
+        extra={<Link to="/leaderboard">看完整榜单 →</Link>}
       >
         <Paragraph type="secondary" style={{ marginBottom: 16 }}>
           全站用户的模拟盘同台竞技：收益率、总收益两个维度实时排名。
           注册开第一单，看看你能不能排到主理人前面。
         </Paragraph>
-        <Button type="primary" href="/leaderboard">
+        <NavButton type="primary" to="/leaderboard">
           去看排行榜
-        </Button>
+        </NavButton>
       </SectionCard>
 
       {/* 卖点。这里用 UnoCSS 工具类替代内联 style，验证工具链接入生效 */}
@@ -266,9 +269,9 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           <Paragraph type="secondary">
             用户名 + 密码即可注册，不用邮箱、不用手机号。
           </Paragraph>
-          <Button type="primary" size="large" href="/register">
+          <NavButton type="primary" size="large" to="/register">
             立即注册
-          </Button>
+          </NavButton>
         </Card>
       )}
     </Space>

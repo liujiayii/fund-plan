@@ -1,6 +1,6 @@
 import type { Route } from "./+types/login";
 import { Alert, Button, Form, Input, Typography } from "antd";
-import { redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
+import { Link, redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { loginUser } from "~/services/auth";
 import { getAppContext } from "~/services/context";
@@ -97,7 +97,7 @@ export default function Login() {
 
         <Paragraph style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
           还没有账号？
-          <a href="/register">立即注册，送 10 万模拟本金</a>
+          <Link to="/register">立即注册，送 10 万模拟本金</Link>
         </Paragraph>
       </SectionCard>
     </div>

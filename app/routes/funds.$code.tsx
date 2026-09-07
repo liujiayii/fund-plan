@@ -9,6 +9,7 @@ import { NavChart } from "~/components/NavChart";
 import { PeriodReturnTable } from "~/components/PeriodReturnTable";
 import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { runBatch } from "~/db/client";
@@ -208,9 +209,9 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           </Space>
 
           <Space style={{ marginTop: 8 }}>
-            <Button size="large" href="/funds">
+            <NavButton size="large" to="/funds">
               继续搜索
-            </Button>
+            </NavButton>
             {isLoggedIn && (
               <fetcher.Form method="post" action="/me/watchlist" style={{ display: "inline" }}>
                 {/* intent 随当前态翻转：未自选→add，已自选→remove */}
@@ -353,9 +354,9 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
       <SectionCard title="买入">
         {!isLoggedIn
           ? (
-              <Button type="primary" size="large" href="/register">
+              <NavButton type="primary" size="large" to="/register">
                 注册后即可买入
-              </Button>
+              </NavButton>
             )
           : latest
             ? (
@@ -390,7 +391,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           <Paragraph type="secondary">
             设置定期定额买入这只基金，系统每天 10:00 自动扫描到期计划下单。
           </Paragraph>
-          <Button type="primary" href="/me/dca">去设置定投 →</Button>
+          <NavButton type="primary" to="/me/dca">去设置定投 →</NavButton>
         </SectionCard>
       )}
     </Space>

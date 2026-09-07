@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { OrderView } from "~/services/portfolio-service";
 import { Tag, Timeline, Tooltip } from "antd";
+import { Link } from "react-router";
 import { fmtYuan } from "~/components/ui/format";
 import { navToDisplay, sharesToDisplay } from "~/domain/money";
 import { COLOR } from "~/theme";
@@ -36,9 +37,9 @@ export function OrderTimeline({ orders, renderActions }: OrderTimelineProps) {
           children: (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <a href={`/funds/${o.fundCode}`} style={{ color: COLOR.textPrimary, fontWeight: 500 }}>
+                <Link to={`/funds/${o.fundCode}`} style={{ color: COLOR.textPrimary, fontWeight: 500 }}>
                   {o.fundName}
-                </a>
+                </Link>
                 <span style={{ fontSize: 12, color: COLOR.textSecondary }}>{o.fundCode}</span>
                 {o.side === "buy" ? <Tag color="blue">申购</Tag> : <Tag>赎回</Tag>}
                 {o.source === "dca" && <Tag color="purple">定投</Tag>}
