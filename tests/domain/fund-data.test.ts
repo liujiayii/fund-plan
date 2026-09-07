@@ -177,6 +177,7 @@ describe("fetchFundBasic 基金档案", () => {
     expect(r!.minPurchaseCents).toBe(1000); // 10 元 → 1000 分
     expect(r!.riskLevel).toBe(4);
     expect(r!.status).toBe("开放申购");
+    expect(r!.redeemStatus).toBe("开放赎回"); // SHZT：2026-09-08 起 FundDetail 复用它
   });
 
   it("RATE 缺失时回退用 SOURCERATE", async () => {
@@ -440,11 +441,34 @@ describe("fetchFundDetail 基金详情", () => {
       BENCH: "中证800成长",
       MGREXP: "1.20%",
       TRUSTEXP: "0.20%",
+      // 2026-09-08 实测：评级字段是 RLEVEL_SZ（上证星级 1~5；此处取 3 便于断言解析）
+      RLEVEL_SZ: "3",
+    },
+  };
+  // SHZT（赎回状态）实测在 BasicInformation 响应里，fetchFundDetail 会并发
+  // 复用 fetchFundBasic 补齐——stub 按域名分路喂两份响应
+  const basicResp = {
+    Datas: {
+      FCODE: "000001",
+      SHORTNAME: "华夏成长混合",
+      FTYPE: "混合型-灵活",
+      SOURCERATE: "1.50%",
+      RATE: "0.15%",
+      MINSG: "10",
+      RISKLEVEL: "4",
+      SGZT: "开放申购",
+      SHZT: "开放赎回",
     },
   };
 
-  it("解析经理/公司/成立日/规模/基准/费率", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(detailResp))));
+  it("解析经理/公司/成立日/规模/基准/费率/评级/赎回状态", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.includes("FundMNNBasicInformation")
+          ? new Response(JSON.stringify(basicResp))
+          : new Response(JSON.stringify(detailResp))),
+    );
     const r = await fetchFundDetail(fakeEnv(), "000001");
     expect(r).not.toBeNull();
     expect(r!.manager).toBe("郑晓辉,刘睿聪");
@@ -454,6 +478,8 @@ describe("fetchFundDetail 基金详情", () => {
     expect(r!.benchmark).toBe("中证800成长");
     expect(r!.mgmtFeeRate).toBe(120); // 1.20% → 万分之 120
     expect(r!.trustFeeRate).toBe(20);
+    expect(r!.rating).toBe(3); // RLEVEL_SZ → 上证三星
+    expect(r!.redeemStatus).toBe("开放赎回"); // 取自档案接口的 SHZT
   });
 
   it("规模 '--' 时 scaleYuan 为 null", async () => {
@@ -473,35 +499,63 @@ describe("fetchFundDetail 基金详情", () => {
   });
 });
 
-describe("fetchFundPosition 重仓股", () => {
+describe("fetchFundPosition 投资组合（股票/债券/行业）", () => {
+  // 2026-09-08 实测：债券键名是 fundboods（接口自己的拼写），字段
+  // ZQDM/ZQMC/ZJZBL；行业不在本接口，走独立的 FundMNSectorAllocation
   const posResp = {
-    Datas: { fundStocks: [
-      { GPDM: "300308", GPJC: "中际旭创", JZBL: "6.45", INDEXNAME: "通信", PCTNVCHGTYPE: "增持" },
-      { GPDM: "688347", GPJC: "华虹宏力", JZBL: "5.57", INDEXNAME: "电子", PCTNVCHGTYPE: "增持" },
-    ] },
+    Datas: {
+      fundStocks: [
+        { GPDM: "300308", GPJC: "中际旭创", JZBL: "6.45", INDEXNAME: "通信", PCTNVCHGTYPE: "增持" },
+        { GPDM: "688347", GPJC: "华虹宏力", JZBL: "5.57", INDEXNAME: "电子", PCTNVCHGTYPE: "增持" },
+      ],
+      fundboods: [
+        { ZQDM: "019827", ZQMC: "26国债01", ZJZBL: "7.05" },
+      ],
+    },
+  };
+  const sectorResp = {
+    Datas: [
+      { HYMC: "制造业", SZ: "286612.688067", ZJZBL: "72.78" },
+      { HYMC: "信息传输、软件和信息技术服务业", ZJZBL: "7.18" },
+    ],
   };
 
-  it("解析代码/简称/占比/行业/增减持", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(posResp))));
+  it("解析股票/债券/行业三视图", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.includes("FundMNSectorAllocation")
+          ? new Response(JSON.stringify(sectorResp))
+          : new Response(JSON.stringify(posResp))),
+    );
     const r = await fetchFundPosition(fakeEnv(), "000001");
-    expect(r).toHaveLength(2);
-    expect(r[0]).toEqual({
+    expect(r.stocks).toHaveLength(2);
+    expect(r.stocks[0]).toEqual({
       code: "300308",
       name: "中际旭创",
       ratio: 645,
       industry: "通信",
       changeType: "增持",
     });
+    expect(r.bonds).toEqual([{ code: "019827", name: "26国债01", ratio: 705 }]);
+    expect(r.industries).toEqual([
+      { name: "制造业", ratio: 7278 },
+      { name: "信息传输、软件和信息技术服务业", ratio: 718 },
+    ]);
   });
 
-  it("网络异常返回空数组", async () => {
+  it("网络异常返回三空数组", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
         throw new Error("boom");
       }),
     );
-    expect(await fetchFundPosition(fakeEnv(), "000001")).toEqual([]);
+    expect(await fetchFundPosition(fakeEnv(), "000001")).toEqual({
+      stocks: [],
+      bonds: [],
+      industries: [],
+    });
   });
 });
 

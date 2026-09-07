@@ -312,15 +312,16 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         </SectionCard>
       )}
 
-      {loaderData.position.length > 0 && (
+      {loaderData.position.stocks.length > 0 && (
         <SectionCard title="重仓股（前 10）">
-          {/* 桌面视图：原 5 列 Table 原样保留（Task 8 双渲染，列不动） */}
+          {/* 桌面视图：5 列 Table 原样保留（双渲染，列不动）——
+              本卡是投资组合的股票视图（Task 9 升级为三视图） */}
           <div className="fp-desktop">
             <Table
               size="small"
               pagination={false}
               rowKey="code"
-              dataSource={loaderData.position.slice(0, 10)}
+              dataSource={loaderData.position.stocks.slice(0, 10)}
               columns={[
                 { title: "代码", dataIndex: "code" },
                 { title: "简称", dataIndex: "name" },
@@ -338,7 +339,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           {/* 窄屏：降级成 DataRow，字段不缺——代码/简称并进标题行，
               占净值比/行业/增减持各占一行（同 SellPanel 的批次降级） */}
           <div className="fp-mobile">
-            {loaderData.position.slice(0, 10).map(p => (
+            {loaderData.position.stocks.slice(0, 10).map(p => (
               <div key={p.code} style={{ marginBottom: 8 }}>
                 <Text strong style={{ fontSize: 13 }}>
                   {p.name}

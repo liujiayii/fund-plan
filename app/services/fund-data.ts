@@ -37,6 +37,13 @@ export interface FundBasic {
   riskLevel: number;
   /** 申购状态，如「开放申购」 */
   status: string;
+  /**
+   * 赎回状态（SHZT，如「开放赎回」）。加法字段：旧 KV 缓存缺省为 undefined。
+   * 2026-09-08 实测：SHZT 只在 FundMNNBasicInformation 响应里
+   * （FundMNDetailInformation 没有这个键），所以赎回状态从这里产出，
+   * fetchFundDetail 复用本函数取值。
+   */
+  redeemStatus: string;
 }
 
 /** 单日净值 */
@@ -62,10 +69,16 @@ const CACHE_TTL = {
   rank: 86400,
   /** 基金详情（经理/规模/成立日）缓存 1 天 */
   detail: 86400,
-  /** 重仓股缓存 1 天 */
+  /** 重仓股缓存 1 天（position:v2 三视图共用） */
   position: 86400,
   /** 指数净值（沪深300）缓存 1 天 */
   index: 86400,
+  /** 资产配置缓存 1 天 */
+  alloc: 86400,
+  /** 历史分红缓存 1 天 */
+  bonus: 86400,
+  /** 基金经理详情缓存 1 天 */
+  manager: 86400,
 } as const;
 
 /**
@@ -271,6 +284,7 @@ export async function fetchFundBasic(
       minPurchaseCents: yuanToCents(Number(d.MINSG) || 10),
       riskLevel: Number(d.RISKLEVEL) || 3,
       status: d.SGZT ?? "开放申购",
+      redeemStatus: d.SHZT ?? "",
     };
 
     await env.KV.put(cacheKey, JSON.stringify(basic), {
@@ -599,6 +613,12 @@ export interface FundDetail {
   benchmark: string;
   mgmtFeeRate: number;
   trustFeeRate: number;
+  /** 基金评级（上证星级 1~5；0 = 无评级）。加法字段：旧缓存缺省为 undefined，页面显示 — */
+  rating: number;
+  /** 投资风格（如「大盘成长型」）。加法字段，同上 */
+  investStyle: string;
+  /** 赎回状态（SHZT，如「开放赎回」）。加法字段，同上 */
+  redeemStatus: string;
 }
 
 export async function fetchFundDetail(
@@ -620,7 +640,13 @@ export async function fetchFundDetail(
     const url
       = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNDetailInformation`
         + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
-    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+    // SHZT（赎回状态）2026-09-08 实测在 FundMNNBasicInformation 而非本接口——
+    // 复用 fetchFundBasic（自带 fund:basic KV，1 天 TTL）补齐。详情页 loader 的
+    // ensureFund 前脚刚刷过它，这里几乎必命中缓存，不新增 KV key 也不多打网络
+    const [resp, basic] = await Promise.all([
+      fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS }),
+      fetchFundBasic(env, code),
+    ]);
     const json = (await resp.json()) as { Datas?: Record<string, string> | null };
     const d = json.Datas;
     if (!d || !d.FCODE)
@@ -635,6 +661,16 @@ export async function fetchFundDetail(
       benchmark: d.BENCH ?? "",
       mgmtFeeRate: percentToRate(d.MGREXP),
       trustFeeRate: percentToRate(d.TRUSTEXP),
+      // 稳健档新增（2026-09-08 实测）：
+      // 评级字段是 RLEVEL_SZ（上证星级，"--" 或 "1"~"5"；移动端 H5 的
+      // fundGrade 就是读它拼「上证X星评级」），计划预期的 JJPJ 不存在；
+      // 拉不到给 0，页面显示 —，缓存 1 天后自然刷新带上真值
+      rating: Number(d.RLEVEL_SZ) || 0,
+      // 投资风格：实测 FundMNDetailInformation 没有风格字段（网页版 f10 的
+      // 「投资风格」九宫格是一张静态图片，移动端 API 家族无文本源）——
+      // 保留两个解析位兜底，当前恒为空串，页面显示 —
+      investStyle: d.FUNDINVESTSTYLE ?? d.INVESTSTYLE ?? "",
+      redeemStatus: basic?.redeemStatus ?? "",
     };
 
     await env.KV.put(cacheKey, JSON.stringify(detail), {
@@ -649,9 +685,10 @@ export async function fetchFundDetail(
 }
 
 /**
- * 重仓股。东财 FundMNInverstPosition，返回 Datas.fundStocks[]。
+ * 投资组合（原「重仓股」扩展）。东财 FundMNInverstPosition 同一响应里带
+ * fundStocks（股票）/ fundboods（债券，接口拼写就是 boods）两块，此前只取了股票。
  * ⚠️ 用 EM_MOBILE_HEADERS。
- * 失败返回空数组，详情页不渲染「重仓股」卡片。
+ * 失败返回三空数组，详情页不渲染「投资组合」卡片。
  */
 export interface FundStock {
   code: string;
@@ -662,38 +699,99 @@ export interface FundStock {
   changeType: string;
 }
 
+/** 债券持仓条目 */
+export interface FundBond {
+  code: string;
+  name: string;
+  /** 占净值比 万分之（6.45% → 645） */
+  ratio: number;
+}
+
+/** 行业配置条目 */
+export interface FundIndustry {
+  name: string;
+  /** 占净值比 万分之 */
+  ratio: number;
+}
+
+/** 投资组合视图：股票/债券/行业三块。股票+债券出自 FundMNInverstPosition，行业出自 FundMNSectorAllocation */
+export interface FundPositionView {
+  stocks: FundStock[];
+  bonds: FundBond[];
+  industries: FundIndustry[];
+}
+
 export async function fetchFundPosition(
   env: Env,
   code: string,
-): Promise<FundStock[]> {
-  const cacheKey = `fund:position:${code}`;
+): Promise<FundPositionView> {
+  // v2：返回形状从裸 FundStock[] 改为 {stocks,bonds,industries}——
+  // 旧缓存（fund:position:{code}）存的是数组，形状不兼容必须换 key；
+  // 旧 key 一天后 TTL 自然过期，无需清理
+  const cacheKey = `fund:position:v2:${code}`;
   const cached = await env.KV.get(cacheKey);
   if (cached) {
     try {
-      return JSON.parse(cached) as FundStock[];
+      return JSON.parse(cached) as FundPositionView;
     }
     catch {
       /* 缓存损坏 */
     }
   }
 
+  // 行业配置单独拉（2026-09-08 实测：FundMNInverstPosition 响应里只有
+  // fundStocks/fundboods/fundfofs，没有行业数据；行业在独立的
+  // FundMNSectorAllocation，Datas[] 每行 {HYMC, SZ, ZJZBL}）。
+  // 自带 try：行业拉挂不拖垮股票/债券，退化为空数组即可
+  const fetchIndustries = async (): Promise<FundIndustry[]> => {
+    try {
+      const url
+        = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNSectorAllocation`
+          + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
+      const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+      const json = (await resp.json()) as {
+        Datas?: { HYMC?: string; ZJZBL?: string }[] | null;
+      };
+      return (json.Datas ?? [])
+        .filter(i => i.HYMC)
+        .map(i => ({
+          name: i.HYMC!,
+          ratio: percentToRate(i.ZJZBL),
+        }));
+    }
+    catch (err) {
+      console.error(`[fund-data] 拉取基金 ${code} 行业配置失败：`, err);
+      return [];
+    }
+  };
+
   try {
     const url
       = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition`
         + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
-    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+    // 两路并行：股票+债券（InverstPosition）与行业（SectorAllocation）
+    const [resp, industries] = await Promise.all([
+      fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS }),
+      fetchIndustries(),
+    ]);
     const json = (await resp.json()) as {
-      Datas?: { fundStocks?: {
-        GPDM?: string;
-        GPJC?: string;
-        JZBL?: string;
-        INDEXNAME?: string;
-        PCTNVCHGTYPE?: string;
-      }[]; } | null;
+      Datas?: {
+        fundStocks?: {
+          GPDM?: string;
+          GPJC?: string;
+          JZBL?: string;
+          INDEXNAME?: string;
+          PCTNVCHGTYPE?: string;
+        }[];
+        // 2026-09-08 实测：债券键名是 fundboods（接口自己的拼写），字段
+        // ZQDM（代码）/ZQMC（名称）/ZJZBL（占净值比）；拉不到就是空数组，
+        // Segmented 自动隐藏对应选项（优雅降级）
+        fundboods?: { ZQDM?: string; ZQMC?: string; ZJZBL?: string }[];
+      } | null;
     };
-    const stocks = json.Datas?.fundStocks ?? [];
+    const d = json.Datas;
 
-    const items: FundStock[] = stocks
+    const stocks: FundStock[] = (d?.fundStocks ?? [])
       .filter(s => s.GPDM && s.GPJC)
       .map(s => ({
         code: s.GPDM!,
@@ -703,16 +801,25 @@ export async function fetchFundPosition(
         changeType: s.PCTNVCHGTYPE ?? "",
       }));
 
-    if (items.length > 0) {
-      await env.KV.put(cacheKey, JSON.stringify(items), {
+    const bonds: FundBond[] = (d?.fundboods ?? [])
+      .filter(b => b.ZQDM && b.ZQMC)
+      .map(b => ({
+        code: b.ZQDM!,
+        name: b.ZQMC!,
+        ratio: percentToRate(b.ZJZBL),
+      }));
+
+    const view: FundPositionView = { stocks, bonds, industries };
+    if (stocks.length + bonds.length + industries.length > 0) {
+      await env.KV.put(cacheKey, JSON.stringify(view), {
         expirationTtl: CACHE_TTL.position,
       });
     }
-    return items;
+    return view;
   }
   catch (err) {
-    console.error(`[fund-data] 拉取基金 ${code} 重仓股失败：`, err);
-    return [];
+    console.error(`[fund-data] 拉取基金 ${code} 投资组合失败：`, err);
+    return { stocks: [], bonds: [], industries: [] };
   }
 }
 
@@ -781,5 +888,210 @@ export async function fetchIndexNav(
   catch (err) {
     console.error(`[fund-data] 拉取指数 ${secid} 净值失败：`, err);
     return [];
+  }
+}
+
+/** 资产配置（股票/债券/现金占净值比） */
+export interface AssetAllocation {
+  /** 占净值比，百分数（85.2 表示 85.2%）。展示数据不是钱，不走精度铁律 */
+  stocks: number;
+  bonds: number;
+  cash: number;
+}
+
+/**
+ * 资产配置。东财 FundMNAssetAllocationNew。
+ * ⚠️ 用 EM_MOBILE_HEADERS；失败返回 null，详情页不渲染「资产配置」卡片。
+ * 2026-09-08 实测：Datas 是数组（按报告期，最新在前），字段是
+ * GP（股票）/ZQ（债券）/HB（货币=现金）——计划预期的 STOCKNAV 系列不存在。
+ */
+export async function fetchAssetAllocation(
+  env: Env,
+  code: string,
+): Promise<AssetAllocation | null> {
+  const cacheKey = `fund:alloc:${code}`;
+  const cached = await env.KV.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as AssetAllocation;
+    }
+    catch {
+      /* 缓存损坏 */
+    }
+  }
+
+  try {
+    const url
+      = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNAssetAllocationNew`
+        + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
+    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+    const json = (await resp.json()) as {
+      Datas?: { GP?: string; ZQ?: string; HB?: string }[] | null;
+    };
+    // 取最新报告期（首行）；无报告期（新基金）返回 null
+    const row = json.Datas?.[0];
+    if (!row)
+      return null;
+
+    // percentToRate 百分比→万分之，这里再回百分数，
+    // 顺手把 "--"/空串归一成 0
+    const pct = (v: string | undefined): number => percentToRate(v ?? null) / 100;
+    const alloc: AssetAllocation = {
+      stocks: pct(row.GP),
+      bonds: pct(row.ZQ),
+      cash: pct(row.HB),
+    };
+    // 三项全 0 视为无数据（货币基金 GP="--" 也会被归一成 0，但 ZQ/HB 有值）
+    if (alloc.stocks <= 0 && alloc.bonds <= 0 && alloc.cash <= 0)
+      return null;
+
+    await env.KV.put(cacheKey, JSON.stringify(alloc), {
+      expirationTtl: CACHE_TTL.alloc,
+    });
+    return alloc;
+  }
+  catch (err) {
+    console.error(`[fund-data] 拉取基金 ${code} 资产配置失败：`, err);
+    return null;
+  }
+}
+
+/** 历史分红条目 */
+export interface FundBonus {
+  /** 分红年度标签（自除息日取年份，如 "2025"；同年多次分红会出现重复标签） */
+  year: string;
+  /** 每 10 份派现（元） */
+  per10Shares: number;
+  /** 除息日 YYYY-MM-DD（可能缺失） */
+  recordDate: string;
+}
+
+/**
+ * 历史分红。东财 FundMNBonusDetail。
+ * ⚠️ 用 EM_MOBILE_HEADERS；失败返回 null，无记录返回空数组——
+ * 两种情况详情页都不渲染「历史分红」卡。
+ * 2026-09-08 实测：计划预期的 FundMNBonus 端点 404，真名是 FundMNBonusDetail
+ * （天天基金 H5 官方 bundle 里的 getFundMNBonusDetail）；记录在 Datas.FHINFO[]，
+ * FHFCZ 是「每份派现（元）」，无分红基金回 Datas:null。
+ */
+export async function fetchBonusHistory(
+  env: Env,
+  code: string,
+): Promise<FundBonus[] | null> {
+  const cacheKey = `fund:bonus:${code}`;
+  const cached = await env.KV.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as FundBonus[];
+    }
+    catch {
+      /* 缓存损坏 */
+    }
+  }
+
+  try {
+    const url
+      = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNBonusDetail`
+        + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
+    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+    const json = (await resp.json()) as {
+      // FHINFO：分红记录；FCINFO：份额拆分记录（本卡不展示）
+      Datas?: { FHINFO?: { FSRQ?: string; FHFCZ?: string }[] } | null;
+    };
+    const items: FundBonus[] = (json.Datas?.FHINFO ?? [])
+      .filter(b => b.FSRQ)
+      .map(b => ({
+        year: b.FSRQ!.slice(0, 4),
+        // FHFCZ 是「每份派现（元）」，展示口径是每 10 份 → ×10。
+        // 用 Decimal 吃字符串再乘，避免 0.07*10 这类浮点尾差；"--"/非法按 0 兜底
+        per10Shares: b.FHFCZ && Number.isFinite(Number(b.FHFCZ))
+          ? Number(new Decimal(b.FHFCZ).mul(10))
+          : 0,
+        // FSRQ 是除息日；接口另有 DJR（登记日）/FFR（发放日），展示取主日期即可
+        recordDate: b.FSRQ ?? "",
+      }));
+
+    // 空列表也写缓存：防止无分红基金每次访问都打网络
+    await env.KV.put(cacheKey, JSON.stringify(items), {
+      expirationTtl: CACHE_TTL.bonus,
+    });
+    return items;
+  }
+  catch (err) {
+    console.error(`[fund-data] 拉取基金 ${code} 分红记录失败：`, err);
+    return null;
+  }
+}
+
+/** 基金经理条目（fundSize/profit 为东财原样展示字符串，透传不加工） */
+export interface FundManager {
+  name: string;
+  /** 任职起始（如 "2019-05-20"） */
+  workTime: string;
+  /** 在管规模（如 "132.66亿元"） */
+  fundSize: string;
+  /** 任期回报（如 "82.35%"） */
+  profit: string;
+  /** 简介 */
+  resume: string;
+}
+
+/**
+ * 基金经理详情。东财 FundMNMangerList。
+ * ⚠️ 用 EM_MOBILE_HEADERS；失败返回 null，详情页「基金经理」卡退化为概况里的名字。
+ * 2026-09-08 实测：计划预期的 FundMNManagerInformation 端点 404，真名是
+ * FundMNMangerList（接口自己拼错 Manager，天天基金 H5 官方 bundle 同款拼写）。
+ * 每行是一段「管理团队任期」，只取现任（LEMPDATE="--"）；本接口没有
+ * FUNDSIZE/RESUME（在按经理 ID 查的详情端点里），相应字段恒为空串，
+ * 页面按空值隐藏对应行。
+ */
+export async function fetchManagerInfo(
+  env: Env,
+  code: string,
+): Promise<FundManager[] | null> {
+  const cacheKey = `fund:manager:${code}`;
+  const cached = await env.KV.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as FundManager[];
+    }
+    catch {
+      /* 缓存损坏 */
+    }
+  }
+
+  try {
+    const url
+      = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNMangerList`
+        + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
+    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+    const json = (await resp.json()) as {
+      Datas?: Record<string, string>[] | null;
+    };
+    const items: FundManager[] = (json.Datas ?? [])
+      // 只取现任管理团队（离任段 LEMPDATE 是具体日期，现任是 "--"）
+      .filter(m => m.MGRNAME && m.LEMPDATE === "--")
+      .map((m) => {
+        // PENAVGROWTH 是任期回报百分数（如 "70.492"）；"--"/非法归空串
+        const growth = Number(m.PENAVGROWTH);
+        return {
+          name: m.MGRNAME ?? "",
+          workTime: m.FEMPDATE ?? "",
+          fundSize: "",
+          profit: Number.isFinite(growth) ? `${growth.toFixed(2)}%` : "",
+          resume: "",
+        };
+      });
+
+    if (items.length > 0) {
+      await env.KV.put(cacheKey, JSON.stringify(items), {
+        expirationTtl: CACHE_TTL.manager,
+      });
+    }
+    return items;
+  }
+  catch (err) {
+    console.error(`[fund-data] 拉取基金 ${code} 经理详情失败：`, err);
+    return null;
   }
 }
