@@ -174,7 +174,8 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         <Title level={3} style={{ margin: 0 }}>{d.fundName}</Title>
         <Text type="secondary">{d.fundCode}</Text>
         {d.fundType && <Tag>{d.fundType}</Tag>}
-        <NavButton size="small" to="/me/holdings">← 返回持仓</NavButton>
+        {/* 返回 /me（持仓模块在那里）；原 /me/holdings 列表页已删除 */}
+        <NavButton size="small" to="/me">← 返回持仓</NavButton>
       </Space>
 
       {/* 提交成功/失败的反馈：成功走 message.success（见 handleSuccess），

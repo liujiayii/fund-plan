@@ -23,9 +23,9 @@ export interface HoldingListProps {
    * 行内名称链接的目标地址。不传则 `FundListItem` 用默认 `/funds/{code}`。
    *
    * 这是期一在 `FundListItem` 上预留的 `href` 口子的兑现：
-   * `/me/holdings` 列表行的语义是「点进单只持仓详情」，应链到 `/me/holdings/{code}`
-   * 而非基金详情页 `/funds/{code}`；只读页（`HoldingListReadonly`、`me._index`）
-   * 不传本 prop，继续走默认基金详情页链接，行为不变。
+   * `/me` 持仓列表行的语义是「点进单只持仓详情」，应链到 `/me/holdings/{code}`
+   * 而非基金详情页 `/funds/{code}`；不传本 prop 的只剩 `HoldingListReadonly`
+   * （公开盘）——继续走默认基金详情页链接（me._index 的持仓行传本 prop）。
    */
   getHref?: (h: HoldingView) => string;
 }
