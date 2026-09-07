@@ -409,3 +409,51 @@ export async function getOrdersByFund(
     fundName,
   }));
 }
+
+/** 已持有速览（基金详情页顶部标识用） */
+export interface HoldingBrief {
+  marketValueCents: number;
+  pnlCents: number;
+  /** 普通小数，如 0.0123 = +1.23% */
+  pnlRate: number;
+}
+
+/**
+ * 读取某用户对某基金的持有速览：基金详情页「已持有」标识与两格统计的数据源。
+ * 无持仓行或总份额为 0 → null（页面据此不显示标识）。
+ *
+ * ⚠️ 同源估值契约：与 getPortfolio / getHoldingDetail 完全相同的
+ * latestNavMap + costBasisNavScaled 兜底 + valuateHolding——
+ * 「已持有」是事实，不因净值缺席而消失；三处的持有金额/收益必须一字不差，
+ * 别在这里另写估值。
+ */
+export async function getHoldingBrief(
+  db: Db,
+  userId: number,
+  fundCode: string,
+): Promise<HoldingBrief | null> {
+  const row = await db.query.holding.findFirst({
+    where: and(eq(holding.userId, userId), eq(holding.fundCode, fundCode)),
+  });
+  if (!row || row.totalShares <= 0)
+    return null;
+
+  const navMap = await latestNavMap(db, [fundCode]);
+  const navInfo = navMap.get(fundCode);
+  // 无净值时成本价兜底（与 getPortfolio 同款），不返回 null
+  const navScaled = navInfo
+    ? navInfo.unitNav
+    : costBasisNavScaled(row.totalCost, row.totalShares);
+
+  const v = valuateHolding({
+    fundCode,
+    totalSharesScaled: row.totalShares,
+    totalCostCents: row.totalCost,
+    navScaled,
+  });
+  return {
+    marketValueCents: v.marketValueCents,
+    pnlCents: v.pnlCents,
+    pnlRate: v.pnlRate,
+  };
+}
