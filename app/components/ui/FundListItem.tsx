@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Tag } from "antd";
+import { Link } from "react-router";
 import { COLOR } from "~/theme";
 
 export interface FundListItemProps {
@@ -70,15 +71,15 @@ export function FundListItem(props: FundListItemProps) {
           fp-fli-main 是窄屏两段式的锚点（responsive.css §5，spec §8） */}
       <div className="fp-fli-main" style={{ flex: 1, minWidth: 0 }}>
         {/*
-          ⚠️ <a> 必须同时包住名称与代码两行。
+          ⚠️ <Link> 必须同时包住名称与代码两行。
           旧表格的写法是 <a>{name}<br/><Text>{code}</Text></a> —— 两行都可点。
-          若只把 fundName 放进 <a>，点代码就不跳转了，是可验证的功能退化。
+          若只把 fundName 放进 <Link>，点代码就不跳转了，是可验证的功能退化。
           display: block 让链接铺满左列宽度，整块可点 —— 这也更接近支付宝
           基金列表「整行可点」的观感。
-          note 刻意留在 <a> 外面：它装的是状态 Tag 与流水说明，不该整段变成链接。
+          note 刻意留在 <Link> 外面：它装的是状态 Tag 与流水说明，不该整段变成链接。
         */}
-        <a
-          href={href ?? `/funds/${fundCode}`}
+        <Link
+          to={href ?? `/funds/${fundCode}`}
           style={{ display: "block", color: COLOR.textPrimary }}
         >
           <div style={{ fontSize: 15, fontWeight: 500 }}>{fundName}</div>
@@ -86,7 +87,7 @@ export function FundListItem(props: FundListItemProps) {
             {fundCode}
             {fundType ? <Tag style={{ marginInlineStart: 8 }}>{fundType}</Tag> : null}
           </div>
-        </a>
+        </Link>
         {note !== undefined && (
           <div style={{ fontSize: 12, color: COLOR.textSecondary, marginTop: 4 }}>
             {note}

@@ -1,11 +1,12 @@
 import type { Route } from "./+types/root";
-import { GithubOutlined, LogoutOutlined } from "@ant-design/icons";
+import { GithubOutlined, LogoutOutlined, SettingOutlined } from "@ant-design/icons";
 import { DefaultFooter } from "@ant-design/pro-components";
-import { Layout as AntLayout, Avatar, Button, ConfigProvider, Dropdown, Menu, Space, theme } from "antd";
+import { Layout as AntLayout, Avatar, ConfigProvider, Dropdown, Menu, Space, theme } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { useRef } from "react";
 import {
   isRouteErrorResponse,
+  Link,
   Links,
   Meta,
   Outlet,
@@ -13,8 +14,10 @@ import {
   ScrollRestoration,
   useLoaderData,
   useLocation,
+  useNavigate,
 } from "react-router";
 import { MobileTabBar } from "~/components/MobileTabBar";
+import { NavButton } from "~/components/ui/NavButton";
 import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
@@ -73,6 +76,8 @@ export default function App() {
   const data = useLoaderData<typeof loader>();
   const location = useLocation();
   const user = data?.user ?? null;
+  // SPA 导航：菜单里的「设置」项走客户端跳转，不做整页刷新
+  const navigate = useNavigate();
 
   // 登出表单引用：Dropdown 的菜单项点击后触发 submit，走 POST /logout。
   // 仍用 form post 而非 client fetch，是为了沿用服务端清 session + 重定向的标准链路。
@@ -137,7 +142,10 @@ export default function App() {
               selectedKeys={selectedKey ? [selectedKey] : []}
               items={navItems.map(i => ({
                 key: i.key,
-                label: <a href={i.key}>{i.label}</a>,
+                label: i.key === "/" || i.key === "/master"
+                // 目标为 / 与 /master 保持原生 <a>：游客边缘缓存靠整页跳转命中（spec）
+                  ? <a href={i.key}>{i.label}</a>
+                  : <Link to={i.key}>{i.label}</Link>,
               }))}
               style={{ minWidth: 0, borderBottom: "none" }}
             />
@@ -151,6 +159,13 @@ export default function App() {
                   placement="bottomRight"
                   menu={{
                     items: [
+                      {
+                        key: "settings",
+                        icon: <SettingOutlined />,
+                        label: "设置",
+                        // 设置页此前全站无入口（只能手输 URL），这里补上门——SPA 跳转
+                        onClick: () => navigate("/me/settings"),
+                      },
                       {
                         key: "logout",
                         icon: <LogoutOutlined />,
@@ -177,12 +192,12 @@ export default function App() {
               )
             : (
                 <Space>
-                  <Button size="small" href="/login">
+                  <NavButton size="small" to="/login">
                     登录
-                  </Button>
-                  <Button size="small" type="primary" href="/register">
+                  </NavButton>
+                  <NavButton size="small" type="primary" to="/register">
                     注册
-                  </Button>
+                  </NavButton>
                 </Space>
               )}
           {/* 登出表单：视觉上隐藏，仅供 Dropdown 菜单项触发 submit 用 */}

@@ -9,6 +9,7 @@ import { NavChart } from "~/components/NavChart";
 import { PeriodReturnTable } from "~/components/PeriodReturnTable";
 import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { runBatch } from "~/db/client";
@@ -26,7 +27,6 @@ import {
 } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
 import { getNavSeries } from "~/services/portfolio-service";
-import { placeBuyOrder } from "~/services/trade";
 import { isWatched } from "~/services/watchlist-service";
 import { pnlColor } from "~/theme";
 
@@ -136,32 +136,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   };
 }
 
-/** 买入下单 */
-export async function action({ request, params, context }: Route.ActionArgs) {
-  const { db, env } = getAppContext(context);
-  const user = await getCurrentUser(request, db);
-  if (!user)
-    return { error: "请先登录" };
-
-  const fd = await request.formData();
-  const amountYuan = String(fd.get("amount") ?? "");
-  const n = Number(amountYuan);
-  if (!Number.isFinite(n) || n <= 0)
-    return { error: "请输入正确的金额" };
-
-  try {
-    const { yuanToCents } = await import("~/domain/money");
-    await placeBuyOrder(db, env, {
-      userId: user.id,
-      fundCode: params.code,
-      amountCents: yuanToCents(amountYuan),
-    });
-    return { ok: true, message: "下单成功，待 T+1 确认" };
-  }
-  catch (err) {
-    return { error: err instanceof Error ? err.message : "下单失败" };
-  }
-}
+// 买入下单已统一迁移到 POST /me/trade 资源路由（BuyDrawer 的 action prop 直指它）
 
 /**
  * 风险等级对应的颜色与说明。
@@ -234,9 +209,9 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           </Space>
 
           <Space style={{ marginTop: 8 }}>
-            <Button size="large" href="/funds">
+            <NavButton size="large" to="/funds">
               继续搜索
-            </Button>
+            </NavButton>
             {isLoggedIn && (
               <fetcher.Form method="post" action="/me/watchlist" style={{ display: "inline" }}>
                 {/* intent 随当前态翻转：未自选→add，已自选→remove */}
@@ -379,9 +354,9 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
       <SectionCard title="买入">
         {!isLoggedIn
           ? (
-              <Button type="primary" size="large" href="/register">
+              <NavButton type="primary" size="large" to="/register">
                 注册后即可买入
-              </Button>
+              </NavButton>
             )
           : latest
             ? (
@@ -399,7 +374,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
                     navScaled={latest.unitNav}
                     navDate={latest.navDate}
                     cashCents={cash}
-                    action={`/funds/${f.code}`}
+                    action="/me/trade" // 统一提交到 /me/trade 资源路由
                   />
                 </>
               )
@@ -416,7 +391,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           <Paragraph type="secondary">
             设置定期定额买入这只基金，系统每天 10:00 自动扫描到期计划下单。
           </Paragraph>
-          <Button type="primary" href="/me/dca">去设置定投 →</Button>
+          <NavButton type="primary" to="/me/dca">去设置定投 →</NavButton>
         </SectionCard>
       )}
     </Space>

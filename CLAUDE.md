@@ -262,7 +262,7 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 ### 提交粒度
 
 **一个 Task 一个 commit——不要比这更细。**
-`docs/superpowers/plans/` 里每个 Task 末尾自带 commit 步骤，照它执行即可，但：
+`.superpowers/plans/` 里每个 Task 末尾自带 commit 步骤，照它执行即可，但：
 
 - **code review 的修正合并进该 Task 自己的 commit**（`git commit --amend`），
   或攒够一批再提一条。**绝不要一条注释一个 commit。**
@@ -277,8 +277,12 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 ## 交易日历需每年更新
 
 `app/domain/trading-calendar.ts` 的 `CN_HOLIDAYS` 是硬编码节假日表，每年需人工更新。
+**消费方有两处**：撮合（`resolveConfirmDate` 算 T+1 确认日）与定投（`nextRunDate`
+算下次执行日——2026-09-07 起定投执行日也校准到交易日，周末/节假日不再下单）。
+表漏了某天会导致定投在该日多生成一单（会在下个交易日被撮合）。
 兜底：撮合时把 `fund_nav` 的净值日期序列作为 `knownTradingDays` 传入——
-有净值的那天必然是交易日，可反向校正遗漏。
+有净值的那天必然是交易日，可反向校正遗漏（定投的 `nextRunDate` 目前未接
+knownTradingDays，纯靠节假日表）。
 
 ## 上线流程
 
@@ -295,12 +299,15 @@ CodeRabbit 评审处理方式、合并即自动部署的完整规约都在里面
   `/master` 的游客视图走 `workers/app.ts` 的边缘缓存，排障看 `x-fp-cache` 头）
 - 开发指南 `docs/development.md`（踩坑记录的完整版）
 
-**设计文档 `docs/superpowers/specs/`（记录「为什么这样设计」，git diff 答不出的那部分）：**
+**设计文档 `.superpowers/specs/`（记录「为什么这样设计」，git diff 答不出的那部分）：**
+
+> 2026-09-07 起 specs/plans 与后续所有规划类文档均存放于 `.superpowers/`
+> （目录自带 `.gitignore` 自忽略），**纯本地工作文档，一律不入库**。
 
 - `2026-08-24-fund-simulator-design.md` —— 金融内核与三层架构的决策依据
 - `2026-08-25-alipay-style-refactor-design.md` —— 支付宝式视觉重构
 
-**实施计划 `docs/superpowers/plans/`（是当时的施工图，不是现状描述）：**
+**实施计划 `.superpowers/plans/`（是当时的施工图，不是现状描述）：**
 
 进度**只看各计划文件标题下的状态戳**，不要看复选框（历史上从未勾过，全空
 不代表没做，勿照此重新施工）。一期收尾必须补盖状态戳，且**必须盖在

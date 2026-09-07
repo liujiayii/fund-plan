@@ -1,9 +1,10 @@
 import type { Route } from "./+types/me.holdings";
-import { Button, Space, Typography } from "antd";
+import { Space, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { account } from "~/db/schema";
@@ -79,9 +80,9 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
         {holdings.length === 0
           ? (
               <EmptyState description="还没有持仓">
-                <Button type="primary" href="/funds">
+                <NavButton type="primary" to="/funds">
                   去挑一只基金
-                </Button>
+                </NavButton>
               </EmptyState>
             )
           : (
@@ -96,12 +97,12 @@ export default function MeHoldings({ loaderData }: Route.ComponentProps) {
                 // 买入入口在自选页/基金详情页，这里再加就回到「到处都是」
                 renderActions={h => (
                   <Space size={8}>
-                    <Button size="small" href={`/me/holdings/${h.fundCode}`}>
+                    <NavButton size="small" to={`/me/holdings/${h.fundCode}`}>
                       详情
-                    </Button>
-                    <Button size="small" type="primary" href={`/me/holdings/${h.fundCode}?tab=trade`}>
+                    </NavButton>
+                    <NavButton size="small" type="primary" to={`/me/holdings/${h.fundCode}?tab=trade`}>
                       卖出
-                    </Button>
+                    </NavButton>
                   </Space>
                 )}
               />

@@ -1,7 +1,8 @@
-import type { Route } from "./+types/admin.users.$id";
-import { Button, Space, Tag, Typography } from "antd";
+import type { Route } from "./+types/admin_.users.$id";
+import { Space, Tag, Typography } from "antd";
 import { OrderList } from "~/components/OrderList";
 import { HoldingListReadonly, PortfolioSummary } from "~/components/PortfolioView";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getUserDetail } from "~/services/admin-service";
@@ -13,8 +14,15 @@ const { Title, Paragraph } = Typography;
 export function meta(_: Route.MetaArgs) {
   return [{ title: "用户详情 · 管理后台 · 模拟基金" }];
 }
-
-/** admin 看某个用户的盘：只读。渲染复用 /master 那套（PortfolioSummary + 只读列表） */
+/**
+ * admin 看某个用户的盘：只读。渲染复用 /master 那套（PortfolioSummary + 只读列表）。
+ *
+ * ⚠️ 文件名里的 `admin_.` 尾下划线是刻意的：断开与 admin.tsx 的嵌套。
+ * 此前叫 admin.users.$id.tsx（点号串联=嵌套路由），但 admin.tsx 是普通
+ * 页面组件没有 <Outlet/>，嵌套子路由永远渲染不出来——整页访问时 title
+ * 换了正文却还是列表页（PR #34 起就坏，SPA 化后症状放大成「URL 变了
+ * 内容不变」）。改名后两条路由各自整屏渲染，互不包裹。
+ */
 export async function loader({ request, params, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   await requireAdmin(request, db);
@@ -54,7 +62,7 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
       </div>
 
       {/* 返回列表的入口放标题区下方，排查问题时在多个用户间跳转是高频动作 */}
-      <Button href="/admin">← 返回用户列表</Button>
+      <NavButton to="/admin">← 返回用户列表</NavButton>
 
       <SectionCard>
         <PortfolioSummary portfolio={portfolio} />

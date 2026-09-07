@@ -5,6 +5,7 @@ import { Button, Input, Segmented, Space, Typography } from "antd";
 import { Form as RouterForm, useNavigation, useSearchParams } from "react-router";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { FundListItem } from "~/components/ui/FundListItem";
+import { NavButton } from "~/components/ui/NavButton";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { navToDisplay } from "~/domain/money";
@@ -103,9 +104,9 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
                         fundType={r.type || undefined}
                         last={i === results.length - 1}
                         actions={(
-                          <Button size="small" type="link" href={`/funds/${r.code}`}>
+                          <NavButton size="small" type="link" to={`/funds/${r.code}`}>
                             查看详情
-                          </Button>
+                          </NavButton>
                         )}
                       />
                     ))
@@ -189,9 +190,9 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
                       </span>
                     )}
                     actions={(
-                      <Button size="small" type="link" href={`/funds/${r.code}`}>
+                      <NavButton size="small" type="link" to={`/funds/${r.code}`}>
                         查看详情
-                      </Button>
+                      </NavButton>
                     )}
                   />
                 ))}

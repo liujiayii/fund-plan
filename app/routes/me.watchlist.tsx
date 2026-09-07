@@ -7,6 +7,7 @@ import { useFetcher } from "react-router";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { FundListItem } from "~/components/ui/FundListItem";
+import { NavButton } from "~/components/ui/NavButton";
 import { PnlText } from "~/components/ui/PnlText";
 import { account } from "~/db/schema";
 import { navToDisplay } from "~/domain/money";
@@ -32,7 +33,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { items, cash: acc?.cash ?? 0 };
 }
 
-/** 行内买入 / 加自选 / 取消自选 action（详情页的加自选也 post 到这里） */
+/** 加自选 / 取消自选 action（详情页的加自选也 post 到这里；行内买入已统一提交到 /me/trade） */
 export async function action({ request, context }: Route.ActionArgs) {
   const { db, env } = getAppContext(context);
   const user = await requireUser(request, db);
@@ -45,23 +46,6 @@ export async function action({ request, context }: Route.ActionArgs) {
     return { error: "请输入 6 位基金代码" };
 
   try {
-    if (intent === "buy") {
-      // 行内买入抽屉提交（buyTarget 那只基金）。金额校验与 funds.$code 的
-      // 买入 action 同口径；起购/现金不足等业务错误由 placeBuyOrder 抛出，
-      // 走下方 catch 回给抽屉内的错误 Alert 展示
-      const amount = String(fd.get("amount") ?? "");
-      const n = Number(amount);
-      if (!Number.isFinite(n) || n <= 0)
-        return { error: "请输入正确的金额" };
-      const { yuanToCents } = await import("~/domain/money");
-      const { placeBuyOrder } = await import("~/services/trade");
-      await placeBuyOrder(db, env, {
-        userId: user.id,
-        fundCode,
-        amountCents: yuanToCents(amount),
-      });
-      return { ok: true, message: "下单成功，待 T+1 确认" };
-    }
     if (intent === "add") {
       // 动态 import：loader 只需 listWatch，action 这里才用到 addWatch/removeWatch，
       // 按需加载保持路由模块轻量
@@ -112,9 +96,9 @@ export default function MeWatchlist({ loaderData }: Route.ComponentProps) {
       {items.length === 0
         ? (
             <EmptyState description="还没有自选基金">
-              <Button type="primary" href="/funds">
+              <NavButton type="primary" to="/funds">
                 去发现页挑一只
-              </Button>
+              </NavButton>
             </EmptyState>
           )
         : (
@@ -180,13 +164,13 @@ export default function MeWatchlist({ loaderData }: Route.ComponentProps) {
             </div>
           )}
 
-      {/* 行内买入抽屉：提交 post 到本页 action 的 buy 分支，成功 toast + 自动关
+      {/* 行内买入抽屉：提交 post 到 /me/trade 资源路由，成功 toast + 自动关
           （onSuccess 由 BuyDrawer 接管）；现金余额随 loader revalidate 自动刷新。
           buyTarget 为 null 的兜底值只在抽屉关闭时出现（destroyOnHidden 下无渲染） */}
       <BuyDrawer
         open={buyOpen}
         onClose={() => setBuyOpen(false)}
-        action="/me/watchlist"
+        action="/me/trade"
         cashCents={cash}
         fundCode={buyTarget?.fundCode ?? ""}
         fundName={buyTarget?.fundName ?? ""}

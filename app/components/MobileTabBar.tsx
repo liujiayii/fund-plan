@@ -5,7 +5,7 @@ import {
   StarOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { useLocation } from "react-router";
+import { Link, useLocation } from "react-router";
 import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 
 /**
@@ -33,15 +33,30 @@ export function MobileTabBar() {
   return (
     <nav className="fp-tabbar fp-mobile" aria-label="主导航">
       {TABS.map(t => (
-        <a
-          key={t.key}
-          href={t.key}
-          className={`fp-tabbar-item${selectedKey === t.key ? " active" : ""}`}
-          aria-current={selectedKey === t.key ? "page" : undefined}
-        >
-          {t.icon}
-          <span>{t.label}</span>
-        </a>
+        t.key === "/"
+        // 首页保持原生 <a>：游客边缘缓存靠整页跳转命中（spec，同 root.tsx 顶栏）
+          ? (
+              <a
+                key={t.key}
+                href={t.key}
+                className={`fp-tabbar-item${selectedKey === t.key ? " active" : ""}`}
+                aria-current={selectedKey === t.key ? "page" : undefined}
+              >
+                {t.icon}
+                <span>{t.label}</span>
+              </a>
+            )
+          : (
+              <Link
+                key={t.key}
+                to={t.key}
+                className={`fp-tabbar-item${selectedKey === t.key ? " active" : ""}`}
+                aria-current={selectedKey === t.key ? "page" : undefined}
+              >
+                {t.icon}
+                <span>{t.label}</span>
+              </Link>
+            )
       ))}
     </nav>
   );

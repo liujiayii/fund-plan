@@ -5,9 +5,15 @@
  * `valuateHolding`），额外展示份额批次明细——把 FIFO 阶梯费率这个系统最独特的
  * 设计对用户可见，并以「交易 / 定投 / 订单」三页签覆盖加仓、卖出、
  * 该基金定投计划与交易流水（定投与全局 /me/dca 同协议，service 层复用）。
+ *
+ * ⚠️ 文件名里的 `holdings_` 尾下划线是刻意的：断开与 me.holdings.tsx 的嵌套。
+ * 此前叫 me.holdings.$code.tsx（点号串联=嵌套路由），但 me.holdings.tsx 是
+ * 普通列表组件没有 <Outlet/>，嵌套子路由永远渲染不出来——整页访问时 title
+ * 换了正文却还是列表页，SPA 化后症状放大成「URL 变了内容不变」（与
+ * admin_.users.$id.tsx 同款坑，修复同法）。
  */
-import type { Route } from "./+types/me.holdings.$code";
-import { Button, message, Space, Table, Tabs, Tag, Typography } from "antd";
+import type { Route } from "./+types/me.holdings_.$code";
+import { message, Space, Table, Tabs, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
@@ -19,6 +25,7 @@ import { SellPanel } from "~/components/SellPanel";
 import { DataRow } from "~/components/ui/DataRow";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { account } from "~/db/schema";
@@ -29,7 +36,7 @@ import { getAppContext } from "~/services/context";
 import { createDcaPlan, deleteDcaPlan, toggleDcaPlan } from "~/services/dca-service";
 import { requireUser } from "~/services/guard";
 import { getDcaPlans, getHoldingDetail, getOrdersByFund } from "~/services/portfolio-service";
-import { placeBuyOrder, placeSellOrder } from "~/services/trade";
+import { placeSellOrder } from "~/services/trade";
 import { pnlColor } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
@@ -66,7 +73,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   };
 }
 
-/** 加仓与赎回共用 action，intent 区分（从 me.holdings 原样迁来） */
+/** 赎回与定投共用 action，intent 区分（买入已统一提交到 /me/trade 资源路由） */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const { db, env } = getAppContext(context);
   const user = await requireUser(request, db);
@@ -113,14 +120,6 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       return { ok: true, message: "计划已删除" };
     }
 
-    if (intent === "buy") {
-      const amount = String(fd.get("amount") ?? "");
-      const n = Number(amount);
-      if (!Number.isFinite(n) || n <= 0)
-        return { error: "请输入正确的金额" };
-      await placeBuyOrder(db, env, { userId: user.id, fundCode, amountCents: yuanToCents(amount) });
-      return { ok: true, message: "加仓下单成功，待 T+1 确认" };
-    }
     if (intent === "sell") {
       const shares = String(fd.get("shares") ?? "");
       const n = Number(shares);
@@ -175,7 +174,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         <Title level={3} style={{ margin: 0 }}>{d.fundName}</Title>
         <Text type="secondary">{d.fundCode}</Text>
         {d.fundType && <Tag>{d.fundType}</Tag>}
-        <Button size="small" href="/me/holdings">← 返回持仓</Button>
+        <NavButton size="small" to="/me/holdings">← 返回持仓</NavButton>
       </Space>
 
       {/* 提交成功/失败的反馈：成功走 message.success（见 handleSuccess），
@@ -297,7 +296,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
                       navScaled={d.navScaled}
                       navDate={d.navDate}
                       cashCents={cash}
-                      action={actionUrl}
+                      action="/me/trade" // 统一提交到 /me/trade 资源路由
                       onSuccess={handleSuccess}
                     />
                   </SectionCard>
