@@ -277,8 +277,12 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 ## 交易日历需每年更新
 
 `app/domain/trading-calendar.ts` 的 `CN_HOLIDAYS` 是硬编码节假日表，每年需人工更新。
+**消费方有两处**：撮合（`resolveConfirmDate` 算 T+1 确认日）与定投（`nextRunDate`
+算下次执行日——2026-09-07 起定投执行日也校准到交易日，周末/节假日不再下单）。
+表漏了某天会导致定投在该日多生成一单（会在下个交易日被撮合）。
 兜底：撮合时把 `fund_nav` 的净值日期序列作为 `knownTradingDays` 传入——
-有净值的那天必然是交易日，可反向校正遗漏。
+有净值的那天必然是交易日，可反向校正遗漏（定投的 `nextRunDate` 目前未接
+knownTradingDays，纯靠节假日表）。
 
 ## 上线流程
 
