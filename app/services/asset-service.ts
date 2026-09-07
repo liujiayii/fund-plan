@@ -1,30 +1,35 @@
 import type { Db } from "~/db/client";
 import type { DailyAsset, ReplayInput } from "~/domain/asset-timeline";
-import { asc, eq } from "drizzle-orm";
-import { orders, transactions } from "~/db/schema";
+import type { FundDayPnl, FundPnlInput } from "~/domain/fund-pnl";
+import { asc, eq, inArray } from "drizzle-orm";
+import { fund, orders, transactions } from "~/db/schema";
 import { replayDailyAssets } from "~/domain/asset-timeline";
+import { attributeFundPnlByDate } from "~/domain/fund-pnl";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getNavSeries } from "~/services/portfolio-service";
 
 /**
- * 资产时间线 service：查 D1 拼 ReplayInput，调领域层重放逐日资产。
- * 被 /me 与 /master 的曲线图共用（Task 5 消费）。
+ * 资产时间线 / 收益明细 service：查 D1 拼 ReplayInput，调领域层重放逐日资产；
+ * getProfitDetail 在同一条输入上追加按基金归因，供收益明细页用。
+ * 时间线被 /me 与 /master 的曲线图共用（Task 5 消费）。
  *
  * 五步查询均为 load-bearing——少查或查错，重放结果必错。
  * 任何一步查不到数据都不抛：空数据让 domain 返回空数组、latest=null，页面渲染空态。
  */
 
 /**
- * 查询用户资产时间线。
- *
- * @param db   Drizzle 实例（由 loader 传入）
- * @param userId 用户 ID
- * @returns daily 逐日资产快照；latest 最新一天（页面可标注日期）
+ * 五步查询 + 映射的重放输入组装。getAssetTimeline 与 getProfitDetail 共用，
+ * 是「时间线口径」与「归因口径」同源的结构性保证。
  */
-export async function getAssetTimeline(
-  db: Db,
-  userId: number,
-): Promise<{ daily: DailyAsset[]; latest: DailyAsset | null }> {
+async function buildReplayInput(db: Db, userId: number): Promise<{
+  input: ReplayInput;
+  /** 归因输入（与 input 同源的子集 + 每单现金流） */
+  fundPnlInput: FundPnlInput;
+  /** 累计投入本金（分）= Σ净入金（初始 + 历次签到） */
+  totalDepositedCents: number;
+  /** 历史确认订单涉及的全部基金代码（含已清仓） */
+  fundCodes: string[];
+}> {
   // ── 查询 1 & 2：全部订单 + 现金账本（互相独立，一波并行）──────────
   // 订单取全量（不只 confirmed）：份额重放只用 confirmed，但「在途申购」
   // 事件流需要每笔买单的完整生命周期（下单/改单/撤销/失败）。
@@ -42,6 +47,7 @@ export async function getAssetTimeline(
         placeDate: orders.placeDate,
         confirmDate: orders.confirmDate,
         dealShares: orders.dealShares,
+        dealAmount: orders.dealAmount,
       })
       .from(orders)
       .where(eq(orders.userId, userId))
@@ -59,10 +65,11 @@ export async function getAssetTimeline(
       .orderBy(asc(transactions.createdAt), asc(transactions.id)),
   ]);
 
-  // 映射成 ReplayInput.confirmedOrders 的形状（份额重放只用已成交单）。
-  // 上面主排序是 placeDate，这里必须按 (confirmDate, id) 重排——
-  // domain 前向扫描游标要求按确认日有序
+  // 映射成重放与归因各自要的形状。份额重放只用已成交单；归因额外带
+  // 每单现金流：买 = amount（含费全额），卖 = dealAmount（扣费后净到账）——
+  // 确认单这两列必已落库（settle 确认时同批写入）
   const confirmedOrders: ReplayInput["confirmedOrders"] = [];
+  const fundPnlOrders: FundPnlInput["confirmedOrders"] = [];
   const fundCodeSet = new Set<string>();
   for (const row of orderRows) {
     if (row.status !== "confirmed" || row.dealShares === null)
@@ -73,8 +80,17 @@ export async function getAssetTimeline(
       confirmDate: row.confirmDate,
       dealShares: row.dealShares,
     });
+    fundPnlOrders.push({
+      fundCode: row.fundCode,
+      side: row.side,
+      confirmDate: row.confirmDate,
+      dealShares: row.dealShares,
+      cashCents: row.side === "buy" ? row.amount! : row.dealAmount!,
+    });
     fundCodeSet.add(row.fundCode);
   }
+  // 上面主排序是 placeDate，这里必须按 (confirmDate, id) 重排——
+  // domain 前向扫描游标要求按确认日有序
   confirmedOrders.sort((a, b) =>
     a.confirmDate < b.confirmDate ? -1 : a.confirmDate > b.confirmDate ? 1 : 0,
   );
@@ -186,6 +202,12 @@ export async function getAssetTimeline(
   for (const d of cashDates) dateSet.add(d);
   const dateAxis = [...dateSet].sort();
 
+  // 累计投入本金：Σ净入金，精确按构造（不依赖「总资产−累计收益」恒等式）
+  let totalDepositedCents = 0;
+  for (const v of netDepositByDate.values()) {
+    totalDepositedCents += v;
+  }
+
   // ── 拼 ReplayInput 喂领域层 ─────────────────────────────────────
   const input: ReplayInput = {
     dateAxis,
@@ -195,9 +217,73 @@ export async function getAssetTimeline(
     navSeries,
     transitEvents,
   };
+  const fundPnlInput: FundPnlInput = { dateAxis, navSeries, confirmedOrders: fundPnlOrders };
 
+  return { input, fundPnlInput, totalDepositedCents, fundCodes };
+}
+
+/**
+ * 查询用户资产时间线。
+ *
+ * @param db   Drizzle 实例（由 loader 传入）
+ * @param userId 用户 ID
+ * @returns daily 逐日资产快照；latest 最新一天（页面可标注日期）；
+ *   totalDepositedCents 累计投入本金（Σ净入金，分）
+ */
+export async function getAssetTimeline(
+  db: Db,
+  userId: number,
+): Promise<{ daily: DailyAsset[]; latest: DailyAsset | null; totalDepositedCents: number }> {
+  const { input, totalDepositedCents } = await buildReplayInput(db, userId);
   const daily = replayDailyAssets(input);
   const latest = daily.length > 0 ? daily[daily.length - 1] : null;
+  return { daily, latest, totalDepositedCents };
+}
 
-  return { daily, latest };
+/** 收益明细页视图（/me/profit）。序列化安全：loader 数据要跨 SSR 脱水，一律普通对象不外泄 Map */
+export interface ProfitDetailView {
+  daily: DailyAsset[];
+  latest: DailyAsset | null;
+  /** 日期 → 当日各基金收益（当日有持仓/现金流的日期才有 key，含已清仓基金） */
+  fundPnlByDate: Record<string, FundDayPnl[]>;
+  /** fundCode → 基金名 */
+  fundNames: Record<string, string>;
+}
+
+/**
+ * 收益明细页数据：时间线 + 全量按基金归因 + 基金名。
+ * 归因一次算全量（365 天 × 10 基金 ≈ 3650 条，内存级），
+ * 日历点击某天时直接查表，无额外请求。
+ */
+export async function getProfitDetail(
+  db: Db,
+  userId: number,
+): Promise<ProfitDetailView> {
+  const { input, fundPnlInput, fundCodes } = await buildReplayInput(db, userId);
+  const daily = replayDailyAssets(input);
+
+  // 基金名一次 inArray 查询（含已清仓——历史日期的归因里有它们）
+  const funds = fundCodes.length > 0
+    ? await db
+        .select({ code: fund.code, name: fund.name })
+        .from(fund)
+        .where(inArray(fund.code, fundCodes))
+    : [];
+
+  // Map → 普通对象（loader 序列化安全）
+  const fundPnlByDate: Record<string, FundDayPnl[]> = {};
+  for (const [date, list] of attributeFundPnlByDate(fundPnlInput)) {
+    fundPnlByDate[date] = list;
+  }
+  const fundNames: Record<string, string> = {};
+  for (const f of funds) {
+    fundNames[f.code] = f.name;
+  }
+
+  return {
+    daily,
+    latest: daily.length > 0 ? daily[daily.length - 1] : null,
+    fundPnlByDate,
+    fundNames,
+  };
 }
