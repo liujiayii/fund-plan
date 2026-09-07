@@ -1,34 +1,17 @@
-import type { RouteConfig } from "@react-router/dev/routes";
-import { index, route } from "@react-router/dev/routes";
+import { flatRoutes } from "@react-router/fs-routes";
 
 /**
- * 显式路由表。
+ * 约定式路由（flat routes）：文件名即路由，无需手工登记。
  *
- * 公开页（游客可见）：/ /master /leaderboard /funds /funds/:code /login /register
- * 需登录页：/me 系列（鉴权在各自 loader 里用 requireUser 做）
- * 管理页：/admin 系列（loader 里用 requireAdmin 把门，非 admin 一律 403）
+ * 命名规则（点号串联的扁平风格）：
+ *   `_index.tsx`            → /
+ *   `funds._index.tsx`      → /funds（index 路由）
+ *   `funds.$code.tsx`       → /funds/:code（$ 开头是动态参数）
+ *   `me.holdings.$code.tsx` → /me/holdings/:code
+ *
+ * 鉴权不在路由表里，而在各自 loader：
+ *   公开页（游客可见）：/ /master /leaderboard /funds /funds/:code /login /register
+ *   需登录页：/me 系列（loader 里 requireUser 把门）
+ *   管理页：/admin 系列（loader 里 requireAdmin 把门，非 admin 一律 403）
  */
-export default [
-  // ==== 公开 ====
-  index("routes/_index.tsx"),
-  route("master", "routes/master.tsx"),
-  route("leaderboard", "routes/leaderboard.tsx"),
-  route("funds", "routes/funds._index.tsx"),
-  route("funds/:code", "routes/funds.$code.tsx"),
-  route("login", "routes/login.tsx"),
-  route("register", "routes/register.tsx"),
-  route("logout", "routes/logout.tsx"),
-
-  // ==== 需登录 ====
-  route("me", "routes/me._index.tsx"),
-  route("me/holdings", "routes/me.holdings.tsx"),
-  route("me/holdings/:code", "routes/me.holdings.$code.tsx"),
-  route("me/watchlist", "routes/me.watchlist.tsx"),
-  route("me/orders", "routes/me.orders.tsx"),
-  route("me/dca", "routes/me.dca.tsx"),
-  route("me/settings", "routes/me.settings.tsx"),
-
-  // ==== 管理（admin 专属，loader 里 requireAdmin 把门）====
-  route("admin", "routes/admin.tsx"),
-  route("admin/users/:id", "routes/admin.users.$id.tsx"),
-] satisfies RouteConfig;
+export default flatRoutes();

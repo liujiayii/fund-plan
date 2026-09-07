@@ -15,14 +15,11 @@ importers:
         specifier: ^2.6.7
         version: 2.6.7(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@ant-design/icons':
-        specifier: ^6.3.4
+        specifier: 6.3.4
         version: 6.3.4(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@ant-design/pro-components':
         specifier: 3.1.14-7
         version: 3.1.14-7(antd@6.6.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)
-      '@react-router/node':
-        specifier: ^8.3.1
-        version: 8.3.1(@typescript/typescript6@6.0.2)(react-router@8.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
       antd:
         specifier: ^6.6.2
         version: 6.6.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -66,6 +63,9 @@ importers:
       '@react-router/dev':
         specifier: ^8.3.1
         version: 8.3.1(@typescript/typescript6@6.0.2)(babel-plugin-macros@3.1.0)(react-router@8.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@10.2.2)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(wrangler@4.129.0)
+      '@react-router/fs-routes':
+        specifier: 8.3.1
+        version: 8.3.1(@react-router/dev@8.3.1(@typescript/typescript6@6.0.2)(babel-plugin-macros@3.1.0)(react-router@8.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@10.2.2)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(wrangler@4.129.0))(@typescript/typescript6@6.0.2)
       '@types/node':
         specifier: ^26.4.1
         version: 26.4.1
@@ -2085,6 +2085,16 @@ packages:
       typescript:
         optional: true
       wrangler:
+        optional: true
+
+  '@react-router/fs-routes@8.3.1':
+    resolution: {integrity: sha512-bAIk7cvs9ie+Lu0WkznmEPZTLmaocrdg/DrSM7P01UkTG16VTlWP7TDRY8yszLGm6DnR1fbf0sOaa2L7/8QBzg==}
+    engines: {node: '>=22.22.0'}
+    peerDependencies:
+      '@react-router/dev': ^8.3.1
+      typescript: ^5.1.0 || ^6.0.0 || ^7.0.0
+    peerDependenciesMeta:
+      typescript:
         optional: true
 
   '@react-router/node@8.3.1':
@@ -6933,6 +6943,13 @@ snapshots:
     transitivePeerDependencies:
       - babel-plugin-macros
       - supports-color
+
+  '@react-router/fs-routes@8.3.1(@react-router/dev@8.3.1(@typescript/typescript6@6.0.2)(babel-plugin-macros@3.1.0)(react-router@8.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@10.2.2)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(wrangler@4.129.0))(@typescript/typescript6@6.0.2)':
+    dependencies:
+      '@react-router/dev': 8.3.1(@typescript/typescript6@6.0.2)(babel-plugin-macros@3.1.0)(react-router@8.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@10.2.2)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(wrangler@4.129.0)
+      minimatch: 10.2.6
+    optionalDependencies:
+      typescript: '@typescript/typescript6@6.0.2'
 
   '@react-router/node@8.3.1(@typescript/typescript6@6.0.2)(react-router@8.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))':
     dependencies:

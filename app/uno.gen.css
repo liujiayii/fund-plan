@@ -2,7 +2,7 @@
 @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))){*, ::before, ::after, ::backdrop{--un-ease:initial;}}
 @property --un-ease{syntax:"*";inherits:false;}
 /* layer: theme */
-:root, :host { --spacing: 0.25rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); }
+:root, :host { --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); --spacing: 0.25rem; }
 /* layer: default */
 .tab{-moz-tab-size:4;-o-tab-size:4;tab-size:4;}
 .m1{margin:calc(var(--spacing) * 1);}
