@@ -316,7 +316,7 @@ export interface HoldingDetailView extends HoldingView {
  * 读取单只持仓详情。
  *
  * ⚠️ 同源估值契约：这里复用与 getPortfolio 完全相同的 latestNavMap + valuateHolding
- * （包括无净值时的成本价兜底公式），是「单只持仓详情页数据与 /me/holdings 汇总
+ * （包括无净值时的成本价兜底公式），是「单只持仓详情页数据与 /me 持仓汇总
  * 保持一致」这条验收标准的结构性保证——不要在这里重新实现一遍估值逻辑。
  */
 export async function getHoldingDetail(

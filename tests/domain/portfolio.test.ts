@@ -143,6 +143,11 @@ describe("fundMarketValueCents 共享市值函数", () => {
     expect(fundMarketValueCents(6568133, 12345)).toBe(81084);
   });
 
+  it("0.5 份 × 净值 1.05 = 52.5 分，HALF_UP 进位到 53（卡住 .5 边界）", () => {
+    // HALF_EVEN 会得 52——这个用例把 HALF_UP 契约钉死
+    expect(fundMarketValueCents(5000, 10500)).toBe(53);
+  });
+
   it("零份额返回 0", () => {
     expect(fundMarketValueCents(0, 12345)).toBe(0);
   });

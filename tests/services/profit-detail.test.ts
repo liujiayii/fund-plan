@@ -135,6 +135,17 @@ describe("getProfitDetail 按基金归因（端到端）", () => {
     await seedFund();
     const userId = await seedUser();
 
+    // registerUser 用真实时钟写 init 流水（运行测试的当天），而下面的订单用
+    // 注入时钟（08-24 ~ 08-26）——init 会晚于全部订单出现在账本，前向填充在
+    // 注册日取到过期余额，制造 dayPnl=−9.9M 的幻影日（asset-timeline.test.ts
+    // 首测注释记载的同款陷阱，上面的买测试也回拨过）。把 init 流水回拨到
+    // 场景前夜，账本日期序与真实序一致，「逐日 Σ归因 === dayPnl」不变量
+    // 才能在每一天成立。
+    await db
+      .update(transactions)
+      .set({ createdAt: new Date("2026-08-23T02:00:00Z").getTime() })
+      .where(and(eq(transactions.userId, userId), eq(transactions.type, "init")));
+
     // 08-24 15:30 买 → 08-25 确认 @1.5
     await placeBuyOrder(db, env, {
       userId,
@@ -165,6 +176,12 @@ describe("getProfitDetail 按基金归因（端到端）", () => {
     // 单基金场景下它就等于当日总收益（不变量的卖出口径）
     const day = detail.daily.find(d => d.date === "2026-08-26")!;
     expect(d26.reduce((s, f) => s + f.dayPnlCents, 0)).toBe(day.dayPnlCents);
+
+    // 端到端不变量：每天 Σ归因 === dayPnlCents（卖出口径）
+    for (const d of detail.daily) {
+      const sum = (detail.fundPnlByDate[d.date] ?? []).reduce((s, f) => s + f.dayPnlCents, 0);
+      expect(sum).toBe(d.dayPnlCents);
+    }
   });
 
   it("新用户（仅 init 流水）：无归因条目、每日收益全为 0", async () => {

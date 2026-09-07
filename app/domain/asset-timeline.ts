@@ -134,7 +134,7 @@ export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
     const cashCents = cashIdx > 0 ? cashLedger[cashIdx - 1].balance : 0;
 
     // ── 步骤 3：遍历持仓份额，用净值前向填充算市值 ──
-    // 每只基金各自 roundInt 后累加（与 valuateHolding 粒度一致）
+    // 每只基金经 fundMarketValueCents 取整后累加（与 valuateHolding 同源）
     let marketValueCents = 0;
     for (const [fundCode, sharesScaled] of sharesMap) {
       if (sharesScaled === 0)

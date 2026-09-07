@@ -107,7 +107,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         />
       </SectionCard>
 
-      {/* 收益详情：与 /me 完全同款（AssetPnlSummary 单日+累计两格 + 曲线图 + 收益日历），
+      {/* 收益详情：与 /me/profit 收益明细页同款（AssetPnlSummary 单日+累计两格 + 曲线图 + 收益日历），
           游客围观主理人时也能看到「这个盘到底赚没赚」的完整故事 */}
       <SectionCard title="资产走势">
         <AssetPnlSummary daily={timeline.daily} latest={timeline.latest} />

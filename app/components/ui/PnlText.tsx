@@ -18,9 +18,9 @@ export interface PnlTextProps {
  * ⚠️ 尚未收敛干净，别把本组件当成唯一出处：
  *  - `SellDrawer` 的「已实现盈亏」**刻意**仍手写这个模式 —— 只换它一处会让它拿到
  *    NUM_FONT，而同一块里的赎回总额/赎回费合计/预计到账仍是比例字体，块内反而更不一致。
- *  - `PortfolioView` / `me.holdings` 的「浮动盈亏」与 `funds.$code` 的「日涨跌」
- *    手写 +/− 号后把 `pnlColor(v)` 传给 `StatBig` —— 那里要的是大字号主位数字，
- *    本组件给不了。
+ *  - `PortfolioView` 的「浮动盈亏」、`AssetOverviewCard` 的「昨日收益/累计收益」
+ *    与 `funds.$code` 的「日涨跌」手写 +/− 号后把 `pnlColor(v)` 传给 `StatBig` ——
+ *    那里要的是大字号主位数字，本组件给不了。
  * 也就是说本组件收敛的是**列表行与总览副值**这一类，不是全部。
  * （`TxList` 的流水金额形状相似但**不判色**，理由见该文件的注释，不属于待收敛项。）
  *

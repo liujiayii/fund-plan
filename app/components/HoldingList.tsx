@@ -10,8 +10,9 @@ export interface HoldingListProps {
   holdings: HoldingView[];
   /**
    * 名称下方的补充说明。**必填**。
-   * 只读页（公开盘、仪表盘速览）传 `sharesAndNavNote` —— 份额 + 估值时点；
-   * 持仓管理页传份额/成本/净值/批次/待赎回。
+   * 只读页（`HoldingListReadonly`：公开盘与 admin 只读后台）传 `sharesAndNavNote`
+   * —— 份额 + 估值时点；/me 持仓模块传份额 + 估值时点 + 成本（`sharesAndNavNote`
+   * 外再拼一层成本，批次/待赎回留在单只持仓详情页）。
    * ⚠️ 刻意做成必填而非可选：「只读页也得给份额和净值」这条规则此前只写在注释里，
    * 结果被漏掉过两轮（期四引入、期八延续，「持有份额」「净值」各丢过一次）——
    * 旧表格的五列里两者都在，只读不等于可以少给字段。必填把注释约束换成编译错误。
@@ -32,8 +33,8 @@ export interface HoldingListProps {
 
 /**
  * 只读持仓行的 note：「X 份 · 净值 Y（日期）」。
- * 公开盘（`HoldingListReadonly`）与仪表盘速览（`me._index`）共用 ——
- * 两处的旧表格列完全一致，所以 note 也该一致。
+ * 只读页（`HoldingListReadonly`）直接用它；/me 持仓模块以它为底、后面再拼
+ * 「成本」—— 份额与估值时点的语义两处一致，成本只在持仓模块多给一层。
  *
  * ⚠️ 「份」必须显式写。旧表格的 `持有份额` 列渲染的是裸 `sharesToDisplay(v)`，
  * 单位由**列头**承载；卡片里没有列头，去掉后缀就是丢单位。

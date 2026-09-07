@@ -15,7 +15,8 @@ export function meta(_: Route.MetaArgs) {
   return [{ title: "用户详情 · 管理后台 · 模拟基金" }];
 }
 /**
- * admin 看某个用户的盘：只读。渲染复用 /master 那套（PortfolioSummary + 只读列表）。
+ * admin 看某个用户的盘：只读。只读后台沿用 PortfolioSummary 总览 + 只读列表；
+ * /me 与 /master 已改用 AssetOverviewCard（2026-09-07），此处维持旧总览。
  *
  * ⚠️ 文件名里的 `admin_.` 尾下划线是刻意的：断开与 admin.tsx 的嵌套。
  * 此前叫 admin.users.$id.tsx（点号串联=嵌套路由），但 admin.tsx 是普通

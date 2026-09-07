@@ -9,7 +9,7 @@ import { latestNavMap } from "./portfolio-service";
  * 自选基金服务。与持仓无关——用户收藏的基金独立维护，
  * 用于「发现」页与详情页的加自选按钮。
  *
- * 复用 latestNavMap 保证自选列表的净值口径与 /me/holdings 估值同源，
+ * 复用 latestNavMap 保证自选列表的净值口径与 /me 估值同源，
  * 避免两处显示的「最新净值」对不上。
  */
 
@@ -80,7 +80,7 @@ export async function isWatched(
 
 /**
  * 列出自选基金 + 最新净值 + 日涨跌。
- * 复用 latestNavMap 保证与 /me/holdings 估值同源（同一份净值口径）。
+ * 复用 latestNavMap 保证与 /me 估值同源（同一份净值口径）。
  */
 export async function listWatch(db: Db, userId: number): Promise<WatchItem[]> {
   // 按加入时间倒序，最近加的排前面
