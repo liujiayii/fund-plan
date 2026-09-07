@@ -194,7 +194,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
       { replace: true },
     );
     // 刻意只跑一次：深链是「进入页面这一次」的意图，后续参数变化不该重放
-    // eslint-disable-next-line react/exhaustive-deps
+    // eslint-disable-next-line react/exhaustive-deps -- 刻意只跑一次
   }, []);
 
   // 昨日收益：该基金最新有净值交易日的归因收益（净值延迟同步、周末顺延，

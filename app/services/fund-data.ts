@@ -1035,9 +1035,9 @@ export interface FundManager {
   name: string;
   /** 任职起始（如 "2019-05-20"） */
   workTime: string;
-  /** 在管规模（如 "132.66亿元"） */
+  /** 在管规模（本接口无此数据源，恒为空串；字段保留供 UI 兜底链） */
   fundSize: string;
-  /** 任期回报（如 "82.35%"） */
+  /** 任期回报（由 PENAVGROWTH 格式化为 "70.49%" 形态的百分号串） */
   profit: string;
   /** 简介 */
   resume: string;

@@ -34,7 +34,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const fundCode = new URL(request.url).searchParams.get("fund");
   if (fundCode) {
     const orders = await getOrdersByFund(db, user.id, fundCode, 200);
-    // 过滤指示要显示基金名；where 回调风格与本文件 action 一致（不引 drizzle 帮手）
+    // 过滤指示要显示基金名；where 回调风格与 me.dca.tsx 的 action 一致（不引 drizzle 帮手）
     const f = await db.query.fund.findFirst({
       where: (f, { eq }) => eq(f.code, fundCode),
     });
@@ -100,7 +100,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function MeOrders({ loaderData }: Route.ComponentProps) {
   const { orders, fundFilter } = loaderData;
-  // 过滤参数进 URL：持仓详情页深链进来、× 清参回全量，都不额外发请求
+  // 过滤参数进 URL：持仓详情页深链进来；× 清参以 replace 重跑本页 loader（一次请求），无其他副作用
   const [, setSearchParams] = useSearchParams();
   // 待确认委托独立成区：委托管理的主战场，撤单/改单按钮就在眼前，
   // 不再和已成交历史混在一条时间线里（主人反馈「撤单改单难发现」）
