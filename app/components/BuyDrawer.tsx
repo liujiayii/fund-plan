@@ -16,7 +16,7 @@ export interface BuyDrawerProps extends Omit<BuyPanelProps, "onSuccess"> {
  * 为什么抽屉形态又回来了：期三曾删光 BuyDrawer/SellDrawer 把交易收进详情页，
  * 那次收敛解决的是「持仓页交易入口分散」；自选页行内买入是新场景——
  * 用户要「看中就买、不跳页」，弹层 + 复用 BuyPanel 是唯一不动金融逻辑的做法。
- * 决策链详见 docs/superpowers/specs/2026-09-01-buy-drawer-design.md。
+ * 决策链详见 .superpowers/specs/2026-09-01-buy-drawer-design.md。
  *
  * 成功处理由本壳接管（onSuccess 不外露）：toast + 关抽屉。
  */

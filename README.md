@@ -152,7 +152,7 @@ app/
 workers/app.ts  Worker 入口（fetch + scheduled）
 drizzle/        迁移 SQL
 tests/          单元测试与集成测试
-docs/           设计文档、实施计划、部署与开发指南
+docs/           部署与开发指南（设计文档与实施计划为本地工作文档，不入库）
 ```
 
 ## 已知限制
@@ -163,8 +163,5 @@ docs/           设计文档、实施计划、部署与开发指南
 
 ## 文档
 
-- [设计文档](docs/superpowers/specs/2026-08-24-fund-simulator-design.md)——金融内核与三层架构
-- [支付宝式视觉重构设计](docs/superpowers/specs/2026-08-25-alipay-style-refactor-design.md)
-- [收益排行榜设计](docs/superpowers/specs/2026-08-28-leaderboard-design.md)
 - [部署指南](docs/deployment.md)
 - [开发指南](docs/development.md)
