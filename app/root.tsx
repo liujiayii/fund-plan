@@ -1,5 +1,5 @@
 import type { Route } from "./+types/root";
-import { GithubOutlined, LogoutOutlined } from "@ant-design/icons";
+import { GithubOutlined, LogoutOutlined, SettingOutlined } from "@ant-design/icons";
 import { DefaultFooter } from "@ant-design/pro-components";
 import { Layout as AntLayout, Avatar, ConfigProvider, Dropdown, Menu, Space, theme } from "antd";
 import zhCN from "antd/locale/zh_CN";
@@ -14,6 +14,7 @@ import {
   ScrollRestoration,
   useLoaderData,
   useLocation,
+  useNavigate,
 } from "react-router";
 import { MobileTabBar } from "~/components/MobileTabBar";
 import { NavButton } from "~/components/ui/NavButton";
@@ -75,6 +76,8 @@ export default function App() {
   const data = useLoaderData<typeof loader>();
   const location = useLocation();
   const user = data?.user ?? null;
+  // SPA 导航：菜单里的「设置」项走客户端跳转，不做整页刷新
+  const navigate = useNavigate();
 
   // 登出表单引用：Dropdown 的菜单项点击后触发 submit，走 POST /logout。
   // 仍用 form post 而非 client fetch，是为了沿用服务端清 session + 重定向的标准链路。
@@ -156,6 +159,13 @@ export default function App() {
                   placement="bottomRight"
                   menu={{
                     items: [
+                      {
+                        key: "settings",
+                        icon: <SettingOutlined />,
+                        label: "设置",
+                        // 设置页此前全站无入口（只能手输 URL），这里补上门——SPA 跳转
+                        onClick: () => navigate("/me/settings"),
+                      },
                       {
                         key: "logout",
                         icon: <LogoutOutlined />,
