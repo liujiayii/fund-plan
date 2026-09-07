@@ -40,12 +40,9 @@ pnpm test -t "FIFO"                       # 按测试名过滤
 pnpm test:workers tests/services/settle.test.ts
 ```
 
-注意**不要加 `--`**：`pnpm test -- tests/x.test.ts` 会被 pnpm 当成字面参数传成
-`vitest run "--" "tests/x.test.ts"`，过滤失效、静默跑全部测试。
-
-`vitest.config.ts` 只 include `tests/domain/**` 与 `tests/smoke.test.ts`，
-`vitest.workers.config.ts` 只 include `tests/db/**` 与 `tests/services/**`。
-用错配置会报 `No test files found`（并打出 include 范围），照提示换命令即可。
+注意**不要加 `--`**：`pnpm test -- tests/x.test.ts` 会被 pnpm 当成字面参数，
+过滤失效、静默跑全部测试。用错配置会报 `No test files found`（打出 include
+范围），照提示换命令即可。
 
 **手动触发 Cron（不用等到点）：**
 
@@ -78,6 +75,25 @@ workers/app.ts   Worker 入口：export default { fetch, scheduled }
 
 新增金融计算逻辑时**先在 domain 写纯函数 + 单测**，再在 service 层接线。
 这样测试跑得快，也不需要起数据库。
+
+### 约定式路由（flat routes）：文件名即路由
+
+路由由 `@react-router/fs-routes` 的 `flatRoutes()` 按 `app/routes/` 目录的文件名约定
+生成（见 `app/routes.ts`）。新建路由文件**即时生效**，无需登记。命名规则：
+
+- `_index.tsx` → `/`；`funds._index.tsx` → `/funds`（`_index` 后缀是 index 路由）
+- `funds.$code.tsx` → `/funds/:code`（`$` 开头是动态参数）
+- `me.holdings.$code.tsx` → `/me/holdings/:code`（点号串联即层级）
+
+鉴权不在路由表里，而在各自 loader：公开页（`/` `/master` `/leaderboard`
+`/funds*` `/login` `/register`）游客可见；`/me` 系列用 `requireUser` 把门；
+`/admin` 系列用 `requireAdmin` 把门（非 admin 一律 403）。
+
+### loader/action 里取 env 的标准姿势
+
+Cloudflare 的 `env`/`ctx` 由 `workers/app.ts` 注入 `CloudflareContext`，
+路由侧一律通过 `app/services/context.ts` 的 `getAppContext(context)`
+一把取出 `{ db, env, ctx }`，不要自己手写 `context.get(CloudflareContext)`。
 
 ### 精度铁律（改任何涉及金额的代码前必读）
 
@@ -121,9 +137,8 @@ FIFO 逐批消耗，每批按各自持有天数查阶梯费率——所以一笔
 ### D1 免费版每请求 50 条查询是硬顶
 
 列表/聚合页严禁 N+1。旧版 `/admin` 逐人调 `getPortfolio`（每人 2~4 条查询），
-用户过 ~10 人直接 500。正确姿势见 `listUsersOverview`：并行批量取全表 +
-一条 groupBy 计数 + 去重后一次查净值，查询数与用户数无关，聚合全在内存做。
-新增任何「遍历用户/基金再逐条查」的页面之前，先数一数会发多少条查询。
+用户过 ~10 人直接 500。正确姿势见 `listUsersOverview`：查询数与用户数无关，
+聚合全在内存做。新增任何「遍历用户/基金再逐条查」的页面之前，先数查询数。
 
 ### 权限模型
 
@@ -134,8 +149,7 @@ FIFO 逐批消耗，每批按各自持有天数查阶梯费率——所以一笔
 admin **另有只读后台**（PR #34）：`/admin` 用户列表 + 全局统计，
 `/admin/users/:id` 单用户组合与订单。**只有读，没有任何写操作**——排查问题用，
 不是运营工具。`requireAdmin` 对非 admin 一律 403（刻意不重定向登录页，
-不暴露后台存在）；`listUsersOverview` 必须保持批量聚合写法，
-不得退回逐人 `getPortfolio` 的 N+1（原因见下一条陷阱）。
+不暴露后台存在）；`listUsersOverview` 必须保持批量聚合写法，不得退回 N+1。
 
 ### Cron 调度
 
@@ -162,6 +176,15 @@ admin **另有只读后台**（PR #34）：`/admin` 用户列表 + 全局统计�
 
 `fundmobapi` 是移动端接口，带 Chrome UA 会返回 **HTTP 200 但 `Datas` 为空**（静默失败）。
 `app/services/fund-data.ts` 里 `EM_WEB_HEADERS` / `EM_MOBILE_HEADERS` 刻意分开，别合并。
+
+### 绝不安装 @react-router/node（以及 express/serve 适配器）
+
+react-router 的 vite 插件按 **package.json 里是否装了这些包**（`hasNodeDependency()`，
+与代码是否引用无关）判定「托管在 Node 上」，装了就为 SSR 环境保留 `node` 解析条件。
+本项目跑在 workerd，这个条件是错的：曾导致 `@ant-design/icons` 6.3.x 按 node 条件
+解析到 CJS 桥接入口，依赖优化器产出只含 default 的 shim，**所有图标具名导入在
+dev SSR 里变成 undefined、每页 500**（真 Node / 生产 build / CI 全都不炸，纯本地
+静默）。删包即根治。最小复现与完整证据链：`../antd-icons-workerd-repro`。
 
 ### UnoCSS 走 CLI 预生成，不是 Vite 插件
 
@@ -224,9 +247,8 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 - 配置文件全部手写
 
 `pnpm-workspace.yaml` 的 `allowBuilds` 放行了 `esbuild`/`workerd`/`simple-git-hooks`
-的 postinstall（不放行则二进制不下载、git 钩子装不上）。
-`trustPolicyExclude` 豁免了 `semver@6.3.1`（已核实为 pnpm 误判：该版本发布于 2022-01，
-早于 npm provenance 机制推出的 2023-04，不可能有当时不存在的签名）。
+的 postinstall（不放行则二进制不下载、git 钩子装不上）。`trustPolicyExclude`
+豁免了 `semver@6.3.1`（pnpm 误判，考证见 `docs/development.md`）。
 
 ## 代码风格
 
@@ -280,7 +302,7 @@ CodeRabbit 评审处理方式、合并即自动部署的完整规约都在里面
 
 **实施计划 `docs/superpowers/plans/`（是当时的施工图，不是现状描述）：**
 
-进度**只看各计划文件标题下的状态戳**（「状态：已完成 · 日期」），不要看复选框——
-历史上从未勾过，全空不代表没做，勿照此重新施工。一期收尾时必须补盖状态戳，
-格式与作废段落的写法见任一已完成计划的开头，**必须盖在 `For agentic workers` 之前**
-（那行写着「照此逐 Task 施工」，戳晚一行，接手的人就先读到施工指令了）。
+进度**只看各计划文件标题下的状态戳**，不要看复选框（历史上从未勾过，全空
+不代表没做，勿照此重新施工）。一期收尾必须补盖状态戳，且**必须盖在
+`For agentic workers` 之前**（那行是施工指令，戳晚一行，接手的人就先读到
+「照此逐 Task 施工」了）。格式与作废段落写法见任一已完成计划的开头。
