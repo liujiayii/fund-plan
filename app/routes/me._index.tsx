@@ -10,12 +10,9 @@ import {
   Typography,
 } from "antd";
 import { Link, useFetcher } from "react-router";
-import { AssetPnlSummary } from "~/components/AssetPnlSummary";
-import { AssetTrendChart } from "~/components/AssetTrendChart";
+import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
-import { OrderList } from "~/components/OrderList";
-import { PortfolioSummary } from "~/components/PortfolioView";
-import { ProfitCalendar } from "~/components/ProfitCalendar";
+import { QuickEntries } from "~/components/QuickEntries";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
@@ -26,7 +23,7 @@ import { getAssetTimeline } from "~/services/asset-service";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
-import { getOrders, getPortfolio } from "~/services/portfolio-service";
+import { getPortfolio } from "~/services/portfolio-service";
 import { COLOR } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
@@ -39,14 +36,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
 
-  const [portfolio, checkinStatus, orders, timeline] = await Promise.all([
+  const [portfolio, checkinStatus, timeline] = await Promise.all([
     getPortfolio(db, user.id),
     getCheckinStatus(db, user.id),
-    getOrders(db, user.id, 5),
     getAssetTimeline(db, user.id),
   ]);
 
-  return { user, portfolio, checkinStatus, orders, timeline };
+  return { user, portfolio, checkinStatus, timeline };
 }
 
 /** 签到 action */
@@ -67,8 +63,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
-  const { user, portfolio, checkinStatus, orders, timeline } = loaderData;
-  // 总览数字全部交给 PortfolioSummary，这里只需要持仓列表
+  const { user, portfolio, checkinStatus, timeline } = loaderData;
+  // 这里只需要持仓列表；总览数字全部交给 AssetOverviewCard
   const { holdings } = portfolio;
   const fetcher = useFetcher<typeof action>();
   const signing = fetcher.state === "submitting";
@@ -93,23 +89,19 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         )}
       </div>
 
-      {/* 资产总览 */}
+      {/* 资产总览：总资产主位 + 昨日/累计/余额（口径注释见 AssetOverviewCard） */}
       <SectionCard>
-        <PortfolioSummary portfolio={portfolio} />
+        <AssetOverviewCard
+          summary={portfolio.summary}
+          daily={timeline.daily}
+          latest={timeline.latest}
+          totalDepositedCents={timeline.totalDepositedCents}
+        />
       </SectionCard>
 
-      {/* 资产走势：收益摘要（单日+累计两格，消除口径误读）+ 曲线图。
-          曲线默认「累计收益」口径（百万本金下总资产曲线压成直线，看不出收益形状），
-          可在图内切回「总资产」。
-          收益标注「截至 X 日」不写「昨日」——净值同步有延迟 */}
-      <SectionCard title="资产走势">
-        <AssetPnlSummary daily={timeline.daily} latest={timeline.latest} />
-        <AssetTrendChart data={timeline.daily} />
-      </SectionCard>
-
-      {/* 收益日历 */}
-      <SectionCard title="收益日历">
-        <ProfitCalendar data={timeline.daily} />
+      {/* 腰部功能入口：收益明细 / 交易记录 / 定投计划 */}
+      <SectionCard>
+        <QuickEntries />
       </SectionCard>
 
       {/* 每日签到 */}
@@ -186,17 +178,6 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
             )
           : (
               <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />
-            )}
-      </SectionCard>
-
-      {/* 最近订单：extra 文本链接走 SPA 导航（Link） */}
-      <SectionCard title="最近订单" extra={<Link to="/me/orders">全部订单 →</Link>}>
-        {orders.length === 0
-          ? (
-              <EmptyState description="还没有交易记录" />
-            )
-          : (
-              <OrderList orders={orders} />
             )}
       </SectionCard>
     </Space>

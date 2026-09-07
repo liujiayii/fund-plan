@@ -1,6 +1,7 @@
 import type { Route } from "./+types/master";
 import { Pagination, Space, Tabs, Tag, Typography } from "antd";
 import { useState } from "react";
+import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { AssetPnlSummary } from "~/components/AssetPnlSummary";
 import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { DcaPlanList } from "~/components/DcaPlanList";
@@ -8,7 +9,6 @@ import { OrderList } from "~/components/OrderList";
 import {
   AdminNotReady,
   HoldingListReadonly,
-  PortfolioSummary,
 } from "~/components/PortfolioView";
 import { ProfitCalendar } from "~/components/ProfitCalendar";
 import { TxList } from "~/components/TxList";
@@ -97,8 +97,14 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
+      {/* 顶部与 /me 同款总览卡（timeline 数据 loader 本来就查了，零额外查询） */}
       <SectionCard>
-        <PortfolioSummary portfolio={portfolio} />
+        <AssetOverviewCard
+          summary={portfolio.summary}
+          daily={timeline.daily}
+          latest={timeline.latest}
+          totalDepositedCents={timeline.totalDepositedCents}
+        />
       </SectionCard>
 
       {/* 收益详情：与 /me 完全同款（AssetPnlSummary 单日+累计两格 + 曲线图 + 收益日历），
