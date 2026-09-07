@@ -79,6 +79,8 @@ const CACHE_TTL = {
   bonus: 86400,
   /** 基金经理详情缓存 1 天 */
   manager: 86400,
+  /** 投资风格缓存 1 天 */
+  style: 86400,
 } as const;
 
 /**
@@ -1023,7 +1025,12 @@ export async function fetchBonusHistory(
   }
 }
 
-/** 基金经理条目（fundSize/profit 为东财原样展示字符串，透传不加工） */
+/**
+ * 基金经理条目。字段口径如实描述（Task 8 评审 Minor 修正，2026-09-08）：
+ * profit 由 PENAVGROWTH 格式化为百分号串（如 "70.49%"），不是原样透传；
+ * fundSize / resume 在本接口（FundMNMangerList）无数据源、恒为空串，
+ * 页面按空值隐藏对应行。
+ */
 export interface FundManager {
   name: string;
   /** 任职起始（如 "2019-05-20"） */
@@ -1092,6 +1099,65 @@ export async function fetchManagerInfo(
   }
   catch (err) {
     console.error(`[fund-data] 拉取基金 ${code} 经理详情失败：`, err);
+    return null;
+  }
+}
+
+/**
+ * 投资风格。东财 FundMNTagList——移动端唯一有文本风格的源
+ * （FundMNDetailInformation 的 FUNDINVESTSTYLE/INVESTSTYLE 实测不存在，
+ * 2026-09-08 主人裁决换源）。
+ * ⚠️ 用 EM_MOBILE_HEADERS；失败返回 null，概况卡显示 —。
+ *
+ * 2026-09-08 实测（16 只基金采样）：Datas 是数组（每行 { FEATYPE, TAGLIST[] }），
+ * 标签文本在 TAGLIST[].FEANAME——骨架假设的「Datas 上的单字段」不存在。且标签
+ * 混装：「十年优秀基 / 夏普高 / 优秀基金经理 / 长期绩优基金」等是质量标签，
+ * 风格标签全族以「投资」开头（如「投资大盘股」）——「投资」前缀过滤是
+ * 采样归纳的启发式，不是接口契约；多标签基金里质量标签可能排在前面，
+ * 取首标签不可行。无风格标签（纯质量标签，或债券基金直接回 Datas:null）
+ * 返回 null，概况卡显示 —。
+ */
+export async function fetchInvestStyle(
+  env: Env,
+  code: string,
+): Promise<string | null> {
+  const cacheKey = `fund:style:${code}`;
+  const cached = await env.KV.get(cacheKey);
+  if (cached) {
+    try {
+      // 命中哨兵 "null" 时 JSON.parse 天然还原 null（非空串判真，链路自洽）
+      return JSON.parse(cached) as string | null;
+    }
+    catch {
+      /* 缓存损坏 */
+    }
+  }
+
+  try {
+    const url
+      = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNTagList`
+        + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
+    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
+    const json = (await resp.json()) as {
+      Datas?: { TAGLIST?: { FEANAME?: string }[] }[] | null;
+    };
+    // 摊平所有分组的标签，只留「投资X」风格文本（启发式的实测证据见顶注）
+    const styles = (json.Datas ?? [])
+      .flatMap(d => d.TAGLIST ?? [])
+      .map(t => (t.FEANAME ?? "").trim())
+      .filter(name => name.startsWith("投资"));
+    // 多枚风格标签（如「投资大盘股」+ 未来的「投资港股」类）用「 / 」串联
+    const style = styles.length > 0 ? styles.join(" / ") : null;
+    // 无风格也写缓存：JSON.stringify(null) 就是 "null"，作哨兵——不写的话
+    // 这类基金每次访问都实打东财，违背顶注「全部走 KV 缓存」铁律。
+    // TTL 1 天：次日缓存过期有一次重试拿真值的机会（哨兵方案的附带优点）
+    await env.KV.put(cacheKey, JSON.stringify(style), {
+      expirationTtl: CACHE_TTL.style,
+    });
+    return style;
+  }
+  catch (err) {
+    console.error(`[fund-data] 拉取基金 ${code} 投资风格失败：`, err);
     return null;
   }
 }

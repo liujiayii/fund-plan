@@ -1,10 +1,11 @@
 import type { Route } from "./+types/funds.$code";
 import type { RedeemTier } from "~/domain/redeem";
 import type { DcaPlanView, HoldingBrief } from "~/services/portfolio-service";
-import { Alert, Button, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Progress, Segmented, Space, Table, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useState } from "react";
 import { Link, useFetcher } from "react-router";
+import { AssetAllocationChart } from "~/components/AssetAllocationChart";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { DcaDrawer } from "~/components/DcaDrawer";
 import { NavChart } from "~/components/NavChart";
@@ -22,15 +23,19 @@ import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { getAppContext } from "~/services/context";
 import {
   ensureFund,
+  fetchAssetAllocation,
+  fetchBonusHistory,
   fetchFundDetail,
   fetchFundPosition,
   fetchIndexNav,
+  fetchInvestStyle,
+  fetchManagerInfo,
   fetchNavHistory,
 } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
 import { getDcaPlans, getHoldingBrief, getNavSeries } from "~/services/portfolio-service";
 import { isWatched } from "~/services/watchlist-service";
-import { pnlColor } from "~/theme";
+import { NUM_FONT, pnlColor } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -116,12 +121,18 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // 阶段涨幅：本地 fund_nav 计算（不新增接口依赖）
   const periodReturns = calcPeriodReturns(series);
 
-  // 基金概况与重仓股：东财接口，拉不到为 null/[]（不渲染对应卡片）
+  // 基金概况与投资组合：东财接口，拉不到为 null/空（不渲染对应卡片）
   // 沪深300 基准线：拉不到返回空数组，组件内传 undefined 即不画基准线（彩蛋，可砍）
-  const [detail, position, indexNav] = await Promise.all([
+  // 稳健档新增：资产配置 / 历史分红 / 基金经理详情 / 投资风格
+  // （fund-data.ts 里有各接口字段名的实测注记）
+  const [detail, position, indexNav, allocation, bonus, manager, investStyle] = await Promise.all([
     fetchFundDetail(env, code),
     fetchFundPosition(env, code),
     fetchIndexNav(env, "1.000300", 400),
+    fetchAssetAllocation(env, code),
+    fetchBonusHistory(env, code),
+    fetchManagerInfo(env, code),
+    fetchInvestStyle(env, code),
   ]);
 
   return {
@@ -146,6 +157,10 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     detail,
     position,
     indexNav,
+    allocation,
+    bonus,
+    manager,
+    investStyle,
   };
 }
 
@@ -173,6 +188,26 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
   // 抽屉开合（买入沿用现有壳；定投用 DcaDrawer）
   const [buyOpen, setBuyOpen] = useState(false);
   const [dcaOpen, setDcaOpen] = useState(false);
+
+  // 投资组合三视图：数据哪个空藏哪个；选中项被数据淘汰时回落到第一个可用项
+  const [posView, setPosView] = useState<string>("stocks");
+  const posOptions = [
+    ...(loaderData.position.stocks.length > 0 ? [{ value: "stocks", label: "股票" }] : []),
+    ...(loaderData.position.bonds.length > 0 ? [{ value: "bonds", label: "债券" }] : []),
+    ...(loaderData.position.industries.length > 0 ? [{ value: "industries", label: "行业" }] : []),
+  ];
+  const activePosView = posOptions.some(o => o.value === posView)
+    ? posView
+    : posOptions[0]?.value;
+
+  // 同年多笔分红加序号区分标签（Task 8 评审 Minor 的落地）：
+  // 同年第 n 笔的 label 为 `${year}·${n}`，仅同年多笔时加序号，单笔保持 `${year}`。
+  // bonus 为 null 时不进 map，内层 `!` 断言不会被求值
+  const bonusRows = (loaderData.bonus ?? []).map((b, i) => {
+    const nth = loaderData.bonus!.filter((x, j) => x.year === b.year && j <= i).length;
+    const sameYearTotal = loaderData.bonus!.filter(x => x.year === b.year).length;
+    return { ...b, label: sameYearTotal > 1 ? `${b.year}·${nth}` : b.year };
+  });
 
   const risk = RISK_MAP[f.riskLevel] ?? RISK_MAP[3];
   // 日涨跌率存的是万分之，转成百分比展示
@@ -264,6 +299,219 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </SectionCard>
 
+      {/* 基金经理：经理详情接口拉到就富展示，拉不到退化为只有名字的简卡 */}
+      {(loaderData.manager?.length ?? 0) > 0
+        ? (
+            <SectionCard title="基金经理">
+              {loaderData.manager!.map((m, i) => (
+                <div
+                  key={`${m.name}-${i}`}
+                  style={{ marginBottom: i === loaderData.manager!.length - 1 ? 0 : 16 }}
+                >
+                  <DataRow label="姓名" value={m.name || "—"} />
+                  <DataRow label="任职日期" value={m.workTime || "—"} />
+                  <DataRow label="在管规模" value={m.fundSize || "—"} mono />
+                  <DataRow label="任期回报" value={m.profit || "—"} mono last />
+                  {m.resume && (
+                    <Paragraph
+                      type="secondary"
+                      style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}
+                      ellipsis={{ rows: 3, expandable: true, symbol: "展开" }}
+                    >
+                      {m.resume}
+                    </Paragraph>
+                  )}
+                </div>
+              ))}
+            </SectionCard>
+          )
+        : loaderData.detail?.manager && (
+          <SectionCard title="基金经理">
+            <DataRow label="姓名" value={loaderData.detail.manager} last />
+          </SectionCard>
+        )}
+
+      {loaderData.detail && (
+        <SectionCard title="基金概况">
+          {/* 基金评级：星级比数字快读；0/缺省显示 — */}
+          <DataRow
+            label="基金评级"
+            value={loaderData.detail.rating ? "★".repeat(loaderData.detail.rating) : "—"}
+          />
+          {/* 投资风格：FundMNTagList 换源后的真文本（补-1）；detail.investStyle
+              恒空串，留在兜底链里无妨 */}
+          <DataRow label="投资风格" value={loaderData.investStyle || loaderData.detail.investStyle || "—"} />
+          <DataRow label="赎回状态" value={loaderData.detail.redeemStatus || "—"} />
+          <DataRow label="基金公司" value={loaderData.detail.company || "—"} />
+          <DataRow label="成立日期" value={loaderData.detail.estabDate || "—"} />
+          <DataRow
+            label="最新规模"
+            value={loaderData.detail.scaleYuan !== null
+              ? `${(loaderData.detail.scaleYuan / 1e8).toFixed(2)} 亿元`
+              : "—"}
+            mono
+          />
+          <DataRow label="管理费" value={rateToPercent(loaderData.detail.mgmtFeeRate)} mono />
+          <DataRow label="托管费" value={rateToPercent(loaderData.detail.trustFeeRate)} mono last />
+          {loaderData.detail.benchmark && (
+            <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+              业绩基准：
+              {loaderData.detail.benchmark}
+            </Paragraph>
+          )}
+        </SectionCard>
+      )}
+
+      {/* 资产配置：股票/债券/现金占净值比环形图 */}
+      {loaderData.allocation && (
+        <SectionCard title="资产配置">
+          <AssetAllocationChart
+            stocks={loaderData.allocation.stocks}
+            bonds={loaderData.allocation.bonds}
+            cash={loaderData.allocation.cash}
+          />
+          <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
+            股票 / 债券 / 现金占净值比，来自基金最新定期报告。
+          </Paragraph>
+        </SectionCard>
+      )}
+
+      {/* 投资组合：股票/债券/行业三视图，数据哪个空藏哪个；三块全空整卡不渲染 */}
+      {posOptions.length > 0 && (
+        <SectionCard title="投资组合">
+          {posOptions.length > 1 && (
+            <div className="fp-h-scroll" style={{ marginBottom: 16 }}>
+              <Segmented
+                size="small"
+                value={activePosView}
+                onChange={v => setPosView(String(v))}
+                options={posOptions}
+              />
+            </div>
+          )}
+
+          {activePosView === "stocks" && (
+            <>
+              {/* 桌面视图：股票 5 列 Table（原重仓股卡原样搬入） */}
+              <div className="fp-desktop">
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey="code"
+                  dataSource={loaderData.position.stocks.slice(0, 10)}
+                  columns={[
+                    { title: "代码", dataIndex: "code" },
+                    { title: "简称", dataIndex: "name" },
+                    {
+                      title: "占净值比",
+                      dataIndex: "ratio",
+                      align: "right",
+                      render: (v: number) => rateToPercent(v),
+                    },
+                    { title: "行业", dataIndex: "industry" },
+                    { title: "增减持", dataIndex: "changeType" },
+                  ]}
+                />
+              </div>
+              {/* 窄屏：降级成 DataRow，字段不缺（原重仓股卡原样搬入） */}
+              <div className="fp-mobile">
+                {loaderData.position.stocks.slice(0, 10).map(p => (
+                  <div key={p.code} style={{ marginBottom: 8 }}>
+                    <Text strong style={{ fontSize: 13 }}>
+                      {p.name}
+                      （
+                      {p.code}
+                      ）
+                    </Text>
+                    <DataRow label="占净值比" value={rateToPercent(p.ratio)} mono />
+                    <DataRow label="行业" value={p.industry} />
+                    <DataRow label="增减持" value={p.changeType} last />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {activePosView === "bonds" && (
+            <>
+              <div className="fp-desktop">
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey="code"
+                  dataSource={loaderData.position.bonds}
+                  columns={[
+                    { title: "代码", dataIndex: "code" },
+                    { title: "名称", dataIndex: "name" },
+                    {
+                      title: "占净值比",
+                      dataIndex: "ratio",
+                      align: "right",
+                      render: (v: number) => rateToPercent(v),
+                    },
+                  ]}
+                />
+              </div>
+              <div className="fp-mobile">
+                {loaderData.position.bonds.map((b, i) => (
+                  <div key={b.code} style={{ marginBottom: 8 }}>
+                    <Text strong style={{ fontSize: 13 }}>
+                      {b.name}
+                      （
+                      {b.code}
+                      ）
+                    </Text>
+                    <DataRow
+                      label="占净值比"
+                      value={rateToPercent(b.ratio)}
+                      mono
+                      last={i === loaderData.position.bonds.length - 1}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {activePosView === "industries" && (
+            <div>
+              {loaderData.position.industries.map(ind => (
+                <div key={ind.name} style={{ marginBottom: 8 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 13,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <span>{ind.name}</span>
+                    <span style={{ fontFamily: NUM_FONT }}>{rateToPercent(ind.ratio)}</span>
+                  </div>
+                  {/* ratio 是万分之（645 = 6.45%），Progress 吃百分数 */}
+                  <Progress percent={ind.ratio / 100} showInfo={false} size="small" />
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      )}
+
+      {/* 历史分红：无记录整卡不渲染 */}
+      {(loaderData.bonus?.length ?? 0) > 0 && (
+        <SectionCard title="历史分红">
+          {bonusRows.map((b, i) => (
+            <DataRow
+              key={`${b.year}-${i}`}
+              label={b.label}
+              value={`每 10 份派 ${b.per10Shares} 元${b.recordDate ? ` · 除息日 ${b.recordDate}` : ""}`}
+              mono
+              last={i === bonusRows.length - 1}
+            />
+          ))}
+        </SectionCard>
+      )}
+
       <SectionCard title="赎回费率阶梯">
         <Paragraph type="secondary">
           赎回按
@@ -288,73 +536,6 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           />
         ))}
       </SectionCard>
-
-      {loaderData.detail && (
-        <SectionCard title="基金概况">
-          <DataRow label="基金经理" value={loaderData.detail.manager || "—"} />
-          <DataRow label="基金公司" value={loaderData.detail.company || "—"} />
-          <DataRow label="成立日期" value={loaderData.detail.estabDate || "—"} />
-          <DataRow
-            label="最新规模"
-            value={loaderData.detail.scaleYuan !== null
-              ? `${(loaderData.detail.scaleYuan / 1e8).toFixed(2)} 亿元`
-              : "—"}
-            mono
-          />
-          <DataRow label="管理费" value={rateToPercent(loaderData.detail.mgmtFeeRate)} mono />
-          <DataRow label="托管费" value={rateToPercent(loaderData.detail.trustFeeRate)} mono last />
-          {loaderData.detail.benchmark && (
-            <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-              业绩基准：
-              {loaderData.detail.benchmark}
-            </Paragraph>
-          )}
-        </SectionCard>
-      )}
-
-      {loaderData.position.stocks.length > 0 && (
-        <SectionCard title="重仓股（前 10）">
-          {/* 桌面视图：5 列 Table 原样保留（双渲染，列不动）——
-              本卡是投资组合的股票视图（Task 9 升级为三视图） */}
-          <div className="fp-desktop">
-            <Table
-              size="small"
-              pagination={false}
-              rowKey="code"
-              dataSource={loaderData.position.stocks.slice(0, 10)}
-              columns={[
-                { title: "代码", dataIndex: "code" },
-                { title: "简称", dataIndex: "name" },
-                {
-                  title: "占净值比",
-                  dataIndex: "ratio",
-                  align: "right",
-                  render: (v: number) => rateToPercent(v),
-                },
-                { title: "行业", dataIndex: "industry" },
-                { title: "增减持", dataIndex: "changeType" },
-              ]}
-            />
-          </div>
-          {/* 窄屏：降级成 DataRow，字段不缺——代码/简称并进标题行，
-              占净值比/行业/增减持各占一行（同 SellPanel 的批次降级） */}
-          <div className="fp-mobile">
-            {loaderData.position.stocks.slice(0, 10).map(p => (
-              <div key={p.code} style={{ marginBottom: 8 }}>
-                <Text strong style={{ fontSize: 13 }}>
-                  {p.name}
-                  （
-                  {p.code}
-                  ）
-                </Text>
-                <DataRow label="占净值比" value={rateToPercent(p.ratio)} mono />
-                <DataRow label="行业" value={p.industry} />
-                <DataRow label="增减持" value={p.changeType} last />
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
 
       {!latest && (
         <Alert
