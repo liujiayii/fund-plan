@@ -5,8 +5,14 @@
  * `valuateHolding`），额外展示份额批次明细——把 FIFO 阶梯费率这个系统最独特的
  * 设计对用户可见，并以「交易 / 定投 / 订单」三页签覆盖加仓、卖出、
  * 该基金定投计划与交易流水（定投与全局 /me/dca 同协议，service 层复用）。
+ *
+ * ⚠️ 文件名里的 `holdings_` 尾下划线是刻意的：断开与 me.holdings.tsx 的嵌套。
+ * 此前叫 me.holdings.$code.tsx（点号串联=嵌套路由），但 me.holdings.tsx 是
+ * 普通列表组件没有 <Outlet/>，嵌套子路由永远渲染不出来——整页访问时 title
+ * 换了正文却还是列表页，SPA 化后症状放大成「URL 变了内容不变」（与
+ * admin_.users.$id.tsx 同款坑，修复同法）。
  */
-import type { Route } from "./+types/me.holdings.$code";
+import type { Route } from "./+types/me.holdings_.$code";
 import { message, Space, Table, Tabs, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useState } from "react";
