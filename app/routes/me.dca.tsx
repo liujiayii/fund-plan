@@ -9,10 +9,11 @@ import {
   Modal,
   Select,
   Space,
+  Tag,
   Typography,
 } from "antd";
 import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useSearchParams } from "react-router";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
@@ -38,8 +39,23 @@ export function meta(_: Route.MetaArgs) {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
-  const plans = await getDcaPlans(db, user.id);
-  return { plans };
+
+  // ?fund= 过滤：持仓详情页「定投计划」入口带该参数进来。
+  // getDcaPlans 本就吃可选 fundCode（持仓详情页定投面板同款），零 service 改动。
+  // 空串（手输裸 ?fund=）视同未过滤——`??` 不吃空串会把 eq(fundCode, "") 查成
+  // 空列表吓到用户，`||` 与 me.orders 的 `if (fundCode)` 口径对齐（评审修正）
+  const fundCode = new URL(request.url).searchParams.get("fund");
+  const plans = await getDcaPlans(db, user.id, fundCode || undefined);
+
+  // 过滤指示要显示基金名（where 回调风格与本文件 action 一致）
+  let fundFilter: { code: string; name: string } | null = null;
+  if (fundCode) {
+    const f = await db.query.fund.findFirst({
+      where: (f, { eq }) => eq(f.code, fundCode),
+    });
+    fundFilter = { code: fundCode, name: f?.name ?? fundCode };
+  }
+  return { plans, fundFilter };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -122,7 +138,8 @@ const WEEKDAYS = [
 ];
 
 export default function MeDca({ loaderData }: Route.ComponentProps) {
-  const { plans } = loaderData;
+  const { plans, fundFilter } = loaderData;
+  const [, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<typeof action>();
   const [open, setOpen] = useState(false);
   const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly">("monthly");
@@ -162,6 +179,24 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
       )}
       {fetcher.data?.error && (
         <Alert type="error" showIcon message={fetcher.data.error} closable />
+      )}
+
+      {/* 过滤指示：仅看某基金（来自持仓详情页入口）；× 清参回全量 */}
+      {fundFilter && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <Tag
+            color="blue"
+            closable
+            onClose={() => setSearchParams({}, { replace: true })}
+          >
+            仅看
+            {" "}
+            {fundFilter.name}
+            （
+            {fundFilter.code}
+            ）
+          </Tag>
+        </div>
       )}
 
       <SectionCard>
@@ -266,7 +301,12 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
             layout="vertical"
             extra="6 位数字。需先在基金详情页访问过一次，系统才会收录该基金"
           >
-            <Input name="fundCode" placeholder="如 000001" maxLength={6} />
+            <Input
+              name="fundCode"
+              placeholder="如 000001"
+              maxLength={6}
+              defaultValue={fundFilter?.code}
+            />
           </Form.Item>
 
           <Form.Item label="每期金额（元）" layout="vertical">

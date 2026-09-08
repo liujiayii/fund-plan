@@ -2,7 +2,7 @@ import type { ReplayInput } from "~/domain/asset-timeline";
 import type { FundPnlInput } from "~/domain/fund-pnl";
 import { describe, expect, it } from "vitest";
 import { replayDailyAssets } from "~/domain/asset-timeline";
-import { attributeFundPnlByDate } from "~/domain/fund-pnl";
+import { attributeFundPnlByDate, cumulateFundPnl } from "~/domain/fund-pnl";
 
 /** 归因输入骨架，测试只覆写关心的字段 */
 function buildAttrInput(over: Partial<FundPnlInput> = {}): FundPnlInput {
@@ -273,5 +273,37 @@ describe("归因不变量：Σ各基金当日收益 === replayDailyAssets 当日
       }),
       { dateAxis, navSeries: new Map(), confirmedOrders: [] },
     );
+  });
+});
+
+describe("cumulateFundPnl 累计盈亏前缀和", () => {
+  it("空输入返回空数组", () => {
+    expect(cumulateFundPnl([])).toEqual([]);
+  });
+
+  it("逐日前缀和：首日 −申购费、次日回正，末值 === Σ每日收益", () => {
+    const r = cumulateFundPnl([
+      { date: "2026-08-25", dayPnlCents: -1500 }, // 申购费
+      { date: "2026-08-26", dayPnlCents: 2000 },
+      { date: "2026-08-27", dayPnlCents: -500 },
+    ]);
+    expect(r).toEqual([
+      { date: "2026-08-25", cumPnlCents: -1500 },
+      { date: "2026-08-26", cumPnlCents: 500 },
+      { date: "2026-08-27", cumPnlCents: 0 },
+    ]);
+  });
+
+  it("全负序列：累计值如实下穿 0 线（不截负）", () => {
+    const r = cumulateFundPnl([
+      { date: "2026-08-25", dayPnlCents: -100 },
+      { date: "2026-08-26", dayPnlCents: -200 },
+    ]);
+    expect(r[1]!.cumPnlCents).toBe(-300);
+  });
+
+  it("单笔输入：累计值 === 当日收益", () => {
+    const r = cumulateFundPnl([{ date: "2026-08-25", dayPnlCents: 12345 }]);
+    expect(r).toEqual([{ date: "2026-08-25", cumPnlCents: 12345 }]);
   });
 });

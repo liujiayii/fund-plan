@@ -171,3 +171,28 @@ export function attributeFundPnlByDate(
 
   return result;
 }
+
+/** 累计盈亏序列点 */
+export interface FundCumPnlPoint {
+  date: string;
+  /** 自首笔确认日至该日的累计盈亏（分，含已实现盈亏与全部费用） */
+  cumPnlCents: number;
+}
+
+/**
+ * 单基金逐日收益 → 累计盈亏序列（整数域前缀和）。
+ * 输入须按 date 升序（getFundProfitDetail 从归因 Map 按插入序产出）；
+ * 空输入返回空数组。
+ *
+ * 累加在「分」整数域进行——量级远低于 2^53，零误差，无需 Decimal
+ * （与 AssetTrendChart 累计收益前缀和同款论证）。
+ */
+export function cumulateFundPnl(
+  entries: { date: string; dayPnlCents: number }[],
+): FundCumPnlPoint[] {
+  let cum = 0;
+  return entries.map((e) => {
+    cum += e.dayPnlCents;
+    return { date: e.date, cumPnlCents: cum };
+  });
+}
