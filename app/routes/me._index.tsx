@@ -85,8 +85,12 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
     [holdings, sortKey],
   );
 
-  // 行内买入：单实例 BuyDrawer + 当前基金状态（比每行一个抽屉省 DOM）。
-  // 数据全部来自 loader 现成字段：费率/起购是 HoldingView 新透出的，现金取 summary
+  // 行内买入：单实例 BuyDrawer（比每行一个抽屉省 DOM）+ 双状态——
+  // buyOpen 管开合、buyTarget 管数据。关闭动画播放期间 buyTarget 保持不变，
+  // 抽屉退场时仍有数据可画，不会闪成空壳（自选页 PR #32 同款模式，下单成功
+  // 自动关抽屉也走这条路）；输入重置由 BuyDrawer 的 destroyOnHidden 兜底。
+  // 数据全来自 loader 现成字段：费率/起购是 HoldingView 新透出的，现金取 summary
+  const [buyOpen, setBuyOpen] = useState(false);
   const [buyTarget, setBuyTarget] = useState<HoldingView | null>(null);
 
   return (
@@ -226,7 +230,10 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
                         size="small"
                         // 无净值无法定价（与基金详情页买入按钮同一守卫语义）
                         disabled={!(h.navScaled > 0)}
-                        onClick={() => setBuyTarget(h)}
+                        onClick={() => {
+                          setBuyTarget(h);
+                          setBuyOpen(true);
+                        }}
                       >
                         买入
                       </Button>
@@ -245,10 +252,11 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
       </SectionCard>
 
       {/* 行内买入抽屉：提交到 /me/trade 资源路由（全站买入统一入口）。
-          buyTarget 置空即关闭；destroyOnHidden 保证重开时输入重置 */}
+          onClose 只收 buyOpen——buyTarget 保留数据撑完退场动画，不闪空壳；
+          destroyOnHidden 保证重开时输入重置 */}
       <BuyDrawer
-        open={buyTarget !== null}
-        onClose={() => setBuyTarget(null)}
+        open={buyOpen}
+        onClose={() => setBuyOpen(false)}
         fundCode={buyTarget?.fundCode ?? ""}
         fundName={buyTarget?.fundName ?? ""}
         purchaseRate={buyTarget?.purchaseRate ?? 0}
