@@ -24,8 +24,7 @@ export interface FundListItemProps {
   actions?: ReactNode;
   /**
    * 名称链接目标，默认 /funds/{fundCode}。
-   * 期一没有调用方传它——留着是给期三用：`/me/holdings` 的行要链到
-   * 单只持仓详情页 `/me/holdings/{code}` 而不是基金详情页。
+   * `/me` 的持仓行要链到单只持仓详情页 `/me/holdings/{code}` 而不是基金详情页。
    */
   href?: string;
   /** 列表最后一行传 true，不画分割线 */

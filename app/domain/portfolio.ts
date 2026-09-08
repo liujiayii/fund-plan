@@ -33,6 +33,20 @@ export interface PortfolioValuation {
 }
 
 /**
+ * 份额 × 净值 → 市值（分）。估值取整的**唯一入口**。
+ * valuateHolding、replayDailyAssets 与 fund-pnl 归因三处必须同源调用本函数——
+ * 任何一处手写这个公式都可能取整不一致，导致 Σ归因 ≠ 当日总收益。
+ */
+export function fundMarketValueCents(
+  sharesScaled: number,
+  navScaled: number,
+): number {
+  return roundInt(
+    sharesToDecimal(sharesScaled).mul(navToDecimal(navScaled)).mul(YUAN),
+  );
+}
+
+/**
  * 单只持仓估值。
  *   市值 = 份额 × 净值
  *   浮动盈亏 = 市值 − 成本
@@ -44,8 +58,10 @@ export function valuateHolding(i: {
   totalCostCents: number;
   navScaled: number;
 }): HoldingValuation {
-  const marketValueCents = roundInt(
-    sharesToDecimal(i.totalSharesScaled).mul(navToDecimal(i.navScaled)).mul(YUAN),
+  // 市值取整收口在 fundMarketValueCents（全站唯一入口）
+  const marketValueCents = fundMarketValueCents(
+    i.totalSharesScaled,
+    i.navScaled,
   );
   const pnlCents = marketValueCents - i.totalCostCents;
   const pnlRate

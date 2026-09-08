@@ -80,7 +80,14 @@ function fmtPnlShort(cents: number): string {
 // 组件
 // ─────────────────────────────────────────────────────────────
 
-export function ProfitCalendar({ data }: { data: DailyAsset[] }) {
+export function ProfitCalendar({
+  data,
+  onPickDate,
+}: {
+  data: DailyAsset[];
+  /** 点击有数据日期的回调（收益明细页消费）；不传则纯展示（/master） */
+  onPickDate?: (date: string) => void;
+}) {
   // 空数据直接走空态
   if (data.length === 0) {
     return <EmptyState description="暂无收益日历" />;
@@ -90,7 +97,7 @@ export function ProfitCalendar({ data }: { data: DailyAsset[] }) {
   // SSR 安全：服务端/客户端时区不同不会导致 hydration 不一致
   const lastDataMonth = data[data.length - 1]!.date.slice(0, 7);
 
-  return <ProfitCalendarInner data={data} lastDataMonth={lastDataMonth} />;
+  return <ProfitCalendarInner data={data} lastDataMonth={lastDataMonth} onPickDate={onPickDate} />;
 }
 
 /**
@@ -100,9 +107,11 @@ export function ProfitCalendar({ data }: { data: DailyAsset[] }) {
 function ProfitCalendarInner({
   data,
   lastDataMonth,
+  onPickDate,
 }: {
   data: DailyAsset[];
   lastDataMonth: string;
+  onPickDate?: (date: string) => void;
 }) {
   // currentMonth 状态：初始值从 data 派生，SSR 安全
   const [currentMonth, setCurrentMonth] = useState(lastDataMonth);
@@ -189,12 +198,27 @@ function ProfitCalendarInner({
             ? pnlColor(d.dayPnlCents)
             : undefined;
 
+          // 有数据且调用方要交互时，格子可点（键盘可达：role + tabIndex + Enter/Space）
+          const clickable = hasData && onPickDate !== undefined;
+
           return (
             <div
               key={day}
               // fp-cal-cell：窄屏方形化/内距/格高下沉 responsive.css（spec §9），
               // inline 只留桌面值，别把两端同生效的值写进来（桌面零回归）
               className="fp-cal-cell"
+              role={clickable ? "button" : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              aria-label={clickable ? `查看 ${dateStr} 收益明细` : undefined}
+              onClick={clickable ? () => onPickDate?.(dateStr) : undefined}
+              onKeyDown={clickable
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onPickDate?.(dateStr);
+                    }
+                  }
+                : undefined}
               style={{
                 position: "relative",
                 background: bg,
@@ -204,6 +228,7 @@ function ProfitCalendarInner({
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
+                cursor: clickable ? "pointer" : undefined,
               }}
             >
               {/* 日号：右上角小字 */}

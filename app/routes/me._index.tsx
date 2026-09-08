@@ -9,16 +9,15 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { Link, useFetcher } from "react-router";
-import { AssetPnlSummary } from "~/components/AssetPnlSummary";
-import { AssetTrendChart } from "~/components/AssetTrendChart";
+import { useMemo, useState } from "react";
+import { useFetcher } from "react-router";
+import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
-import { OrderList } from "~/components/OrderList";
-import { PortfolioSummary } from "~/components/PortfolioView";
-import { ProfitCalendar } from "~/components/ProfitCalendar";
+import { QuickEntries } from "~/components/QuickEntries";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
+import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_MAX_CENTS } from "~/domain/checkin";
@@ -26,7 +25,7 @@ import { getAssetTimeline } from "~/services/asset-service";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
-import { getOrders, getPortfolio } from "~/services/portfolio-service";
+import { getPortfolio } from "~/services/portfolio-service";
 import { COLOR } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
@@ -39,14 +38,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
 
-  const [portfolio, checkinStatus, orders, timeline] = await Promise.all([
+  const [portfolio, checkinStatus, timeline] = await Promise.all([
     getPortfolio(db, user.id),
     getCheckinStatus(db, user.id),
-    getOrders(db, user.id, 5),
     getAssetTimeline(db, user.id),
   ]);
 
-  return { user, portfolio, checkinStatus, orders, timeline };
+  return { user, portfolio, checkinStatus, timeline };
 }
 
 /** 签到 action */
@@ -67,11 +65,23 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
-  const { user, portfolio, checkinStatus, orders, timeline } = loaderData;
-  // 总览数字全部交给 PortfolioSummary，这里只需要持仓列表
-  const { holdings } = portfolio;
+  const { user, portfolio, checkinStatus, timeline } = loaderData;
+  // summary 的合计市值供持仓卡标题用；其余总览数字全部交给 AssetOverviewCard
+  const { summary, holdings } = portfolio;
   const fetcher = useFetcher<typeof action>();
   const signing = fetcher.state === "submitting";
+
+  // 持仓排序：持有金额（市值）/ 持有收益两键切换，降序；默认持有金额。
+  // 客户端排——持仓数据 loader 已全量带回，几十只以内零成本
+  const [sortKey, setSortKey] = useState<"amount" | "pnl">("amount");
+  const sortedHoldings = useMemo(
+    () =>
+      [...holdings].sort((a, b) =>
+        sortKey === "amount"
+          ? b.marketValueCents - a.marketValueCents
+          : b.pnlCents - a.pnlCents),
+    [holdings, sortKey],
+  );
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -93,23 +103,19 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         )}
       </div>
 
-      {/* 资产总览 */}
+      {/* 资产总览：总资产主位 + 昨日/累计/余额（口径注释见 AssetOverviewCard） */}
       <SectionCard>
-        <PortfolioSummary portfolio={portfolio} />
+        <AssetOverviewCard
+          summary={portfolio.summary}
+          daily={timeline.daily}
+          latest={timeline.latest}
+          totalDepositedCents={timeline.totalDepositedCents}
+        />
       </SectionCard>
 
-      {/* 资产走势：收益摘要（单日+累计两格，消除口径误读）+ 曲线图。
-          曲线默认「累计收益」口径（百万本金下总资产曲线压成直线，看不出收益形状），
-          可在图内切回「总资产」。
-          收益标注「截至 X 日」不写「昨日」——净值同步有延迟 */}
-      <SectionCard title="资产走势">
-        <AssetPnlSummary daily={timeline.daily} latest={timeline.latest} />
-        <AssetTrendChart data={timeline.daily} />
-      </SectionCard>
-
-      {/* 收益日历 */}
-      <SectionCard title="收益日历">
-        <ProfitCalendar data={timeline.daily} />
+      {/* 腰部功能入口：收益明细 / 交易记录 / 定投计划 */}
+      <SectionCard>
+        <QuickEntries />
       </SectionCard>
 
       {/* 每日签到 */}
@@ -174,8 +180,22 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         </Row>
       </SectionCard>
 
-      {/* 持仓速览：extra 文本链接走 SPA 导航（Link） */}
-      <SectionCard title="我的持仓" extra={<Link to="/me/holdings">管理持仓 →</Link>}>
+      {/* 我的持仓：原 /me/holdings 列表页的职能全部并入——
+          标题带只数与合计市值（总资产−可用余额可推导，但直接给更省脑），
+          行内详情/卖出深链，底部批次说明 */}
+      <SectionCard
+        title={`我的持仓（${holdings.length} 只 · 市值 ${fmtYuan(summary.marketValueCents)} 元）`}
+        extra={(
+          <PeriodTabs
+            options={[
+              { key: "amount", label: "持有金额" },
+              { key: "pnl", label: "持有收益" },
+            ]}
+            value={sortKey}
+            onChange={v => setSortKey(v as "amount" | "pnl")}
+          />
+        )}
+      >
         {holdings.length === 0
           ? (
               <EmptyState description="还没有持仓">
@@ -185,18 +205,30 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
               </EmptyState>
             )
           : (
-              <HoldingList holdings={holdings} renderNote={sharesAndNavNote} />
-            )}
-      </SectionCard>
-
-      {/* 最近订单：extra 文本链接走 SPA 导航（Link） */}
-      <SectionCard title="最近订单" extra={<Link to="/me/orders">全部订单 →</Link>}>
-        {orders.length === 0
-          ? (
-              <EmptyState description="还没有交易记录" />
-            )
-          : (
-              <OrderList orders={orders} />
+              <>
+                <HoldingList
+                  holdings={sortedHoldings}
+                  // 份额 + 估值时点 + 成本（批次数/待赎回在单只详情页）
+                  renderNote={h => `${sharesAndNavNote(h)} · 成本 ${fmtYuan(h.costCents)} 元`}
+                  // 行点进单只持仓详情，不链基金详情页
+                  getHref={h => `/me/holdings/${h.fundCode}`}
+                  // 行内「详情 / 卖出」：卖出深链直达交易页签（?tab=trade）
+                  renderActions={h => (
+                    <Space size={8}>
+                      <NavButton size="small" to={`/me/holdings/${h.fundCode}`}>
+                        详情
+                      </NavButton>
+                      <NavButton size="small" type="primary" to={`/me/holdings/${h.fundCode}?tab=trade`}>
+                        卖出
+                      </NavButton>
+                    </Space>
+                  )}
+                />
+                <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
+                  「批次」是同一只基金分次买入形成的份额批，赎回时按买入时间先进先出消耗，
+                  每批按各自持有天数计赎回费。
+                </Paragraph>
+              </>
             )}
       </SectionCard>
     </Space>
