@@ -5,7 +5,7 @@ import {
   transformerDirectives,
   transformerVariantGroup,
 } from "unocss";
-import { COLOR } from "./app/theme";
+import { CARD_SHADOW, COLOR, NUM_FONT } from "./app/theme";
 
 /**
  * UnoCSS 配置。
@@ -14,15 +14,36 @@ import { COLOR } from "./app/theme";
  *
  * 1. **关闭 preflight/reset**。UnoCSS 的全局重置会把 antd 的按钮、表单样式冲掉，
  *    出现按钮没背景色、输入框没边框之类的诡异问题。antd 自带 reset，不需要第二套。
+ *    （注意区分：下面 config 级 preflights 输出的 --fp-* 变量不受此开关影响，
+ *    preset 的 reset 关的是「全局样式重置」。）
  *
  * 2. **不启用 presetAttributify**。属性化写法（<div flex gap-2>）会把 antd 组件的
  *    普通 props 误当成工具类：`<Tag color="red">` 生成 `[color~="red"]{color:red}`、
  *    `<Table align="middle">` 生成 `[align~="middle"]{vertical-align:middle}`，
- *    这些规则会直接污染 antd 组件的渲染。实测生成的 23 条规则里有 8 条是这类垃圾。
+ *    这些规则会直接污染 antd 组件的渲染。
  *
- * 3. **只用 UnoCSS 写布局与间距**，颜色/圆角/阴影仍走 antd 主题 token，
- *    保证视觉统一，也避免两套设计系统打架。
+ * 3. **token 单一出处**。颜色/字体/阴影的唯一出处是 app/theme.ts，本文件直接
+ *    import 映射成主题类与 --fp-* CSS 变量，漂移在结构上不可能发生。
  */
+
+/** camelCase → kebab-case（CSS 变量命名用）：textPrimary → text-primary */
+function kebab(s: string): string {
+  return s.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
+}
+
+/**
+ * COLOR 全量输出为 --fp-* CSS 变量（config 级 preflight）。
+ * 消费方：app/styles/*.css——手写 CSS 进不了 JS 模块图，import 不到 theme.ts，
+ * 只能靠这些变量共享 token（responsive.css 的 var(--fp-card) 等即来源于此）。
+ * ⚠️ 本文件是 --fp-* 唯一的定义处；给 theme.ts 加新 token 时记得这里自动带上
+ * （COLOR 上的键全自动，NUM_FONT/CARD_SHADOW 是手写的两行）。
+ */
+const FP_ROOT_VARS = [
+  ...Object.entries(COLOR).map(([k, v]) => `  --fp-${kebab(k)}: ${v};`),
+  `  --fp-num-font: ${NUM_FONT};`,
+  `  --fp-card-shadow: ${CARD_SHADOW};`,
+].join("\n");
+
 export default defineConfig({
   presets: [
     // Wind4 是 UnoCSS 对齐 Tailwind v4 的预设，工具类名与 Tailwind 一致
@@ -47,23 +68,32 @@ export default defineConfig({
   ],
   // 项目里常用的组合，抽成快捷方式
   shortcuts: {
-    // 涨红跌绿（国内习惯）。色值直接引 app/theme.ts 的 COLOR ——
-    // 这里原先是硬写的镜像字面量 + 一句「不能 import，走不通 ~/ 别名」的注释。
-    // 那个「不能」不成立：~/ 别名确实走不通，但本文件在仓库根，
-    // "./app/theme" 是普通相对路径，且 app/theme.ts 刻意零 import，引它不拖进任何东西。
-    // 换成 import 之后，两处漂移在结构上不可能发生 —— 单一出处优于漂移检测器。
-    "text-rise": `text-[${COLOR.up}]`,
-    "text-fall": `text-[${COLOR.down}]`,
-    // 常用布局
+    // 常用布局。（text-rise / text-fall 快捷方式已退役：theme.colors 直出同名类）
     "flex-center": "flex items-center justify-center",
     "flex-between": "flex items-center justify-between",
   },
   theme: {
     colors: {
-      // 同上：唯一出处是 app/theme.ts，这里不再复制字面量
-      primary: COLOR.primary,
-      rise: COLOR.up,
-      fall: COLOR.down,
+      // 全量映射 app/theme.ts 的 COLOR——色值唯一出处，别在本文件写字面量。
+      // 类名刻意用语义词而非 TS 键名：text-ink 好过 text-text-primary。
+      "primary": COLOR.primary, // 品牌蓝：text-primary / bg-primary
+      "primary-bg": COLOR.primaryBg, // 主色浅底：bg-primary-bg（圆底图标、选中态）
+      "rise": COLOR.up, // 涨红：text-rise / bg-rise
+      "fall": COLOR.down, // 跌绿：text-fall / bg-fall
+      "flat": COLOR.neutral, // 平（0 或无数据）：text-flat
+      "page": COLOR.bg, // 页面底色：bg-page
+      "card": COLOR.card, // 卡片底色：bg-card
+      "line": COLOR.border, // 分割线：border-line
+      "ink": COLOR.textPrimary, // 主文字：text-ink
+      "muted": COLOR.textSecondary, // 次文字：text-muted
+    },
+    fontFamily: {
+      // 数字等宽字体（金额纵向对齐）：font-num，替代内联 fontFamily: NUM_FONT
+      num: NUM_FONT,
+    },
+    boxShadow: {
+      // 卡片阴影：shadow-card，替代内联 boxShadow: CARD_SHADOW
+      card: CARD_SHADOW,
     },
     /**
      * 断点显式对齐 antd 栅格（responsiveObserver：xs 480 / sm 576 / md 768 /
@@ -86,28 +116,28 @@ export default defineConfig({
     },
   },
   /**
-   * 只从 className="..." / class="..." 里提取工具类。
-   *
-   * 默认提取器会扫全文，把 JS 代码当成 class 误报：
-   *   `m[s] ?? {...}`（取值）→ 生成 `.m\[s\]{margin:s}`
-   *   `{!me && (`（条件渲染）→ 生成 `.me` 与 `.!me`
-   * 这些垃圾规则虽然无害，但污染产物、也让人怀疑配置有问题。
+   * --fp-* 变量输出（内容见 FP_ROOT_VARS 的注释）。
    */
-  extractors: [
+  preflights: [
     {
-      name: "class-attribute-only",
-      extract({ code }) {
-        const found = new Set<string>();
-        // 匹配 className="..." 或 class="..."（含模板字符串里的静态部分）
-        const re = /(?:class|className)\s*=\s*["'`]([^"'`]*)["'`]/g;
-        for (const m of code.matchAll(re)) {
-          for (const token of m[1].split(/\s+/)) {
-            if (token)
-              found.add(token);
-          }
-        }
-        return found;
-      },
+      getCSS: () => `:root {\n${FP_ROOT_VARS}\n}`,
     },
   ],
+  /**
+   * 提取器：刻意不配置，用默认的全文扫描。
+   *
+   * 踩坑史（2026-09-08 定案，别再走回头路）：
+   * - 曾写过 class-attribute-only 自定义提取器想挡 JS 裸词误报，但 @unocss/core
+   *   会把默认 extractorSplit 强插队首（除非 extractorDefault: false），自定义
+   *   提取器从未生效过；
+   * - 而若真用 extractorDefault: false 关掉默认提取器，三元/模板串里的条件类
+   *   （`isMe ? "bg-primary/6" : ""`）会静默提取不到——样式凭空消失，比死类可怕
+   *   得多，且与「新增样式优先工具类」的规约直接冲突；
+   * - 两害相权：保留全文扫描，接受它顺手捞出的死类。
+   *
+   * 死类 = 源码里恰好长得像工具类的词生成的无人引用规则（如 PeriodReturnGrid
+   * 的周期 key "m1"、注释里的「fixed 条」）。它们无害——没有元素挂这些类，
+   * 规则就是死文本。uno.gen.css 里看到属正常现象，不要追杀，
+   * 更不要为消灭它们去改业务代码或注释。
+   */
 });

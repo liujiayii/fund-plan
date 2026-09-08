@@ -194,7 +194,8 @@ dev SSR 里变成 undefined、每页 500**（真 Node / 生产 build / CI 全都
 纯 SPA 项目（`@vitejs/plugin-react`，单环境）不受此影响。
 
 所以 `dev`/`build` 前会跑 `pnpm uno:build` 生成 `app/uno.gen.css`（该文件**入库**，不要手改）。
-改了 class 后样式没生效，先确认这步跑过。
+注意这步是**一次性预生成**：dev 运行中新增了类，要手动再跑一次 `pnpm uno:build`
+（vite 会 watch 到产物变化自动热更）。
 
 两个配置必须保持关闭（`uno.config.ts`）：
 
@@ -202,7 +203,19 @@ dev SSR 里变成 undefined、每页 500**（真 Node / 生产 build / CI 全都
 - **不启用 `presetAttributify`** —— 会把 antd 的 `color="red"`、`align="middle"` 等 props
   误当工具类生成污染规则
 
-约定：UnoCSS 只写布局与间距，颜色/圆角/阴影走 antd 主题 token。
+提取器刻意用默认全文扫描、**不要写自定义提取器**：@unocss/core 会把默认提取器
+强插队首（除非 `extractorDefault: false`），自定义提取器从未生效过；而真关掉默认
+提取器，三元/模板串里的条件类会静默丢失（比死类可怕）。全文扫描的代价是死类——
+源码里恰好长得像工具类的词（`"m1"` 数据 key、注释里的「fixed 条」）会生成无人
+引用的规则，**无害，不要追杀**。
+
+无 preflight 的连带代价：`border-b` 只出宽度不出 style，div 默认 `border-style: none`
+边框会隐身——**写边框必须带 `border-solid`**（如 `border-b border-solid border-line`）。
+
+`--fp-*` CSS 变量（`uno.config.ts` 的 preflight 从 theme.ts 全量输出）是手写 CSS
+（`app/styles/*.css`）共享 token 的唯一通道，别在 CSS 里写字面量色值。
+
+样式书写规约见「代码风格」节的「新增样式优先 UnoCSS 工具类」。
 
 ### 依赖 canvas/DOM 的库必须懒加载
 
@@ -255,6 +268,25 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 `@antfu/eslint-config`，**双引号 + 分号 + 2 空格缩进**。
 
 **代码需要加合理的中文注释。**
+
+### 新增样式优先 UnoCSS 工具类（2026-09-08 起的规约）
+
+新增样式一律优先工具类，**不要再新增内联 `style={{}}`、不新建 CSS 文件**：
+
+| 场景                        | 写法                                          | 例                                                                                                                                     |
+| --------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 静态样式                    | 工具类                                        | `style={{ fontSize: 12, color: COLOR.textSecondary }}` → `className="text-xs text-muted"`                                              |
+| token 色                    | 主题类（uno.config 从 theme.ts 全量映射）     | `text-ink` `text-muted` `text-rise` `text-fall` `text-flat` `bg-card` `bg-page` `border-line` `bg-primary-bg` `font-num` `shadow-card` |
+| 有限值域动态                | 条件类（分支互斥，别让同类属性两分支同挂）    | `style={{ color: pnlColor(v) }}` → `className={v > 0 ? "text-rise" : v < 0 ? "text-fall" : "text-flat"}`                               |
+| 连续值动态                  | 仍允许内联（构建期系统数不出无限个值）        | `style={{ width: `${pct}%` }}`                                                                                                         |
+| 覆盖 antd 内部类 / 媒体查询 | 仍走 `app/styles/*.css`，色值用 `var(--fp-*)` | `.ant-card-body` 覆盖、responsive.css                                                                                                  |
+
+- 颜色不写裸值（`text-[#8a9099]` 禁用），一律主题类；页面局部装饰色（如排行榜金银铜）可用任意值
+- `theme.ts` 加新 token 时**必须同步** `uno.config.ts` 的 theme 映射
+- 写边框必须带 `border-solid`（原因见「已知陷阱」）
+- `text-xs` 这类字号类会连 line-height 一起设（Tailwind 惯例）；要保留原行高用 `text-[12px]`
+- 设计系统组件（`app/components/ui/`）存量内联不强制迁移；新写的尽量用类
+- 范本：`app/routes/leaderboard.tsx`（四类场景一页全有）
 
 git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix` 并重新 stage；
 `pre-push` 跑 `typecheck` + `test`。紧急绕过用 `--no-verify`。

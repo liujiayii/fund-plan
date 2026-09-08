@@ -8,7 +8,6 @@ import { SectionCard } from "~/components/ui/SectionCard";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { getLeaderboard } from "~/services/leaderboard-service";
-import { COLOR } from "~/theme";
 
 const { Title, Paragraph } = Typography;
 
@@ -26,23 +25,25 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { me, lb };
 }
 
-/** 名次徽章：前三金/银/铜色，其余灰 */
+/**
+ * 名次徽章：前三金/银/铜色，其余灰。
+ * 金银铜是页面局部装饰色，不是全站 token——用任意值写死在此处，
+ * 别塞进 theme.ts（那里只放跨页复用的语义色）。
+ * 颜色分支刻意互斥（medal 里带全自己的 text-*），避免 text-white 与
+ * text-muted 同挂一个元素、输赢看产物 CSS 里的先后顺序。
+ */
 function RankBadge({ rank }: { rank: number }) {
-  const color = rank === 1 ? "#f5a623" : rank === 2 ? "#a0a0a0" : rank === 3 ? "#b07840" : undefined;
+  const medal
+    = rank === 1
+      ? "bg-[#f5a623] text-white"
+      : rank === 2
+        ? "bg-[#a0a0a0] text-white"
+        : rank === 3
+          ? "bg-[#b07840] text-white"
+          : "text-muted";
   return (
     <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        background: color ?? "transparent",
-        color: color ? "#fff" : COLOR.textSecondary,
-        fontSize: 13,
-        fontWeight: 600,
-      }}
+      className={`inline-flex h-6 w-6 items-center justify-center rounded-xl text-[13px] font-semibold ${medal}`}
     >
       {rank}
     </span>
@@ -59,23 +60,19 @@ function LeaderRow({
 }) {
   const isMe = meId !== null && entry.userId === meId;
   return (
+    // 自己的条目淡蓝高亮：bg-primary/6 = 主色 6% 透明度（原 rgba(22,119,255,0.06)）
+    // border-solid 必须带：preflight 重置已关（让位 antd），wind4 的 border-b 只出
+    // 宽度不出 style，缺了它 div 默认 border-style:none，边框隐身
     <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "12px 0",
-        borderBottom: `1px solid ${COLOR.border}`,
-        background: isMe ? "rgba(22,119,255,0.06)" : undefined,
-      }}
+      className={`flex items-center gap-3 border-b border-solid border-line py-3 ${isMe ? "bg-primary/6" : ""}`}
     >
       <RankBadge rank={entry.rank} />
-      <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-        <div style={{ fontWeight: 500, color: COLOR.textPrimary }}>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="font-medium text-ink">
           {entry.username}
-          {isMe && <Tag color="blue" style={{ marginLeft: 8 }}>我</Tag>}
+          {isMe && <Tag color="blue" className="ml-2">我</Tag>}
         </div>
-        <div style={{ fontSize: 12, color: COLOR.textSecondary, marginTop: 2 }}>
+        <div className="mt-0.5 text-xs text-muted">
           总资产
           {" "}
           {fmtYuan(entry.totalAssetCents)}
@@ -83,9 +80,9 @@ function LeaderRow({
           元
         </div>
       </div>
-      <div style={{ textAlign: "right" }}>
+      <div className="text-right">
         <PnlText cents={entry.totalPnlCents} size={14} />
-        <div style={{ marginTop: 2 }}>
+        <div className="mt-0.5">
           <PnlText rate={entry.totalPnlRate} size={12} />
         </div>
       </div>
@@ -102,12 +99,12 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
     = meId === null ? null : lb.byRate.find(e => e.userId === meId) ?? null;
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <Space direction="vertical" size="large" className="w-full">
       <div>
-        <Title level={3} style={{ marginBottom: 4 }}>
+        <Title level={3} className="mb-1">
           收益排行榜
         </Title>
-        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+        <Paragraph type="secondary" className="mb-0">
           总收益 = 总资产 − 累计入金（初始本金 + 签到奖励）。已清仓落袋的收益也保留在榜上，
           只签到不买基金刷不了榜。
         </Paragraph>
@@ -117,7 +114,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
         {lb.byRate.length === 0
           ? (
               <EmptyState description="还没有人开过单">
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="text-xs">
                   注册后买第一只基金，就能上榜了
                 </Typography.Text>
               </EmptyState>
