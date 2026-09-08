@@ -1,21 +1,20 @@
 import type { Route } from "./+types/_index";
 import { Button, Card, Col, Row, Space, Tag, Typography } from "antd";
 import { Link } from "react-router";
-import { OrderList } from "~/components/OrderList";
-import {
-  AdminNotReady,
-  HoldingListReadonly,
-  PortfolioSummary,
-} from "~/components/PortfolioView";
+import { AssetOverviewCard } from "~/components/AssetOverviewCard";
+import { AssetTrendChart } from "~/components/AssetTrendChart";
+import { AdminNotReady } from "~/components/PortfolioView";
+import { ProfitCalendar } from "~/components/ProfitCalendar";
 import { fmtInt, fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS } from "~/domain/checkin";
 import { INITIAL_CASH_CENTS } from "~/domain/config";
+import { getAssetTimeline } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
-import { getOrders, getPortfolio } from "~/services/portfolio-service";
+import { getPortfolio } from "~/services/portfolio-service";
 import { getSiteStats } from "~/services/stats-service";
 import { CARD_SHADOW } from "~/theme";
 
@@ -48,8 +47,8 @@ function fmtStatsSince(date: string): string {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { db, env } = getAppContext(context);
 
-  // 主理人是后续组合/订单查询的前置（要 admin.id），先单独拿（1 条往返）；
-  // 其余查询（当前用户 / 平台统计 / 组合 / 订单）互相独立，一波全并行。
+  // 主理人是后续组合/时间线查询的前置（要 admin.id），先单独拿（1 条往返）；
+  // 其余查询（当前用户 / 平台统计 / 组合 / 资产时间线）互相独立，一波全并行。
   // 旧写法先并行一批、等齐了再并行第二批——Worker 与 D1 跨大区时
   // 关键路径平白多出一整批往返，首页 TTFB 被拖出数秒
   const admin = await getAdminUser(db, env);
@@ -67,14 +66,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     } as const;
   }
 
-  const [me, stats, portfolio, orders] = await Promise.all([
+  const [me, stats, portfolio, timeline] = await Promise.all([
     getCurrentUser(request, db),
     getSiteStats(db),
     getPortfolio(db, admin.id),
-    getOrders(db, admin.id, 8),
+    // 示范盘三件套（总览+走势+日历）的序列数据；「最近操作」模块已撤，orders 不再查
+    getAssetTimeline(db, admin.id),
   ]);
 
-  return { me, stats, admin, portfolio, orders } as const;
+  return { me, stats, admin, portfolio, timeline } as const;
 }
 
 /** 产品卖点，讲清「这不是玩具」 */
@@ -172,16 +172,22 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               )}
               extra={<a href="/master">查看完整组合 →</a>}
             >
-              <PortfolioSummary portfolio={loaderData.portfolio} showCash={false} />
-              <div style={{ marginTop: 24 }}>
-                <Title level={5}>持仓</Title>
-                <HoldingListReadonly holdings={loaderData.portfolio.holdings} />
-              </div>
-              {loaderData.orders.length > 0 && (
-                <div style={{ marginTop: 24 }}>
-                  <Title level={5}>最近操作</Title>
-                  <OrderList orders={loaderData.orders.slice(0, 5)} />
-                </div>
+              {/* 三件套与 /master 首屏同构：总览（四小格）+ 走势 + 日历；
+                  持仓列表与最近操作已按主人要求撤下，引流页保持轻量（ux-polish #10） */}
+              <AssetOverviewCard
+                summary={loaderData.portfolio.summary}
+                daily={loaderData.timeline.daily}
+                latest={loaderData.timeline.latest}
+                totalDepositedCents={loaderData.timeline.totalDepositedCents}
+              />
+              {loaderData.timeline.daily.length > 0 && (
+                <>
+                  <div style={{ marginTop: 24 }} />
+                  <AssetTrendChart data={loaderData.timeline.daily} />
+                  <div style={{ marginTop: 24 }} />
+                  {/* 首页日历纯展示：游客没有「点日期看明细」的诉求（spec §4④），不带 ProfitCalendarCard */}
+                  <ProfitCalendar data={loaderData.timeline.daily} />
+                </>
               )}
             </SectionCard>
           )}
