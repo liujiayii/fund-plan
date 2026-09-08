@@ -1,86 +1,14 @@
-import type { HoldingView, PortfolioView } from "~/services/portfolio-service";
-import { Col, Row, Tag, Typography } from "antd";
+/**
+ * `AdminNotReady` 与只读持仓列表的归属地；旧 PortfolioSummary 已随 admin
+ * 页改版退役（ux-polish）。
+ */
+import type { HoldingView } from "~/services/portfolio-service";
+import { Tag, Typography } from "antd";
 import { EmptyState } from "~/components/ui/EmptyState";
-import { fmtYuan } from "~/components/ui/format";
-import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
-import { StatBig } from "~/components/ui/StatBig";
-import { pnlColor } from "~/theme";
 import { HoldingList, sharesAndNavNote } from "./HoldingList";
 
 const { Paragraph } = Typography;
-
-export interface PortfolioViewProps {
-  portfolio: PortfolioView;
-  /**
-   * 是否展示「可用现金」这一格，默认展示。
-   * 传 false 的只有首页引流卡；`/admin/users/:id` 不传（露现金）。
-   * ⚠️ 别把它读成「公开盘不露现金」：/master 就是公开盘，它页面上写着
-   * 「持仓、定投与交易流水全部公开」，藏现金反而自相矛盾。
-   */
-  showCash?: boolean;
-}
-
-/**
- * 组合总览。消费方：首页 `/` 引流卡（showCash=false）与 `/admin/users/:id` 只读后台——
- * /me 与 /master 已改用 AssetOverviewCard（2026-09-07）。
- *
- * ⚠️ me._index 曾逐字复制过一份同样的 Row（期十三收掉），两份独立漂移过。
- * 要加字段就加在这里，别再复制。
- *
- * ⚠️ pnlColor 已迁到 ~/theme，本文件不再导出它。
- */
-export function PortfolioSummary({
-  portfolio,
-  showCash = true,
-}: PortfolioViewProps) {
-  const { summary } = portfolio;
-  return (
-    <Row gutter={[24, 16]}>
-      <Col xs={24} sm={12} md={6}>
-        <StatBig
-          label="总资产"
-          value={fmtYuan(summary.totalAssetCents)}
-          suffix="元"
-        />
-      </Col>
-      <Col xs={24} sm={12} md={6}>
-        <StatBig
-          label="持仓市值"
-          value={fmtYuan(summary.marketValueCents)}
-          suffix="元"
-          size={24}
-        />
-      </Col>
-      {showCash && (
-        <Col xs={24} sm={12} md={6}>
-          <StatBig
-            label="可用现金"
-            value={fmtYuan(summary.cashCents)}
-            suffix="元"
-            size={24}
-          />
-        </Col>
-      )}
-      <Col xs={24} sm={12} md={6}>
-        <StatBig
-          label="浮动盈亏"
-          value={`${summary.totalPnlCents > 0 ? "+" : ""}${fmtYuan(summary.totalPnlCents)}`}
-          suffix="元"
-          size={24}
-          color={pnlColor(summary.totalPnlCents)}
-          extra={(
-            <>
-              收益率
-              {" "}
-              <PnlText rate={summary.totalPnlRate} size={12} />
-            </>
-          )}
-        />
-      </Col>
-    </Row>
-  );
-}
 
 /** 持仓列表（只读版，公开页用） */
 export function HoldingListReadonly({ holdings }: { holdings: HoldingView[] }) {
