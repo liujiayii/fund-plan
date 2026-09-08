@@ -472,6 +472,16 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         />
       )}
 
+      {/* 自选提交结果：成功/失败均显式提示，不靠 reload 刷新。
+          ⚠️ 必须放在 BottomActionBar 之前：bar 的占位块之后的内容
+          滚到底时落入 fixed 条的遮挡带（CodeRabbit PR #75 采纳） */}
+      {fetcher.data?.ok && (
+        <Alert type="success" showIcon message={fetcher.data.message} closable />
+      )}
+      {fetcher.data?.error && (
+        <Alert type="error" showIcon message={fetcher.data.error} closable />
+      )}
+
       {/* 页底固定操作条：定投 / 买入 / 自选（ux-polish spec §4①）。
           按钮语义与旧「交易操作」卡一致：无净值禁买入；自选 fetcher 照旧 post /me/watchlist */}
       <BottomActionBar
@@ -507,13 +517,6 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
               </Space>
             )}
       />
-      {/* 自选提交结果：成功/失败均显式提示，不靠 reload 刷新（从旧卡搬来，置于 bar 上方） */}
-      {fetcher.data?.ok && (
-        <Alert type="success" showIcon message={fetcher.data.message} closable />
-      )}
-      {fetcher.data?.error && (
-        <Alert type="error" showIcon message={fetcher.data.error} closable />
-      )}
 
       {/* 抽屉：买入（现有壳）与定投（新壳） */}
       <BuyDrawer
