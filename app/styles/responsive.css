@@ -7,9 +7,11 @@
  *
  * 为什么是手写 CSS 文件而不是 UnoCSS 断点变体类：
  *  - uno.gen.css 是 pnpm uno:build 的纯产物，手改必被覆盖；
- *  - preflights.reset=false 意味着 UnoCSS 不产出任何全局样式；
- *  - uno.config.ts 的自定义 extractor 只认 className="静态字符串"，
- *    条件拼接的 className 提取不到（spec §4.4）。
+ *  - preflights.reset=false 意味着 UnoCSS 不产出全局重置，而本文件的职责之一
+ *    就是覆盖 antd 内部类（.ant-card-body 等）——工具类只够得着自己的元素，
+ *    够不着 antd 渲染出来的内部 DOM；
+ *  - 媒体查询需要「全站窄屏规则聚合一处」，散进各组件的 sm: 变体类会失控。
+ * 色值一律走 var(--fp-*)（uno.config 的 preflight 从 theme.ts 全量输出）。
  *
  * import 顺序（root.tsx）：antd reset → uno.gen.css → 本文件。
  * 排最后才能覆盖工具类与 antd 组件类。
@@ -117,11 +119,10 @@
   bottom: 0;
   z-index: 20;
   display: flex;
-  /* 色值手写字面量而非引 JS 的 COLOR：CSS 文件 import 不进 JS 模块图，
-     引变量只能靠构建期工具（postcss-import + JS 变量），为一个文件引构建链不值。
-     ⚠️ 代价：改 theme.ts 的色值时本块 4 处（card/border/textSecondary/primary）要同改 */
-  background: #fff; /* = COLOR.card */
-  border-top: 1px solid #eef0f4; /* = COLOR.border */
+  /* 色值走 --fp-* 变量：CSS 进不了 JS 模块图 import 不到 COLOR，
+     变量是唯一通道（由 uno.config 的 preflight 从 theme.ts 输出，改色零改动） */
+  background: var(--fp-card);
+  border-top: 1px solid var(--fp-border);
   /* iPhone 底部安全区：没这行最后一格标签被系统横条压住 */
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -136,14 +137,14 @@
   gap: 2px;
   padding: 6px 0 4px;
   min-height: 48px; /* 触控区 ≥44px（WCAG）：图标 22 + gap 2 + 标签 14 + padding */
-  color: #8a9099; /* = COLOR.textSecondary */
+  color: var(--fp-text-secondary);
   text-decoration: none;
   font-size: 12px;
   line-height: 1;
 }
 
 .fp-tabbar-item.active {
-  color: #1677ff; /* = COLOR.primary */
+  color: var(--fp-primary);
   font-weight: 500;
 }
 

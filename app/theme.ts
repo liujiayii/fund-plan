@@ -43,7 +43,7 @@ export const CARD_SHADOW = "0 1px 2px rgba(0, 0, 0, 0.04)";
  * 比例字体下 "1" 比 "8" 窄，一列金额会参差不齐。
  */
 export const NUM_FONT
-  = "\"DIN Alternate\", \"SF Mono\", ui-monospace, Menlo, monospace";
+  = "\"DIN Alternate\", \"SF Mono\", ui-monospace, \"Menlo\", monospace";
 
 /**
  * 涨红跌绿（国内习惯）。
