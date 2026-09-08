@@ -305,7 +305,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             <SectionCard title="基金经理">
               {loaderData.manager!.map((m, i) => (
                 <div
-                  key={`${m.name}-${i}`}
+                  key={`${m.name}-${m.workTime}`}
                   style={{ marginBottom: i === loaderData.manager!.length - 1 ? 0 : 16 }}
                 >
                   <DataRow label="姓名" value={m.name || "—"} />
@@ -502,7 +502,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         <SectionCard title="历史分红">
           {bonusRows.map((b, i) => (
             <DataRow
-              key={`${b.year}-${i}`}
+              key={b.label}
               label={b.label}
               value={`每 10 份派 ${b.per10Shares} 元${b.recordDate ? ` · 除息日 ${b.recordDate}` : ""}`}
               mono

@@ -45,8 +45,10 @@ import { COLOR, pnlColor } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
-export function meta(_: Route.MetaArgs) {
-  return [{ title: "持仓详情 · 模拟基金" }];
+export function meta({ loaderData }: Route.MetaArgs) {
+  // 带 fundName 的标题，浏览器多标签时可辨；loader 抛 404 时兜底通用标题
+  const name = loaderData?.detail?.fundName ?? "持仓详情";
+  return [{ title: `${name} · 模拟基金` }];
 }
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {

@@ -41,9 +41,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const user = await requireUser(request, db);
 
   // ?fund= 过滤：持仓详情页「定投计划」入口带该参数进来。
-  // getDcaPlans 本就吃可选 fundCode（持仓详情页定投面板同款），零 service 改动
+  // getDcaPlans 本就吃可选 fundCode（持仓详情页定投面板同款），零 service 改动。
+  // 空串（手输裸 ?fund=）视同未过滤——`??` 不吃空串会把 eq(fundCode, "") 查成
+  // 空列表吓到用户，`||` 与 me.orders 的 `if (fundCode)` 口径对齐（评审修正）
   const fundCode = new URL(request.url).searchParams.get("fund");
-  const plans = await getDcaPlans(db, user.id, fundCode ?? undefined);
+  const plans = await getDcaPlans(db, user.id, fundCode || undefined);
 
   // 过滤指示要显示基金名（where 回调风格与本文件 action 一致）
   let fundFilter: { code: string; name: string } | null = null;
