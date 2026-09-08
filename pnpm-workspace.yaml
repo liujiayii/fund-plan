@@ -1,9 +1,4 @@
-allowBuilds:
-  esbuild: true
-  simple-git-hooks: true
-  workerd: true
-
-shellEmulator: true
+minimumReleaseAgeExcludePrune: true
 
 # 供应链信任策略：保持严格的 no-downgrade，仅对下面这一个版本开例外。
 trustPolicy: no-downgrade
@@ -18,6 +13,9 @@ trustPolicy: no-downgrade
 #   注意：这里精确锁到版本号，将来 semver 出新版本仍会重新走信任检查。
 trustPolicyExclude:
   - semver@6.3.1
+
+shellEmulator: true
+
 # 依赖定向覆盖：把 @esbuild-kit/core-utils 内嵌的 esbuild 钉到 ≥0.25。
 # 背景：drizzle-kit → @esbuild-kit/esm-loader → core-utils 锁着 esbuild@0.18.20
 #   （Dependabot 中危 GHSA：esbuild ≤0.24.2 的 dev server 漏洞）。
@@ -27,3 +25,8 @@ trustPolicyExclude:
 # pnpm 11 的 overrides 只认这里，package.json 的 pnpm 段已不读（踩过：写那儿不生效）。
 overrides:
   "@esbuild-kit/core-utils>esbuild": ^0.28.2
+
+allowBuilds:
+  esbuild: true
+  simple-git-hooks: true
+  workerd: true
