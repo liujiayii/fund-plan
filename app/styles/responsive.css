@@ -97,11 +97,6 @@
   .fp-header {
     justify-content: space-between;
   }
-
-  /* 窄屏操作条叠在 TabBar 上方：TabBar 56px + 安全区，不盖底部导航 */
-  .fp-bottom-bar {
-    bottom: calc(56px + env(safe-area-inset-bottom));
-  }
 }
 
 /* ══════════ 4. 底部 TabBar（spec §6）══════════ */
@@ -151,7 +146,9 @@
 /* ══════════ 4.5 页底固定操作条（ux-polish spec §4①）══════════ */
 
 /* 桌面基线：贴底全宽。z-index 15 < tabbar 20，两者分属不同区域互不重叠；
-   antd Drawer（1000）在其上，抽屉展开时正确盖住操作条 */
+   antd Drawer（1000）在其上，抽屉展开时正确盖住操作条。
+   窄屏的 bottom 上移（让开 TabBar）在文件末尾的 767px 块里覆盖本基线——
+   同 specificity 靠 source-order 取胜，务必保持「基线在前、覆盖在后」的次序 */
 .fp-bottom-bar {
   position: fixed;
   left: 0;
@@ -198,5 +195,13 @@
      加载期间骨架与成图同高，切换不跳 */
   .fp-chart-box > div:last-child {
     height: 220px !important;
+  }
+
+  /* 窄屏操作条叠在 TabBar 上方：TabBar 56px + 安全区，不盖底部导航。
+     必须放在桌面基线（本文件 4.5 节 .fp-bottom-bar）之后：同 specificity
+     同属性下 source-order 后者胜，放文件头部的 767px 块里会被基线 bottom:0
+     反杀成死代码（review 修正，勿挪回） */
+  .fp-bottom-bar {
+    bottom: calc(56px + env(safe-area-inset-bottom));
   }
 }

@@ -23,28 +23,31 @@ export interface BottomActionBarProps {
 export function BottomActionBar({ actions, note }: BottomActionBarProps) {
   return (
     <>
-      {/* 文档流占位：min-height 64 = 按钮 large 40 + 上下 padding 12×2。
-          note 单行省略，条高可控，占位高度恒成立 */}
+      {/* 文档流占位：height 64 = 按钮 large 40 + 上下 padding 12×2（无 note 时条高恰为 64）。
+          有 note 时条高约 85px，占位差 ~21px 落入 .fp-content 既有底 padding
+          （桌面 48px / 窄屏 56px+safe-area+16px），不遮内容也露不出条底 */}
       <div style={{ height: 64 }} aria-hidden />
       <div
         className="fp-bottom-bar"
         style={{ background: COLOR.card, borderTop: `1px solid ${COLOR.border}` }}
       >
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "12px 24px" }}>
-          {note !== undefined && (
-            <div
-              style={{
-                fontSize: 12,
-                color: COLOR.textSecondary,
-                marginBottom: 4,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {note}
-            </div>
-          )}
+          {note
+            ? (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: COLOR.textSecondary,
+                    marginBottom: 4,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {note}
+                </div>
+              )
+            : null}
           {actions}
         </div>
       </div>
