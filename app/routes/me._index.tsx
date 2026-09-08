@@ -1,4 +1,5 @@
 import type { Route } from "./+types/me._index";
+import type { HoldingView } from "~/services/portfolio-service";
 import {
   Alert,
   Button,
@@ -12,8 +13,9 @@ import {
 import { useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
+import { BuyDrawer } from "~/components/BuyDrawer";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
-import { QuickEntries } from "~/components/QuickEntries";
+import { ME_QUICK_ENTRIES, QuickEntries } from "~/components/QuickEntries";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
@@ -83,6 +85,14 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
     [holdings, sortKey],
   );
 
+  // 行内买入：单实例 BuyDrawer（比每行一个抽屉省 DOM）+ 双状态——
+  // buyOpen 管开合、buyTarget 管数据。关闭动画播放期间 buyTarget 保持不变，
+  // 抽屉退场时仍有数据可画，不会闪成空壳（自选页 PR #32 同款模式，下单成功
+  // 自动关抽屉也走这条路）；输入重置由 BuyDrawer 的 destroyOnHidden 兜底。
+  // 数据全来自 loader 现成字段：费率/起购是 HoldingView 新透出的，现金取 summary
+  const [buyOpen, setBuyOpen] = useState(false);
+  const [buyTarget, setBuyTarget] = useState<HoldingView | null>(null);
+
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <div>
@@ -115,7 +125,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
 
       {/* 腰部功能入口：收益明细 / 交易记录 / 定投计划 */}
       <SectionCard>
-        <QuickEntries />
+        <QuickEntries entries={ME_QUICK_ENTRIES} />
       </SectionCard>
 
       {/* 每日签到 */}
@@ -212,12 +222,21 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
                   renderNote={h => `${sharesAndNavNote(h)} · 成本 ${fmtYuan(h.costCents)} 元`}
                   // 行点进单只持仓详情，不链基金详情页
                   getHref={h => `/me/holdings/${h.fundCode}`}
-                  // 行内「详情 / 卖出」：卖出深链直达交易页签（?tab=trade）
+                  // 行内「买入 / 卖出」：买入开抽屉不跳页（自选页 PR #32 同款模式）；
+                  // 「详情」按钮撤下——行本身可点进单只持仓详情，窄屏也少挤一个按钮
                   renderActions={h => (
                     <Space size={8}>
-                      <NavButton size="small" to={`/me/holdings/${h.fundCode}`}>
-                        详情
-                      </NavButton>
+                      <Button
+                        size="small"
+                        // 无净值无法定价（与基金详情页买入按钮同一守卫语义）
+                        disabled={!(h.navScaled > 0)}
+                        onClick={() => {
+                          setBuyTarget(h);
+                          setBuyOpen(true);
+                        }}
+                      >
+                        买入
+                      </Button>
                       <NavButton size="small" type="primary" to={`/me/holdings/${h.fundCode}?tab=trade`}>
                         卖出
                       </NavButton>
@@ -231,6 +250,22 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
               </>
             )}
       </SectionCard>
+
+      {/* 行内买入抽屉：提交到 /me/trade 资源路由（全站买入统一入口）。
+          onClose 只收 buyOpen——buyTarget 保留数据撑完退场动画，不闪空壳；
+          destroyOnHidden 保证重开时输入重置 */}
+      <BuyDrawer
+        open={buyOpen}
+        onClose={() => setBuyOpen(false)}
+        fundCode={buyTarget?.fundCode ?? ""}
+        fundName={buyTarget?.fundName ?? ""}
+        purchaseRate={buyTarget?.purchaseRate ?? 0}
+        minPurchaseCents={buyTarget?.minPurchase ?? 0}
+        navScaled={buyTarget?.navScaled ?? 0}
+        navDate={buyTarget?.navDate ?? null}
+        cashCents={summary.cashCents}
+        action="/me/trade"
+      />
     </Space>
   );
 }

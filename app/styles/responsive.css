@@ -56,6 +56,14 @@
     margin-bottom: calc(56px + env(safe-area-inset-bottom));
   }
 
+  /* 有操作条页面的 Footer 窄屏让位：TabBar 56 + bar 64~86 + 安全区。
+     与 .fp-footer 同为 0,1,0，靠紧跟其后的 source-order 压过上面的 56px 让位
+     （勿挪到 .fp-footer 之前）；桌面 88px 基线在下方 min-width:768px 块里，
+     与本块宽度互斥、永不同时命中，故无需 !important */
+  .fp-footer-bar-clear {
+    margin-bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+
   /* ══════════ 5. FundListItem 窄屏两段式（spec §8）══════════ */
 
   /* 名称占第一行（不再被右侧 nowrap 挤到 50px），数值+操作第二行。
@@ -143,6 +151,20 @@
   font-size: 22px;
 }
 
+/* ══════════ 4.5 页底固定操作条（ux-polish spec §4①）══════════ */
+
+/* 桌面基线：贴底全宽。z-index 15 < tabbar 20，两者分属不同区域互不重叠；
+   antd Drawer（1000）在其上，抽屉展开时正确盖住操作条。
+   窄屏的 bottom 上移（让开 TabBar）在文件末尾的 767px 块里覆盖本基线——
+   同 specificity 靠 source-order 取胜，务必保持「基线在前、覆盖在后」的次序 */
+.fp-bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+}
+
 /* 767px 以下隐藏、768px+ 恢复 —— 与上面 .fp-desktop 的 !important 成对使用。
    这里其实是普通类选择器（specificity 0,1,0），并不比工具类更高，
    真正的胜负手是 import 顺序：本文件在 root.tsx 里排最后、同 specificity 后来者胜；
@@ -157,6 +179,13 @@
      桌面金额断行难看，在这里补回 */
   .fp-fli-side {
     white-space: nowrap;
+  }
+
+  /* 有页底操作条的页面（持仓/基金详情）：Footer 额外让位 bar 高度（无 note 64 / 有 note ~86）。
+     刻意放 min-width 块而非顶层基线：与上方 767px 块里的窄屏让位宽度互斥，
+     两条规则不会同时命中，从结构上免除 source-order 之争，也就不用 !important */
+  .fp-footer-bar-clear {
+    margin-bottom: 88px;
   }
 }
 
@@ -181,5 +210,13 @@
      加载期间骨架与成图同高，切换不跳 */
   .fp-chart-box > div:last-child {
     height: 220px !important;
+  }
+
+  /* 窄屏操作条叠在 TabBar 上方：TabBar 56px + 安全区，不盖底部导航。
+     必须放在桌面基线（本文件 4.5 节 .fp-bottom-bar）之后：同 specificity
+     同属性下 source-order 后者胜，放文件头部的 767px 块里会被基线 bottom:0
+     反杀成死代码（review 修正，勿挪回） */
+  .fp-bottom-bar {
+    bottom: calc(56px + env(safe-area-inset-bottom));
   }
 }

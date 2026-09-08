@@ -13,6 +13,8 @@
 export const COLOR = {
   /** 品牌 / 操作：按钮、链接、选中态、进度条 */
   primary: "#1677FF",
+  /** 主色浅底（圆底图标、选中态底色）。与 antd token colorPrimaryBg 同值，别散写字面量 */
+  primaryBg: "#E6F4FF",
   /** 涨 / 收益为正 */
   up: "#F5222D",
   /** 跌 / 收益为负 */

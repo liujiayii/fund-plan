@@ -32,6 +32,10 @@ export interface HoldingView extends HoldingValuation {
   fundType: string;
   /** 估值所用净值的日期，便于页面标注「截至 X 日」 */
   navDate: string | null;
+  /** 申购费率（万分之，优惠后）。行内买入抽屉试算用（ux-polish #5） */
+  purchaseRate: number;
+  /** 起购金额（分）。行内买入抽屉校验用 */
+  minPurchase: number;
 }
 
 export interface PortfolioView {
@@ -130,6 +134,9 @@ export async function getPortfolio(
       fundName: fundMap.get(r.fundCode)?.name ?? r.fundCode,
       fundType: fundMap.get(r.fundCode)?.type ?? "",
       navDate: navInfo?.navDate ?? null,
+      // 费率/起购纯透出：fundMap 来自上面的全字段查询，零新增 SQL
+      purchaseRate: fundMap.get(r.fundCode)?.purchaseRate ?? 0,
+      minPurchase: fundMap.get(r.fundCode)?.minPurchase ?? 0,
     };
   });
 

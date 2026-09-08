@@ -18,13 +18,13 @@ export interface AssetOverviewCardProps {
   totalDepositedCents: number;
 }
 
-/** 盈亏金额带符号：负号 fmtYuan 自带，正数补 +（与 PortfolioSummary 同款手法） */
+/** 盈亏金额带符号：负号 fmtYuan 自带，正数补 +（沿用旧总览卡的手法） */
 function signedYuan(cents: number): string {
   return `${cents > 0 ? "+" : ""}${fmtYuan(cents)}`;
 }
 
 /**
- * 资产总览卡（支付宝式）：总资产主位 + 昨日收益/累计收益/可用余额三小格。
+ * 资产总览卡（支付宝式）：总资产主位 + 昨日收益/累计收益/持仓金额/可用余额四小格。
  * /me 与 /master 共用——主理人的盘就是公开盘，一份口径两种身份。
  *
  * 口径（spec §2/§8）：
@@ -56,7 +56,8 @@ export function AssetOverviewCard({
     <div>
       <StatBig label="总资产" value={fmtYuan(summary.totalAssetCents)} suffix="元" />
       <Row gutter={[24, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12}>
+          {/* 昨日收益（原三小格版原样保留） */}
           <StatBig
             label="昨日收益"
             value={latest ? signedYuan(latest.dayPnlCents) : "—"}
@@ -66,7 +67,8 @@ export function AssetOverviewCard({
             extra={untilLabel ?? undefined}
           />
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12}>
+          {/* 累计收益（原样保留） */}
           <StatBig
             label="累计收益"
             value={signedYuan(totalPnlCents)}
@@ -84,7 +86,12 @@ export function AssetOverviewCard({
                 )}
           />
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12}>
+          {/* 持仓金额：与「可用余额」凑齐资产侧两格——总资产 = 持仓 + 余额，
+              四格拼出完整的资产拆解（ux-polish spec §4②） */}
+          <StatBig label="持仓金额" value={fmtYuan(summary.marketValueCents)} suffix="元" size={24} />
+        </Col>
+        <Col xs={24} sm={12}>
           <StatBig label="可用余额" value={fmtYuan(summary.cashCents)} suffix="元" size={24} />
         </Col>
       </Row>

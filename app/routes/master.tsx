@@ -1,5 +1,5 @@
 import type { Route } from "./+types/master";
-import { Pagination, Space, Tabs, Tag, Typography } from "antd";
+import { Pagination, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { AssetPnlSummary } from "~/components/AssetPnlSummary";
@@ -10,11 +10,11 @@ import {
   AdminNotReady,
   HoldingListReadonly,
 } from "~/components/PortfolioView";
-import { ProfitCalendar } from "~/components/ProfitCalendar";
+import { ProfitCalendarCard } from "~/components/ProfitCalendarCard";
 import { TxList } from "~/components/TxList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
-import { getAssetTimeline } from "~/services/asset-service";
+import { getProfitDetail } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { getAdminUser } from "~/services/guard";
 import {
@@ -51,15 +51,16 @@ export async function loader({ context }: Route.LoaderArgs) {
     return { admin: null, adminName: env.ADMIN_USERNAME ?? "未配置" } as const;
   }
 
-  const [portfolio, orders, plans, txs, timeline] = await Promise.all([
+  const [portfolio, orders, plans, txs, profit] = await Promise.all([
     getPortfolio(db, admin.id),
     getOrders(db, admin.id, 50),
     getDcaPlans(db, admin.id),
     getTransactions(db, admin.id, 50),
-    getAssetTimeline(db, admin.id),
+    // 换 getAssetTimeline 为 getProfitDetail：日历要各基金归因明细（+1 条 fund 名查询）
+    getProfitDetail(db, admin.id),
   ]);
 
-  return { admin, portfolio, orders, plans, txs, timeline } as const;
+  return { admin, portfolio, orders, plans, txs, profit } as const;
 }
 
 export default function Master({ loaderData }: Route.ComponentProps) {
@@ -79,7 +80,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
     );
   }
 
-  const { admin, portfolio, orders, plans, txs, timeline } = loaderData;
+  const { admin, portfolio, orders, plans, txs, profit } = loaderData;
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -97,108 +98,86 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
-      {/* 顶部与 /me 同款总览卡（timeline 数据 loader 本来就查了，零额外查询） */}
+      {/* 顶部与 /me 同款总览卡（四小格版，Task 3 已升级） */}
       <SectionCard>
         <AssetOverviewCard
           summary={portfolio.summary}
-          daily={timeline.daily}
-          latest={timeline.latest}
-          totalDepositedCents={timeline.totalDepositedCents}
+          daily={profit.daily}
+          latest={profit.latest}
+          totalDepositedCents={profit.totalDepositedCents}
         />
       </SectionCard>
 
-      {/* 收益详情：与 /me/profit 收益明细页同款（AssetPnlSummary 单日+累计两格 + 曲线图 + 收益日历），
-          游客围观主理人时也能看到「这个盘到底赚没赚」的完整故事 */}
-      <SectionCard title="资产走势">
-        <AssetPnlSummary daily={timeline.daily} latest={timeline.latest} />
-        <AssetTrendChart data={timeline.daily} />
+      {/* 资产走势与收益日历：主理人没交易过（daily 为空）时不渲染，空盘不摆空图 */}
+      {profit.daily.length > 0 && (
+        <>
+          <SectionCard title="资产走势">
+            <AssetPnlSummary daily={profit.daily} latest={profit.latest} />
+            <AssetTrendChart data={profit.daily} />
+          </SectionCard>
+          <SectionCard title="收益日历">
+            <ProfitCalendarCard detail={profit} />
+          </SectionCard>
+        </>
+      )}
+
+      {/* 四块内容拆 Tab 平铺：信息一目了然，不用点来点去（ux-polish #9 决策） */}
+      <SectionCard title={`持仓（${portfolio.holdings.length} 只）`}>
+        <HoldingListReadonly holdings={portfolio.holdings} />
       </SectionCard>
 
-      <SectionCard title="收益日历">
-        <ProfitCalendar data={timeline.daily} />
+      <SectionCard title="定投计划">
+        {plans.length === 0
+          ? <EmptyState description="暂无定投计划" />
+          : <DcaPlanList plans={plans} />}
       </SectionCard>
 
-      <SectionCard>
-        <Tabs
-          items={[
-            {
-              key: "holdings",
-              label: `持仓`,
-              children: <HoldingListReadonly holdings={portfolio.holdings} />,
-            },
-            {
-              key: "dca",
-              label: `定投计划`,
-              children:
-                plans.length === 0
-                  ? <EmptyState description="暂无定投计划" />
-                  : <DcaPlanList plans={plans} />,
-            },
-            {
-              key: "orders",
-              label: `交易记录`,
-              children:
-                orders.length === 0
-                  ? <EmptyState description="暂无交易记录" />
-                  : (
-                      <>
-                        <OrderList
-                          orders={orders.slice(
-                            (orderPage - 1) * PAGE_SIZE,
-                            orderPage * PAGE_SIZE,
-                          )}
-                          detailed
-                        />
-                        {orders.length > PAGE_SIZE && (
-                          // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
-                          <div className="fp-h-scroll" style={{ marginTop: 16 }}>
-                            <Pagination
-                              align="end"
-                              responsive
-                              current={orderPage}
-                              pageSize={PAGE_SIZE}
-                              total={orders.length}
-                              showSizeChanger={false}
-                              onChange={setOrderPage}
-                            />
-                          </div>
-                        )}
-                      </>
-                    ),
-            },
-            {
-              key: "txs",
-              label: `资金流水`,
-              children:
-                txs.length === 0
-                  ? <EmptyState description="暂无流水" />
-                  : (
-                      <>
-                        <TxList
-                          txs={txs.slice(
-                            (txPage - 1) * PAGE_SIZE,
-                            txPage * PAGE_SIZE,
-                          )}
-                        />
-                        {txs.length > PAGE_SIZE && (
-                          // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
-                          <div className="fp-h-scroll" style={{ marginTop: 16 }}>
-                            <Pagination
-                              align="end"
-                              responsive
-                              current={txPage}
-                              pageSize={PAGE_SIZE}
-                              total={txs.length}
-                              showSizeChanger={false}
-                              onChange={setTxPage}
-                            />
-                          </div>
-                        )}
-                      </>
-                    ),
-            },
-          ]}
-        />
+      <SectionCard title={`交易记录（最近 ${orders.length} 条）`}>
+        {orders.length === 0
+          ? <EmptyState description="暂无交易记录" />
+          : (
+              <>
+                <OrderList orders={orders.slice((orderPage - 1) * PAGE_SIZE, orderPage * PAGE_SIZE)} detailed />
+                {orders.length > PAGE_SIZE && (
+                  // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
+                  <div className="fp-h-scroll" style={{ marginTop: 16 }}>
+                    <Pagination
+                      align="end"
+                      responsive
+                      current={orderPage}
+                      pageSize={PAGE_SIZE}
+                      total={orders.length}
+                      showSizeChanger={false}
+                      onChange={setOrderPage}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+      </SectionCard>
+
+      <SectionCard title={`资金流水（最近 ${txs.length} 条）`}>
+        {txs.length === 0
+          ? <EmptyState description="暂无流水" />
+          : (
+              <>
+                <TxList txs={txs.slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE)} />
+                {txs.length > PAGE_SIZE && (
+                  // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
+                  <div className="fp-h-scroll" style={{ marginTop: 16 }}>
+                    <Pagination
+                      align="end"
+                      responsive
+                      current={txPage}
+                      pageSize={PAGE_SIZE}
+                      total={txs.length}
+                      showSizeChanger={false}
+                      onChange={setTxPage}
+                    />
+                  </div>
+                )}
+              </>
+            )}
       </SectionCard>
     </Space>
   );

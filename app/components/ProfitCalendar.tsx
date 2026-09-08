@@ -83,10 +83,13 @@ function fmtPnlShort(cents: number): string {
 export function ProfitCalendar({
   data,
   onPickDate,
+  selectedDate,
 }: {
   data: DailyAsset[];
-  /** 点击有数据日期的回调（收益明细页消费）；不传则纯展示（/master） */
+  /** 点击有数据日期的回调（收益明细页消费）；不传则纯展示（首页） */
   onPickDate?: (date: string) => void;
+  /** 当前选中日（可选）：格子加主色描边。与 onPickDate 配合由调用方驱动 */
+  selectedDate?: string;
 }) {
   // 空数据直接走空态
   if (data.length === 0) {
@@ -97,7 +100,14 @@ export function ProfitCalendar({
   // SSR 安全：服务端/客户端时区不同不会导致 hydration 不一致
   const lastDataMonth = data[data.length - 1]!.date.slice(0, 7);
 
-  return <ProfitCalendarInner data={data} lastDataMonth={lastDataMonth} onPickDate={onPickDate} />;
+  return (
+    <ProfitCalendarInner
+      data={data}
+      lastDataMonth={lastDataMonth}
+      onPickDate={onPickDate}
+      selectedDate={selectedDate}
+    />
+  );
 }
 
 /**
@@ -108,10 +118,13 @@ function ProfitCalendarInner({
   data,
   lastDataMonth,
   onPickDate,
+  selectedDate,
 }: {
   data: DailyAsset[];
   lastDataMonth: string;
   onPickDate?: (date: string) => void;
+  /** 当前选中日（可选）：格子加主色描边，与外层同参透传 */
+  selectedDate?: string;
 }) {
   // currentMonth 状态：初始值从 data 派生，SSR 安全
   const [currentMonth, setCurrentMonth] = useState(lastDataMonth);
@@ -210,6 +223,8 @@ function ProfitCalendarInner({
               role={clickable ? "button" : undefined}
               tabIndex={clickable ? 0 : undefined}
               aria-label={clickable ? `查看 ${dateStr} 收益明细` : undefined}
+              // 选中态此前只有视觉 boxShadow，读屏器无感——补 aria-pressed 暴露按下态
+              aria-pressed={clickable ? selectedDate === dateStr : undefined}
               onClick={clickable ? () => onPickDate?.(dateStr) : undefined}
               onKeyDown={clickable
                 ? (e) => {
@@ -222,6 +237,8 @@ function ProfitCalendarInner({
               style={{
                 position: "relative",
                 background: bg,
+                // 选中格：主色描边标明「明细区正在看这一天」
+                boxShadow: selectedDate === dateStr ? `inset 0 0 0 2px ${COLOR.primary}` : undefined,
                 borderRadius: 6,
                 minHeight: 44,
                 padding: "4px 6px",

@@ -4,7 +4,7 @@
  * 支付宝式三段布局（2026-09-07 详情页重构）：
  *   顶部 持仓总览（持有金额主位 + 昨日收益/持有收益/率，右上基金详情入口）
  *   腰部 功能入口（收益明细/交易记录/定投计划，跳全局页，后两者带 ?fund= 过滤）
- *   累计盈亏折线图（近1月/持有以来）+ 份额批次 + 底部操作卡（卖出/定投/买入弹抽屉）
+ *   累计盈亏折线图（近1月/持有以来）+ 份额批次 + 页底固定操作条（卖出/定投/买入弹抽屉）
  *
  * 口径注意（spec §10）：顶部「持有收益」是浮动口径（市值−成本，赎回后清零），
  * 「累计盈亏」图含已实现盈亏与全部费用——两数并存、标签分明；
@@ -21,11 +21,13 @@ import { FieldTimeOutlined, LineChartOutlined, ProfileOutlined } from "@ant-desi
 import { Button, Col, Row, Space, Table, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { DcaDrawer } from "~/components/DcaDrawer";
 import { FundPnlChart } from "~/components/FundPnlChart";
+import { QuickEntries } from "~/components/QuickEntries";
 import { SellDrawer } from "~/components/SellDrawer";
+import { BottomActionBar } from "~/components/ui/BottomActionBar";
 import { DataRow } from "~/components/ui/DataRow";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
@@ -41,7 +43,7 @@ import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getDcaPlans, getHoldingDetail } from "~/services/portfolio-service";
 import { placeSellOrder } from "~/services/trade";
-import { COLOR, pnlColor } from "~/theme";
+import { pnlColor } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -122,39 +124,6 @@ function signedYuan(cents: number): string {
 /** 日期串 → 「9 月 5 日」（去前导零，与 AssetOverviewCard 同款手法） */
 function fmtDateLabel(date: string): string {
   return `${String(Number(date.slice(5, 7)))} 月 ${String(Number(date.slice(8, 10)))} 日`;
-}
-
-/**
- * 腰部功能入口：跳全局页（交易记录/定投带 ?fund= 过滤；收益明细是全局口径）。
- * 图标与配色与 /me 的 QuickEntries 同款保持视觉一致，但刻意不共用组件——
- * 那是 me-page 重构（并行分支）的产物，别 import 对方领地的文件。
- */
-function HoldingQuickEntries({ fundCode }: { fundCode: string }) {
-  const entries = [
-    { to: "/me/profit", label: "收益明细", icon: <LineChartOutlined /> },
-    { to: `/me/orders?fund=${fundCode}`, label: "交易记录", icon: <ProfileOutlined /> },
-    { to: `/me/dca?fund=${fundCode}`, label: "定投计划", icon: <FieldTimeOutlined /> },
-  ];
-  return (
-    <Row gutter={[16, 16]}>
-      {entries.map(e => (
-        <Col xs={8} key={e.to}>
-          <Link
-            to={e.to}
-            style={{
-              display: "block",
-              textAlign: "center",
-              padding: "16px 0",
-              color: COLOR.textPrimary,
-            }}
-          >
-            <div style={{ fontSize: 22, color: COLOR.primary }}>{e.icon}</div>
-            <div style={{ fontSize: 13, marginTop: 8 }}>{e.label}</div>
-          </Link>
-        </Col>
-      ))}
-    </Row>
-  );
 }
 
 export default function MeHoldingDetail({ loaderData, params }: Route.ComponentProps) {
@@ -258,9 +227,15 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         </Row>
       </SectionCard>
 
-      {/* 腰部功能入口（spec §5.1 ③） */}
+      {/* 腰部功能入口：跳全局页（交易记录/定投带 ?fund= 过滤；收益明细是全局口径） */}
       <SectionCard>
-        <HoldingQuickEntries fundCode={d.fundCode} />
+        <QuickEntries
+          entries={[
+            { to: "/me/profit", label: "收益明细", sub: "每日收益一览", icon: <LineChartOutlined /> },
+            { to: `/me/orders?fund=${d.fundCode}`, label: "交易记录", sub: "申购赎回全记录", icon: <ProfileOutlined /> },
+            { to: `/me/dca?fund=${d.fundCode}`, label: "定投计划", sub: "自动下单管理", icon: <FieldTimeOutlined /> },
+          ]}
+        />
       </SectionCard>
 
       {/* 累计盈亏：含已实现盈亏与全部费用，与收益明细页同口径；
@@ -367,34 +342,34 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         </Paragraph>
       </SectionCard>
 
-      {/* 底部操作卡：卖出 / 定投 / 买入（spec §5.1 ⑥） */}
-      <SectionCard title="交易操作">
-        <Space size={16} wrap>
-          <Button
-            size="large"
-            onClick={() => setSellOpen(true)}
-            disabled={d.availableShares <= 0}
-          >
-            卖出
-          </Button>
-          <Button size="large" onClick={() => setDcaOpen(true)}>
-            定投
-          </Button>
-          <Button
-            type="primary"
-            size="large"
-            onClick={() => setBuyOpen(true)}
-            disabled={!(d.navScaled > 0)}
-          >
-            买入
-          </Button>
-        </Space>
-        <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
-          {d.availableShares <= 0
-            ? "无可卖份额（待确认赎回单占用或已全部赎回）"
-            : "卖出按批次先进先出逐批计费；买入按 T+1 确认，现金在下单时冻结。"}
-        </Paragraph>
-      </SectionCard>
+      {/* 页底固定操作条：卖出 / 定投 / 买入。按钮语义与禁用逻辑原样来自旧「交易操作」卡 */}
+      <BottomActionBar
+        note={d.availableShares <= 0
+          ? "无可卖份额（待确认赎回单占用或已全部赎回）"
+          : "卖出按批次先进先出逐批计费；买入按 T+1 确认，现金在下单时冻结。"}
+        actions={(
+          <Space size={16} wrap>
+            <Button
+              size="large"
+              onClick={() => setSellOpen(true)}
+              disabled={d.availableShares <= 0}
+            >
+              卖出
+            </Button>
+            <Button size="large" onClick={() => setDcaOpen(true)}>
+              定投
+            </Button>
+            <Button
+              type="primary"
+              size="large"
+              onClick={() => setBuyOpen(true)}
+              disabled={!(d.navScaled > 0)}
+            >
+              买入
+            </Button>
+          </Space>
+        )}
+      />
 
       {/* 三抽屉：买入（现有壳）/ 卖出 / 定投（Task 7 壳） */}
       <BuyDrawer

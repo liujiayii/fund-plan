@@ -1,11 +1,16 @@
 import type { Route } from "./+types/admin_.users.$id";
 import { Space, Tag, Typography } from "antd";
+import { AssetOverviewCard } from "~/components/AssetOverviewCard";
+import { AssetPnlSummary } from "~/components/AssetPnlSummary";
+import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { OrderList } from "~/components/OrderList";
-import { HoldingListReadonly, PortfolioSummary } from "~/components/PortfolioView";
+import { HoldingListReadonly } from "~/components/PortfolioView";
+import { ProfitCalendarCard } from "~/components/ProfitCalendarCard";
 import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getUserDetail } from "~/services/admin-service";
+import { getProfitDetail } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { requireAdmin } from "~/services/guard";
 
@@ -15,8 +20,8 @@ export function meta(_: Route.MetaArgs) {
   return [{ title: "用户详情 · 管理后台 · 模拟基金" }];
 }
 /**
- * admin 看某个用户的盘：只读。只读后台沿用 PortfolioSummary 总览 + 只读列表；
- * /me 与 /master 已改用 AssetOverviewCard（2026-09-07），此处维持旧总览。
+ * admin 看某个用户的盘：只读。总览/走势/日历已换 /me 同款布局（ux-polish #11），
+ * 持仓与订单仍是只读列表；只读铁律不变——全页没有任何操作按钮。
  *
  * ⚠️ 文件名里的 `admin_.` 尾下划线是刻意的：断开与 admin.tsx 的嵌套。
  * 此前叫 admin.users.$id.tsx（点号串联=嵌套路由），但 admin.tsx 是普通
@@ -37,7 +42,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     throw new Response("用户不存在", { status: 404 });
   }
 
-  return { detail };
+  // 收益三件套（走势+日历+明细）的序列数据；查询数 3+N+1，单用户页面远低于 D1 硬顶
+  const profit = await getProfitDetail(db, id);
+
+  return { detail, profit };
 }
 
 export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
@@ -65,11 +73,31 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
       {/* 返回列表的入口放标题区下方，排查问题时在多个用户间跳转是高频动作 */}
       <NavButton to="/admin">← 返回用户列表</NavButton>
 
+      {/* 总览与收益三件套：与 /me 同款布局（ux-polish #11）。
+          只读铁律不变——没有任何操作按钮 */}
       <SectionCard>
-        <PortfolioSummary portfolio={portfolio} />
+        <AssetOverviewCard
+          summary={portfolio.summary}
+          daily={loaderData.profit.daily}
+          latest={loaderData.profit.latest}
+          totalDepositedCents={loaderData.profit.totalDepositedCents}
+        />
       </SectionCard>
 
-      <SectionCard title={`持仓（${portfolio.holdings.length}）`}>
+      {/* 走势与日历仅 daily 非空时渲染：该用户从没交易过就不摆空图（/master 同款守卫） */}
+      {loaderData.profit.daily.length > 0 && (
+        <>
+          <SectionCard title="资产走势">
+            <AssetPnlSummary daily={loaderData.profit.daily} latest={loaderData.profit.latest} />
+            <AssetTrendChart data={loaderData.profit.daily} />
+          </SectionCard>
+          <SectionCard title="收益日历">
+            <ProfitCalendarCard detail={loaderData.profit} />
+          </SectionCard>
+        </>
+      )}
+
+      <SectionCard title={`持仓（${portfolio.holdings.length} 只）`}>
         <HoldingListReadonly holdings={portfolio.holdings} />
       </SectionCard>
 

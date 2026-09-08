@@ -14,6 +14,7 @@ import {
   ScrollRestoration,
   useLoaderData,
   useLocation,
+  useMatches,
   useNavigate,
 } from "react-router";
 import { MobileTabBar } from "~/components/MobileTabBar";
@@ -92,6 +93,12 @@ export default function App() {
     : NAV_ITEMS;
   // 高亮当前所在的一级导航（顶栏与底部 TabBar 共用同一份纯函数）
   const selectedKey = resolveSelectedKey(location.pathname, navItems);
+
+  // 页底固定操作条（BottomActionBar）只在持仓详情/基金详情两页出现；
+  // Footer 在 Content 之外，bar 的占位块护不到它，这两页要额外让位（ux-polish 终审 I-1）
+  const hasBottomBar = useMatches().some(
+    m => /^\/me\/holdings\/.+/.test(m.pathname) || /^\/funds\/.+/.test(m.pathname),
+  );
 
   // 用户名首字作为头像文字（中文取第一字，英文取首字母大写），
   // 因 DB 未存头像 URL，用品牌蓝底白字字母头像是最接近消费级 App 的做法。
@@ -227,7 +234,7 @@ export default function App() {
         {/* Pro 系标准 Footer：上行 links（GitHub），下行 © + 声明。
             用 DefaultFooter 取代手写 Footer，省去自维护链接样式，视觉与 antd Pro 一致。 */}
         <DefaultFooter
-          className="fp-footer"
+          className={`fp-footer${hasBottomBar ? " fp-footer-bar-clear" : ""}`}
           copyright="模拟盘 · 数据来自公开接口 · 仅供学习，不构成投资建议"
           links={[
             {

@@ -1,7 +1,6 @@
 import type { Route } from "./+types/me.orders";
-import { Pagination, Space, Tag, Typography } from "antd";
+import { Pagination, Space, Typography } from "antd";
 import { useState } from "react";
-import { useSearchParams } from "react-router";
 import { OrderActions } from "~/components/OrderActions";
 import { OrderList } from "~/components/OrderList";
 import { OrderTimeline } from "~/components/OrderTimeline";
@@ -100,8 +99,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function MeOrders({ loaderData }: Route.ComponentProps) {
   const { orders, fundFilter } = loaderData;
-  // 过滤参数进 URL：持仓详情页深链进来；× 清参以 replace 重跑本页 loader（一次请求），无其他副作用
-  const [, setSearchParams] = useSearchParams();
   // 待确认委托独立成区：委托管理的主战场，撤单/改单按钮就在眼前，
   // 不再和已成交历史混在一条时间线里（主人反馈「撤单改单难发现」）
   const pendingOrders = orders.filter(o => o.status === "pending");
@@ -114,25 +111,12 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
         我的订单
       </Title>
 
-      {/* 过滤指示：仅看某基金（来自持仓详情页入口）；× 清参回全量，旁挂返回持仓详情 */}
+      {/* 来自持仓详情页深链时旁挂返回入口；「仅看某基金」Tag 已按主人要求撤下，
+          过滤口径由 URL ?fund= 与列表内容自明（ux-polish #3） */}
       {fundFilter && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <Tag
-            color="blue"
-            closable
-            onClose={() => setSearchParams({}, { replace: true })}
-          >
-            仅看
-            {" "}
-            {fundFilter.name}
-            （
-            {fundFilter.code}
-            ）
-          </Tag>
-          <NavButton size="small" to={`/me/holdings/${fundFilter.code}`}>
-            ← 返回持仓详情
-          </NavButton>
-        </div>
+        <NavButton size="small" to={`/me/holdings/${fundFilter.code}`}>
+          ← 返回持仓详情
+        </NavButton>
       )}
 
       {pendingOrders.length > 0 && (
