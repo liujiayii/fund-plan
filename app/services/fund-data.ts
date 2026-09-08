@@ -11,7 +11,9 @@ import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
  * 东方财富公开接口封装：搜索、档案、历史净值、全量列表兜底。
  *
  * 三条铁律：
- *  1. 全部走 KV 缓存，降低对东财的压力（免费版额度也有限）；
+ *  1. 全部走 KV 缓存，降低对东财的压力（免费版额度也有限）——
+ *     空结果同样要写（"null"/"[]" 哨兵，见 fetchInvestStyle 的论证），
+ *     否则无数据的基金每次访问都实打东财；瞬时故障除外，不落盘；
  *  2. 任何异常都不抛给上层——回退缓存，再不行返回空值，
  *     页面宁可少数据也不能白屏；
  *  3. 净值/费率一律在这里转成整数，再往上走。
@@ -915,7 +917,8 @@ export async function fetchAssetAllocation(
   const cached = await env.KV.get(cacheKey);
   if (cached) {
     try {
-      return JSON.parse(cached) as AssetAllocation;
+      // 命中哨兵 "null" 时 JSON.parse 天然还原 null（非空串判真，链路自洽）
+      return JSON.parse(cached) as AssetAllocation | null;
     }
     catch {
       /* 缓存损坏 */
@@ -930,22 +933,25 @@ export async function fetchAssetAllocation(
     const json = (await resp.json()) as {
       Datas?: { GP?: string; ZQ?: string; HB?: string }[] | null;
     };
-    // 取最新报告期（首行）；无报告期（新基金）返回 null
+    // 取最新报告期（首行）。无报告期（新基金）或三项全 0（全 "--"）都算
+    // 无数据：alloc 置 null，但空结果也写 KV（"null" 哨兵）——不写的话
+    // 这类基金每次访问都实打东财，违背顶注「全部走 KV 缓存」铁律
+    // （评审修正，与 bonus/style 的空哨兵范式对齐）
+    let alloc: AssetAllocation | null = null;
     const row = json.Datas?.[0];
-    if (!row)
-      return null;
-
-    // percentToRate 百分比→万分之，这里再回百分数，
-    // 顺手把 "--"/空串归一成 0
-    const pct = (v: string | undefined): number => percentToRate(v ?? null) / 100;
-    const alloc: AssetAllocation = {
-      stocks: pct(row.GP),
-      bonds: pct(row.ZQ),
-      cash: pct(row.HB),
-    };
-    // 三项全 0 视为无数据（货币基金 GP="--" 也会被归一成 0，但 ZQ/HB 有值）
-    if (alloc.stocks <= 0 && alloc.bonds <= 0 && alloc.cash <= 0)
-      return null;
+    if (row) {
+      // percentToRate 百分比→万分之，这里再回百分数，
+      // 顺手把 "--"/空串归一成 0
+      const pct = (v: string | undefined): number => percentToRate(v ?? null) / 100;
+      alloc = {
+        stocks: pct(row.GP),
+        bonds: pct(row.ZQ),
+        cash: pct(row.HB),
+      };
+      // 三项全 0 视为无数据（货币基金 GP="--" 也会被归一成 0，但 ZQ/HB 有值）
+      if (alloc.stocks <= 0 && alloc.bonds <= 0 && alloc.cash <= 0)
+        alloc = null;
+    }
 
     await env.KV.put(cacheKey, JSON.stringify(alloc), {
       expirationTtl: CACHE_TTL.alloc,
@@ -1090,11 +1096,12 @@ export async function fetchManagerInfo(
         };
       });
 
-    if (items.length > 0) {
-      await env.KV.put(cacheKey, JSON.stringify(items), {
-        expirationTtl: CACHE_TTL.manager,
-      });
-    }
+    // 空列表也写缓存（"[]" 哨兵）：无现任经理的基金（如指数基金）不写的话
+    // 每次访问都实打东财，违背顶注「全部走 KV 缓存」铁律
+    // （评审修正，与 bonus/style 的空哨兵范式对齐）
+    await env.KV.put(cacheKey, JSON.stringify(items), {
+      expirationTtl: CACHE_TTL.manager,
+    });
     return items;
   }
   catch (err) {

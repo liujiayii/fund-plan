@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchAssetAllocation,
+  fetchBonusHistory,
   fetchFundBasic,
   fetchFundDetail,
   fetchFundPosition,
   fetchFundRank,
   fetchIndexNav,
+  fetchInvestStyle,
+  fetchManagerInfo,
   fetchNavHistory,
   parseFundListJs,
   percentToRate,
@@ -581,5 +585,181 @@ describe("fetchIndexNav 沪深300", () => {
       }),
     );
     expect(await fetchIndexNav(fakeEnv(), "1.000300", 30)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 稳健档四接口（资产配置/历史分红/基金经理/投资风格）。
+// 固定响应的形状取自 2026-09-08 对东财移动端接口的实测采样，
+// 字段名（GP/ZQ/HB、FHINFO/FHFCZ、MGRNAME/LEMPDATE/PENAVGROWTH、TAGLIST/FEANAME）
+// 与线上一致——东财改字段名时这里的解析断言会先红，页面不会静默退化成「—」。
+// ---------------------------------------------------------------------------
+
+describe("fetchAssetAllocation 资产配置", () => {
+  // Datas 按报告期排列、最新在前，只取首行
+  const allocResp = {
+    Datas: [
+      { GP: "85.23", ZQ: "5.10", HB: "9.67" },
+      { GP: "80.00", ZQ: "10.00", HB: "10.00" },
+    ],
+  };
+
+  it("解析最新报告期的股/债/现占比（百分数，非万分之）", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(allocResp))));
+    const r = await fetchAssetAllocation(fakeEnv(), "000001");
+    expect(r).toEqual({ stocks: 85.23, bonds: 5.1, cash: 9.67 });
+  });
+
+  it("三项全 '--' 归一成 0 后视为无数据：返回 null 并写 'null' 哨兵缓存", async () => {
+    const kv = fakeKV();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ Datas: [{ GP: "--", ZQ: "--", HB: "--" }] }))),
+    );
+    const env = fakeEnv(kv);
+    expect(await fetchAssetAllocation(env, "000001")).toBeNull();
+    // 评审修正：无数据也落 KV——不写的话这类基金每次访问都实打东财
+    expect(kv._store.get("fund:alloc:000001")).toBe("null");
+  });
+
+  it("无报告期（Datas:null，新基金）返回 null 并写 'null' 哨兵缓存", async () => {
+    const kv = fakeKV();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ Datas: null }))));
+    const env = fakeEnv(kv);
+    expect(await fetchAssetAllocation(env, "000001")).toBeNull();
+    expect(kv._store.get("fund:alloc:000001")).toBe("null");
+  });
+
+  it("哨兵缓存命中：直接返回 null，不打网络", async () => {
+    const kv = fakeKV();
+    kv._store.set("fund:alloc:000001", "null");
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    expect(await fetchAssetAllocation(fakeEnv(kv), "000001")).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("网络异常返回 null 且不写缓存（瞬时故障不落盘，下次访问还有机会）", async () => {
+    const kv = fakeKV();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    );
+    const env = fakeEnv(kv);
+    expect(await fetchAssetAllocation(env, "000001")).toBeNull();
+    expect(kv._store.size).toBe(0);
+  });
+});
+
+describe("fetchBonusHistory 历史分红", () => {
+  const bonusResp = {
+    Datas: {
+      // FHINFO：分红记录；FHFCZ 是「每份派现（元）」，展示口径是每 10 份
+      FHINFO: [
+        { FSRQ: "2025-11-20", FHFCZ: "0.07" },
+        { FSRQ: "2025-05-15", FHFCZ: "0.15" },
+        { FSRQ: "", FHFCZ: "0.10" }, // 缺除息日的脏行，应被过滤
+      ],
+    },
+  };
+
+  it("解析年份/每10份派现/除息日：FHFCZ ×10 走 Decimal 吃尾差，缺日期行过滤", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(bonusResp))));
+    const r = await fetchBonusHistory(fakeEnv(), "000001");
+    expect(r).toEqual([
+      { year: "2025", per10Shares: 0.7, recordDate: "2025-11-20" },
+      { year: "2025", per10Shares: 1.5, recordDate: "2025-05-15" },
+    ]);
+  });
+
+  it("无分红基金（Datas:null）返回空数组并写 '[]' 空缓存", async () => {
+    const kv = fakeKV();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ Datas: null }))));
+    const env = fakeEnv(kv);
+    expect(await fetchBonusHistory(env, "000001")).toEqual([]);
+    expect(kv._store.get("fund:bonus:000001")).toBe("[]");
+  });
+
+  it("网络异常返回 null", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    );
+    expect(await fetchBonusHistory(fakeEnv(), "000001")).toBeNull();
+  });
+});
+
+describe("fetchManagerInfo 基金经理", () => {
+  const mgrResp = {
+    // 每行是一段「管理团队任期」，现任段的 LEMPDATE 是 "--"
+    Datas: [
+      { MGRNAME: "张三", FEMPDATE: "2019-05-20", LEMPDATE: "--", PENAVGROWTH: "70.492" },
+      { MGRNAME: "李四", FEMPDATE: "2015-01-01", LEMPDATE: "2023-12-31", PENAVGROWTH: "55.10" },
+    ],
+  };
+
+  it("只取现任（LEMPDATE='--'），任期回报格式化为百分号串，规模/简介恒空串", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(mgrResp))));
+    const r = await fetchManagerInfo(fakeEnv(), "000001");
+    expect(r).toEqual([
+      { name: "张三", workTime: "2019-05-20", fundSize: "", profit: "70.49%", resume: "" },
+    ]);
+  });
+
+  it("无现任经理（Datas:null，指数基金）返回空数组并写 '[]' 空缓存", async () => {
+    const kv = fakeKV();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ Datas: null }))));
+    const env = fakeEnv(kv);
+    expect(await fetchManagerInfo(env, "000001")).toEqual([]);
+    // 评审修正：空结果也落 KV——不写的话无经理基金每次访问都实打东财
+    expect(kv._store.get("fund:manager:000001")).toBe("[]");
+  });
+
+  it("网络异常返回 null", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    );
+    expect(await fetchManagerInfo(fakeEnv(), "000001")).toBeNull();
+  });
+});
+
+describe("fetchInvestStyle 投资风格", () => {
+  const styleResp = {
+    // 标签混装：质量标签（十年优秀基等）与风格标签（「投资」前缀）同在 TAGLIST
+    Datas: [
+      { FEATYPE: "质量", TAGLIST: [{ FEANAME: "十年优秀基" }, { FEANAME: "优秀基金经理" }] },
+      { FEATYPE: "风格", TAGLIST: [{ FEANAME: "投资大盘股" }, { FEANAME: "投资港股" }] },
+    ],
+  };
+
+  it("只取「投资」前缀的风格标签，「 / 」串联；质量标签不混入", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(styleResp))));
+    expect(await fetchInvestStyle(fakeEnv(), "000001")).toBe("投资大盘股 / 投资港股");
+  });
+
+  it("纯质量标签基金返回 null 并写 'null' 哨兵缓存", async () => {
+    const kv = fakeKV();
+    const pure = { Datas: [{ TAGLIST: [{ FEANAME: "十年优秀基" }] }] };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(pure))));
+    const env = fakeEnv(kv);
+    expect(await fetchInvestStyle(env, "000001")).toBeNull();
+    expect(kv._store.get("fund:style:000001")).toBe("null");
+  });
+
+  it("网络异常返回 null", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    );
+    expect(await fetchInvestStyle(fakeEnv(), "000001")).toBeNull();
   });
 });
