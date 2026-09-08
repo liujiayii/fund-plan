@@ -244,6 +244,8 @@ export async function getAssetTimeline(
 export interface ProfitDetailView {
   daily: DailyAsset[];
   latest: DailyAsset | null;
+  /** 累计投入本金（Σ净入金，分）——总览卡算累计收益率用（/master、/admin/users/:id 复用本视图） */
+  totalDepositedCents: number;
   /** 日期 → 当日各基金收益（当日有持仓/现金流的日期才有 key，含已清仓基金） */
   fundPnlByDate: Record<string, FundDayPnl[]>;
   /** fundCode → 基金名 */
@@ -251,7 +253,7 @@ export interface ProfitDetailView {
 }
 
 /**
- * 收益明细页数据：时间线 + 全量按基金归因 + 基金名。
+ * 收益明细页数据：时间线 + 累计本金 + 全量按基金归因 + 基金名。
  * 归因一次算全量（365 天 × 10 基金 ≈ 3650 条，内存级），
  * 日历点击某天时直接查表，无额外请求。
  */
@@ -259,7 +261,7 @@ export async function getProfitDetail(
   db: Db,
   userId: number,
 ): Promise<ProfitDetailView> {
-  const { input, fundPnlInput, fundCodes } = await buildReplayInput(db, userId);
+  const { input, fundPnlInput, totalDepositedCents, fundCodes } = await buildReplayInput(db, userId);
   const daily = replayDailyAssets(input);
 
   // 基金名一次 inArray 查询（含已清仓——历史日期的归因里有它们）
@@ -283,6 +285,7 @@ export async function getProfitDetail(
   return {
     daily,
     latest: daily.length > 0 ? daily[daily.length - 1] : null,
+    totalDepositedCents,
     fundPnlByDate,
     fundNames,
   };
