@@ -83,6 +83,38 @@ Cloudflare Dashboard → Workers & Pages → 你的 Worker → Settings → Trig
 3. 等当晚 20:30 Cron 跑完（或在 Dashboard 手动触发），订单应变 `已确认`
 4. `/me/holdings` 应出现持仓
 
+## PR 预览环境
+
+每个 PR 会自动部署到预览环境（`.github/workflows/preview.yml`，
+配置在 `wrangler.preview.jsonc`）：独立 Worker `fund-plan-preview`，
+通过 `https://fund-plan-preview.<账户ID>.workers.dev` 访问，
+地址由机器人评论到 PR 上。
+
+### 隔离策略（2026-09-08 定案）：共享生产 D1/KV
+
+预览 Worker 实例独立，但 **D1 与 KV 与生产共享同一个库/命名空间**。
+个人测试站，接受以下代价换取零资源创建成本：
+
+- **PR 里的注册/下单/定投是真实写操作，直接进生产盘**——测试数据会出现在
+  `/admin`、排行榜与主理人的组合里，污染了得手写 SQL 清理
+- **KV 写额度（账户级 1000 次/天）两边共享**，预览拉基金档案/搜索会挤占
+- **preview.yml 刻意不做 D1 迁移**：迁移只由 deploy.yml（main Test 全绿后）
+  执行，PR 的 schema 变更不允许在合并前改生产库结构
+- **preview 配置绝不能加 crons**：否则 preview 与生产两个 Worker 每天各扫
+  一次定投/撮合，同一计划双倍下单、T+1 被提前撮合
+
+> 曾考虑官方 versions preview URL（`wrangler versions upload`）：预览版本
+> 与生产共享绑定，效果等价且 URL 不固定，无额外收益，不采用。
+> 日后若测试污染成为实际痛点，再切独立 D1/KV（免费版 10 库/100 namespace
+> 余量充足），只需换 `wrangler.preview.jsonc` 两个 ID。
+
+### 注意事项
+
+- workers.dev 在国内被 DNS 污染，**本机访问预览环境需挂代理**；CI 部署不受影响
+- 多个 PR 共用同一个预览 Worker，后推送的覆盖先前的
+- 预览 Worker 长期保留不吃多少额度；不想留了手动删：
+  `npx wrangler delete -c wrangler.preview.jsonc`
+
 ## 免费版额度说明
 
 | 资源         | 免费额度    | 本项目消耗          |

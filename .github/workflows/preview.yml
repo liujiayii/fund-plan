@@ -1,0 +1,83 @@
+# 预览流水线：PR 自动部署到 Cloudflare 预览环境（fund-plan-preview）
+#
+# 与生产部署（deploy.yml，workflow_run 等 main 分支 Test 全绿）平行：
+#   - 每个 PR 打开/更新时，把 PR 代码构建后部署到独立 preview Worker，
+#     并把预览地址评论到 PR 里
+#   - 预览 Worker 实例独立，但 D1/KV 与生产**共享**（2026-09-08 定案）：
+#     PR 里的测试数据会直接进生产盘；且本流水线不做 D1 迁移——
+#     PR 的 schema 变更不允许在合并前改生产库
+#   - 预览地址是 *.workers.dev：国内被 DNS 污染，本机访问需代理；CI 部署不受影响
+#   - 生产入口（liujiayii.dpdns.org）不受任何影响：预览 Worker 不绑自定义域名
+#
+# Secrets：复用 deploy.yml 的 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# 同一 PR 的新推送取消旧部署（每次都全量覆盖同一个 preview Worker）
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write # 把预览地址评论到 PR
+
+jobs:
+  preview:
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 钉住 PR head：部署的就是 PR 里看到的那个 commit
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+
+      - name: 构建（含 UnoCSS 产物生成）
+        run: pnpm build
+
+      # ⚠️ 刻意没有「应用 D1 迁移」步骤：预览环境与生产**共享同一个库**，
+      # PR 的 schema 变更不允许在评审/合并前碰生产库结构。
+      # 迁移只由 deploy.yml（main 分支 Test 全绿后）执行。
+
+      - name: 部署预览 Worker
+        run: pnpm exec wrangler deploy -c wrangler.preview.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # 固定地址评论到 PR：已有多条机器人评论时更新最新一条（sticky comment），
+      # 避免 PR 来回更新刷出一串重复评论
+      - name: 评论预览地址
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: https://fund-plan-preview.${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.workers.dev
+        run: |
+          MARKER='<!-- preview-url -->'
+          BODY="${MARKER}
+          🔎 PR 预览环境已更新：**$PR_URL**
+          ⚠️ 预览与生产**共享 D1/KV**：预览里的注册/下单/定投都是真实写操作，会进生产盘，测试数据请留意。
+          ⚠️ \*.workers.dev 国内需代理访问。"
+
+          cid=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq ".[] | select(.user.login==\"github-actions[bot]\" and (.body | startswith(\"$MARKER\"))) | .id" | tail -1)
+
+          if [ -n "$cid" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/$cid -X PATCH -F body="$BODY" >/dev/null
+          else
+            gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -F body="$BODY" >/dev/null
+          fi
