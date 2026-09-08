@@ -2,6 +2,7 @@ import type { ProfitDetailView } from "~/services/asset-service";
 import { useState } from "react";
 import { DailyPnlDetail } from "~/components/DailyPnlDetail";
 import { ProfitCalendar } from "~/components/ProfitCalendar";
+import { EmptyState } from "~/components/ui/EmptyState";
 import { COLOR } from "~/theme";
 
 /**
@@ -19,7 +20,12 @@ export function ProfitCalendarCard({ detail }: { detail: ProfitDetailView }) {
   // null = 尚未点过，展示默认日（最新非零收益日）
   const [picked, setPicked] = useState<string | null>(null);
 
-  // 倒序找最后一个非零收益日；全零回落末位快照。daily 非空由调用方保证
+  // 空 daily 防御：调用方理论上都有门，但组件自己兜住（与 ProfitCalendar 空态同款文案）
+  if (daily.length === 0) {
+    return <EmptyState description="暂无收益日历" />;
+  }
+
+  // 倒序找最后一个非零收益日；全零回落末位快照。daily 非空由上方早退兜底
   let defaultDate = daily[daily.length - 1]!.date;
   for (let i = daily.length - 1; i >= 0; i--) {
     if (daily[i]!.dayPnlCents !== 0) {

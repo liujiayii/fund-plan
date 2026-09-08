@@ -18,7 +18,7 @@ export interface AssetOverviewCardProps {
   totalDepositedCents: number;
 }
 
-/** 盈亏金额带符号：负号 fmtYuan 自带，正数补 +（与 PortfolioSummary 同款手法） */
+/** 盈亏金额带符号：负号 fmtYuan 自带，正数补 +（沿用旧总览卡的手法） */
 function signedYuan(cents: number): string {
   return `${cents > 0 ? "+" : ""}${fmtYuan(cents)}`;
 }

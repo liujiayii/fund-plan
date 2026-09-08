@@ -163,6 +163,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
               <>
                 <TxList txs={txs.slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE)} />
                 {txs.length > PAGE_SIZE && (
+                  // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
                   <div className="fp-h-scroll" style={{ marginTop: 16 }}>
                     <Pagination
                       align="end"

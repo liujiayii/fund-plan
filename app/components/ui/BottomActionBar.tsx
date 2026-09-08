@@ -9,10 +9,10 @@ export interface BottomActionBarProps {
 }
 
 /**
- * 页底固定操作条。桌面上与 GitHub pr 页的 bottom bar 同款：全宽白底 + 顶边框，
+ * 页底固定操作条。桌面上与 GitHub 合并请求页的 bottom bar 同款：全宽白底 + 顶边框，
  * 内容层与 fp-content 同宽对齐；移动端叠在 fp-tabbar 上方（不盖底部导航）。
  *
- * 结构 = 文档流占位 + fixed 条：
+ * 结构 = 文档流占位 + 固定条：
  * 占位块撑出与条等高的空间，调用方页面无需手补 padding；
  * 移动端 tabbar 的让位由 fp-content 既有底 padding（56px+safe-area）负责。
  *

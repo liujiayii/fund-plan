@@ -223,6 +223,8 @@ function ProfitCalendarInner({
               role={clickable ? "button" : undefined}
               tabIndex={clickable ? 0 : undefined}
               aria-label={clickable ? `查看 ${dateStr} 收益明细` : undefined}
+              // 选中态此前只有视觉 boxShadow，读屏器无感——补 aria-pressed 暴露按下态
+              aria-pressed={clickable ? selectedDate === dateStr : undefined}
               onClick={clickable ? () => onPickDate?.(dateStr) : undefined}
               onKeyDown={clickable
                 ? (e) => {

@@ -56,6 +56,14 @@
     margin-bottom: calc(56px + env(safe-area-inset-bottom));
   }
 
+  /* 有操作条页面的 Footer 窄屏让位：TabBar 56 + bar 64~86 + 安全区。
+     与 .fp-footer 同为 0,1,0，靠紧跟其后的 source-order 压过上面的 56px 让位
+     （勿挪到 .fp-footer 之前）；桌面 88px 基线在下方 min-width:768px 块里，
+     与本块宽度互斥、永不同时命中，故无需 !important */
+  .fp-footer-bar-clear {
+    margin-bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+
   /* ══════════ 5. FundListItem 窄屏两段式（spec §8）══════════ */
 
   /* 名称占第一行（不再被右侧 nowrap 挤到 50px），数值+操作第二行。
@@ -171,6 +179,13 @@
      桌面金额断行难看，在这里补回 */
   .fp-fli-side {
     white-space: nowrap;
+  }
+
+  /* 有页底操作条的页面（持仓/基金详情）：Footer 额外让位 bar 高度（无 note 64 / 有 note ~86）。
+     刻意放 min-width 块而非顶层基线：与上方 767px 块里的窄屏让位宽度互斥，
+     两条规则不会同时命中，从结构上免除 source-order 之争，也就不用 !important */
+  .fp-footer-bar-clear {
+    margin-bottom: 88px;
   }
 }
 
