@@ -13,7 +13,7 @@ import { useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
-import { QuickEntries } from "~/components/QuickEntries";
+import { ME_QUICK_ENTRIES, QuickEntries } from "~/components/QuickEntries";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
@@ -115,7 +115,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
 
       {/* 腰部功能入口：收益明细 / 交易记录 / 定投计划 */}
       <SectionCard>
-        <QuickEntries />
+        <QuickEntries entries={ME_QUICK_ENTRIES} />
       </SectionCard>
 
       {/* 每日签到 */}

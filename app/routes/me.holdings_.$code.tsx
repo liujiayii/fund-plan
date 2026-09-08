@@ -21,10 +21,11 @@ import { FieldTimeOutlined, LineChartOutlined, ProfileOutlined } from "@ant-desi
 import { Button, Col, Row, Space, Table, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { DcaDrawer } from "~/components/DcaDrawer";
 import { FundPnlChart } from "~/components/FundPnlChart";
+import { QuickEntries } from "~/components/QuickEntries";
 import { SellDrawer } from "~/components/SellDrawer";
 import { DataRow } from "~/components/ui/DataRow";
 import { EmptyState } from "~/components/ui/EmptyState";
@@ -41,7 +42,7 @@ import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getDcaPlans, getHoldingDetail } from "~/services/portfolio-service";
 import { placeSellOrder } from "~/services/trade";
-import { COLOR, pnlColor } from "~/theme";
+import { pnlColor } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -122,39 +123,6 @@ function signedYuan(cents: number): string {
 /** 日期串 → 「9 月 5 日」（去前导零，与 AssetOverviewCard 同款手法） */
 function fmtDateLabel(date: string): string {
   return `${String(Number(date.slice(5, 7)))} 月 ${String(Number(date.slice(8, 10)))} 日`;
-}
-
-/**
- * 腰部功能入口：跳全局页（交易记录/定投带 ?fund= 过滤；收益明细是全局口径）。
- * 图标与配色与 /me 的 QuickEntries 同款保持视觉一致，但刻意不共用组件——
- * 那是 me-page 重构（并行分支）的产物，别 import 对方领地的文件。
- */
-function HoldingQuickEntries({ fundCode }: { fundCode: string }) {
-  const entries = [
-    { to: "/me/profit", label: "收益明细", icon: <LineChartOutlined /> },
-    { to: `/me/orders?fund=${fundCode}`, label: "交易记录", icon: <ProfileOutlined /> },
-    { to: `/me/dca?fund=${fundCode}`, label: "定投计划", icon: <FieldTimeOutlined /> },
-  ];
-  return (
-    <Row gutter={[16, 16]}>
-      {entries.map(e => (
-        <Col xs={8} key={e.to}>
-          <Link
-            to={e.to}
-            style={{
-              display: "block",
-              textAlign: "center",
-              padding: "16px 0",
-              color: COLOR.textPrimary,
-            }}
-          >
-            <div style={{ fontSize: 22, color: COLOR.primary }}>{e.icon}</div>
-            <div style={{ fontSize: 13, marginTop: 8 }}>{e.label}</div>
-          </Link>
-        </Col>
-      ))}
-    </Row>
-  );
 }
 
 export default function MeHoldingDetail({ loaderData, params }: Route.ComponentProps) {
@@ -258,9 +226,15 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         </Row>
       </SectionCard>
 
-      {/* 腰部功能入口（spec §5.1 ③） */}
+      {/* 腰部功能入口：跳全局页（交易记录/定投带 ?fund= 过滤；收益明细是全局口径） */}
       <SectionCard>
-        <HoldingQuickEntries fundCode={d.fundCode} />
+        <QuickEntries
+          entries={[
+            { to: "/me/profit", label: "收益明细", sub: "每日收益一览", icon: <LineChartOutlined /> },
+            { to: `/me/orders?fund=${d.fundCode}`, label: "交易记录", sub: "申购赎回全记录", icon: <ProfileOutlined /> },
+            { to: `/me/dca?fund=${d.fundCode}`, label: "定投计划", sub: "自动下单管理", icon: <FieldTimeOutlined /> },
+          ]}
+        />
       </SectionCard>
 
       {/* 累计盈亏：含已实现盈亏与全部费用，与收益明细页同口径；
