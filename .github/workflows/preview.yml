@@ -1,0 +1,123 @@
+# 预览流水线：PR 自动上传 Cloudflare 预览版本（wrangler versions upload）
+#
+# 机制与边界（2026-09-08 定案）：
+#   - `pnpm build` 后 @cloudflare/vite-plugin 生成重定向配置（.wrangler/deploy/config.json），
+#     wrangler 命令自动改用 build/server/wrangler.json（vite 产物，no_bundle）。
+#     ⚠️ 因此本流水线绝不能用 `-c` 指定自定义配置——那会绕开重定向、
+#     让 wrangler 对源码 workers/app.ts 现打包，撞上未解析的
+#     virtual:react-router/server-build 直接失败（PR #74 首跑踩坑）。
+#   - `wrangler versions upload` 只上传一个**版本**：不动生产流量、不碰自定义
+#     域名、不加 cron，生产盘完全不受影响；预览地址按别名固定：
+#     https://pr-<PR号>-fund-plan.<workers.dev 子域>.workers.dev
+#   - 绑定与生产共享（D1/KV 同库同命名空间）——2026-09-08 定案：个人测试站
+#     接受测试数据混进生产盘，换取预览库天然有净值数据、零资源创建成本。
+#   - 部署门控：本人（仓库所有者）的 PR 自动部署；他人 PR 需在 Actions 里
+#     手动批准（environment `preview-review` 的 required reviewer）。
+#   - 凭据缺失安全跳过：Dependabot/Renovate 等机器人的 PR 拿不到 secrets，
+#     检测到即发布跳过评论，不红叉（CodeRabbit 评审采纳项）。
+#   - 预览地址是 *.workers.dev：国内被 DNS 污染，本机访问需代理；CI 不受影响。
+#
+# Secrets：复用 deploy.yml 的 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# 同一 PR 的新推送取消旧任务（上传版本是幂等覆盖，无部署状态可打断）
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write # 把预览地址评论到 PR
+
+jobs:
+  preview:
+    name: Preview Deploy
+    runs-on: ubuntu-latest
+    # 门控：本人 PR → preview-auto（无保护，直接跑）；
+    # 他人 PR → preview-review（required reviewer = 所有者，Actions 页面点批准才继续）
+    environment: ${{ github.event.pull_request.user.login == 'liujiayii' && 'preview-auto' || 'preview-review' }}
+    # secrets 上下文不能在 step 的 if 里引用，映射到 env 再判空——
+    # Dependabot/Renovate 的 PR 拿不到 secrets，这里会是空串（凭据缺失检测的依据）
+    env:
+      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 钉住 PR head：部署的就是 PR 里看到的那个 commit
+          ref: ${{ github.event.pull_request.head.sha }}
+          # 本流程不执行任何 git 推拉操作（gh api 用显式 GH_TOKEN），
+          # 关掉凭据持久化，缩小 PR 代码接触 GITHUB_TOKEN 的暴露面
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+
+      - name: 构建（含 UnoCSS 产物生成，并产出重定向配置）
+        run: pnpm build
+
+      # 上传为 fund-plan 的一个版本（别名 pr-<PR号>），生产流量/域名/cron 零改动。
+      # 机器人的 PR 拿不到 secrets → CF_API_TOKEN 为空 → 跳过，由评论步骤说明
+      - name: 上传预览版本
+        if: env.CF_API_TOKEN != '' && env.CF_ACCOUNT_ID != ''
+        run: pnpm exec wrangler versions upload --preview-alias pr-${{ github.event.pull_request.number }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT_ID }}
+
+      # workers.dev 子域是账户级的（用户自设，如 liujiayii），不是账户 ID——
+      # 从 API 现取，避免拼错地址（PR #74 首版用账户 ID 拼 URL 的坑）
+      - name: 查询 workers.dev 子域
+        id: subdomain
+        if: env.CF_API_TOKEN != '' && env.CF_ACCOUNT_ID != ''
+        run: |
+          SUBDOMAIN=$(curl -sf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
+            | jq -r '.result.subdomain')
+          echo "subdomain=$SUBDOMAIN" >> "$GITHUB_OUTPUT"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT_ID }}
+
+      # 固定地址评论到 PR：已有多条机器人评论时更新最新一条（sticky comment），
+      # 避免 PR 来回更新刷出一串重复评论。
+      # --paginate + per_page=100：PR 评论超过默认 30 条/页时也能找全（评审采纳项）
+      - name: 评论预览地址
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUBDOMAIN: ${{ steps.subdomain.outputs.subdomain }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          MARKER='<!-- preview-url -->'
+          if [ -n "$SUBDOMAIN" ]; then
+            URL="https://pr-${PR_NUMBER}-fund-plan.${SUBDOMAIN}.workers.dev"
+            BODY="${MARKER}
+            🔎 PR 预览环境已更新：**${URL}**
+            ⚠️ 预览版本与生产**共享 D1/KV**：预览里的注册/下单/定投都是真实写操作，会进生产盘，测试数据请留意。
+            ⚠️ \*.workers.dev 国内需代理访问。"
+          else
+            BODY="${MARKER}
+            ⏭️ 本次跳过预览部署：当前 PR 拿不到 Cloudflare 凭据（机器人 PR 如 Dependabot/Renovate），代码仍会正常走 Test 流水线。"
+          fi
+
+          cid=$(gh api --paginate -X GET "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments?per_page=100" \
+            --jq ".[] | select(.user.login==\"github-actions[bot]\" and (.body | startswith(\"$MARKER\"))) | .id" | tail -1)
+
+          if [ -n "$cid" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/$cid -X PATCH -F body="$BODY" >/dev/null
+          else
+            gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments -F body="$BODY" >/dev/null
+          fi

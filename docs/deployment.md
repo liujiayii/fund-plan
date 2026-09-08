@@ -83,6 +83,31 @@ Cloudflare Dashboard → Workers & Pages → 你的 Worker → Settings → Trig
 3. 等当晚 20:30 Cron 跑完（或在 Dashboard 手动触发），订单应变 `已确认`
 4. `/me/holdings` 应出现持仓
 
+## PR 预览环境
+
+每个 PR 会自动上传为生产 Worker `fund-plan` 的一个**预览版本**
+（`.github/workflows/preview.yml`，`wrangler versions upload --preview-alias pr-<PR号>`），
+地址固定为 `https://pr-<PR号>-fund-plan.<workers.dev子域>.workers.dev`，
+由机器人评论到 PR 上。
+
+### 机制要点
+
+- **versions upload 只上传版本**：不动生产流量、不碰自定义域名、不加 cron。
+  生产入口 `liujiayii.dpdns.org` 永远跑 main 合并后的版本
+- **绑定与生产共享**（D1/KV 同库同命名空间，2026-09-08 定案）：个人测试站，
+  接受测试数据混进生产盘 + KV 写额度（账户级）共享，换取零资源创建成本
+  与「预览天然有净值数据」（共享同一个 `fund_nav` 表，能测全交易流程）
+- **绝不能用 `-c` 指定自定义 wrangler 配置来另起 preview Worker**：
+  `pnpm build` 时 @cloudflare/vite-plugin 生成重定向配置
+  （`.wrangler/deploy/config.json` → `build/server/wrangler.json`，vite 产物
+  no_bundle 上传），`-c` 会绕开它导致 wrangler 对源码现打包、撞上
+  未解析的 `virtual:react-router/server-build`（PR #74 首跑踩坑）
+- **部署门控**：本人（所有者 liujiayii）的 PR 自动部署；他人 PR 走
+  environment `preview-review`（required reviewer），需在 Actions 里点批准
+- workers.dev 在国内被 DNS 污染，**本机访问预览地址需挂代理**；CI 不受影响
+- 预览版本不额外占额度；不想留的旧版本可在 Dashboard → Worker → Versions
+  里删除，或不管它（自动过期）
+
 ## 免费版额度说明
 
 | 资源         | 免费额度    | 本项目消耗          |
