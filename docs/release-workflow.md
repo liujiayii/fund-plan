@@ -47,14 +47,21 @@ pnpm test:workers    # 应用层集成测试（真实 workerd + D1，慢但不�
    CodeRabbit **不会自动 review**——它会在 PR 里发一条带 `🔍 Trigger review`
    复选框的评论，勾选后才开始评审（不勾的话 CI 里 CodeRabbit 那行会显示
    `Review skipped: manual review required for this OSS repository`）。
+   **推新 commit 后复选框会重置，复审需重新勾一次。**
    手动：在 PR 页面勾选那个复选框。助手可以等 bot 评论出现后用 API 自动勾：
 
    ```bash
    cid=$(gh api repos/liujiayii/fund-plan/issues/<PR号>/comments \
      --jq '.[] | select(.user.login=="coderabbitai[bot]" and (.body | contains("Trigger review"))) | .id')
-   gh api repos/liujiayii/fund-plan/issues/comments/$cid --jq .body \
-     | sed 's/- \[ \] \(<!-- {"checkboxId"/- [x] \1/' > /tmp/cr-body.md
-   gh api repos/liujiayii/fund-plan/issues/comments/$cid -X PATCH -F body=@/tmp/cr-body.md
+   gh api repos/liujiayii/fund-plan/issues/comments/$cid --jq .body > /tmp/cr-body.md
+   # 从 Trigger review 行提取该复选框专属的 checkboxId，钉死替换目标。
+   # ⚠️ 同一条评论里还有 Create stacked PR / Commit on current branch 等其他
+   # 复选框（PR #68 实测共 5 个），泛匹配会一并误勾；也不能用捕获组 \(…\)——
+   # Git Bash 的 sed 会报 Unmatched ( or \(，直接字面量替换最稳。
+   box=$(grep 'Trigger review' /tmp/cr-body.md | grep -o '"checkboxId":"[^"]*"' | head -1 | cut -d'"' -f4)
+   sed "s/- \[ \] <!-- {\"checkboxId\":\"$box/- [x] <!-- {\"checkboxId\":\"$box/" \
+     /tmp/cr-body.md > /tmp/cr-ticked.md
+   gh api repos/liujiayii/fund-plan/issues/comments/$cid -X PATCH -F body=@/tmp/cr-ticked.md
    ```
 
    （若 API 勾选未生效，在 PR 评论 `/codereview` 兜底触发。）
