@@ -69,6 +69,53 @@ describe("attributeFundPnlByDate 按基金归因", () => {
     ]);
   });
 
+  it("首次买入日前已有净值：涨跌幅取前一交易日净值，而非记 0", () => {
+    // 基金 07-31 起就有净值史；用户 08-05 才首次买入——净值游标惰性推进，
+    // 当天才一口气吞掉全部历史，涨跌幅必须从被吞历史里找回 08-04 的净值当基准
+    const r = attributeFundPnlByDate(buildAttrInput({
+      dateAxis: ["2026-08-05"],
+      confirmedOrders: [
+        // 08-05 买 121 元（费 0）@1.21 → 100 份
+        { fundCode: "A", side: "buy", confirmDate: "2026-08-05", dealShares: 1_000_000, cashCents: 12_100 },
+      ],
+      navSeries: new Map([
+        ["A", [
+          { navDate: "2026-07-31", unitNav: 10000 },
+          { navDate: "2026-08-04", unitNav: 11000 },
+          { navDate: "2026-08-05", unitNav: 12100 },
+        ]],
+      ]),
+    }));
+    // dayPnlCents = 市值 12100 − 支出 12100 = 0；涨跌幅 = 1.21/1.1 − 1 = 10%
+    expect(r.get("2026-08-05")).toEqual([
+      { fundCode: "A", dayPnlCents: 0, dayNavRate: 0.1 },
+    ]);
+  });
+
+  it("清仓后再买回：涨跌幅只算当日，不吃停持期累计涨幅", () => {
+    // 08-01 买 @1.0，08-02 全赎；08-03/08-04 空仓（游标冻结在 1.0），
+    // 08-05 再买回——涨跌幅应以 08-04 的 1.1 为基准，而不是冻结的 1.0
+    const r = attributeFundPnlByDate(buildAttrInput({
+      dateAxis: ["2026-08-01", "2026-08-02", "2026-08-05"],
+      confirmedOrders: [
+        { fundCode: "A", side: "buy", confirmDate: "2026-08-01", dealShares: 1_000_000, cashCents: 10_000 },
+        { fundCode: "A", side: "sell", confirmDate: "2026-08-02", dealShares: 1_000_000, cashCents: 10_000 },
+        { fundCode: "A", side: "buy", confirmDate: "2026-08-05", dealShares: 1_000_000, cashCents: 12_100 },
+      ],
+      navSeries: new Map([
+        ["A", [
+          { navDate: "2026-08-01", unitNav: 10000 },
+          { navDate: "2026-08-04", unitNav: 11000 },
+          { navDate: "2026-08-05", unitNav: 12100 },
+        ]],
+      ]),
+    }));
+    // 再买回日：市值 12100 − 支出 12100 = 0；涨跌幅 = 10%（旧逻辑会算成累计 21%）
+    expect(r.get("2026-08-05")).toEqual([
+      { fundCode: "A", dayPnlCents: 0, dayNavRate: 0.1 },
+    ]);
+  });
+
   it("赎回确认日：当日收益恰好 = −赎回费（已实现盈亏已在持有期间逐日记过）", () => {
     // 前一日持 1000 份 @1.0（市值 100000）；当日全赎到账 985 元（费 15）
     const r = attributeFundPnlByDate(buildAttrInput({

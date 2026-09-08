@@ -126,12 +126,19 @@ export function attributeFundPnlByDate(
     for (const fundCode of codes) {
       const sharesScaled = sharesMap.get(fundCode) ?? 0;
 
-      // 推进净值游标（前向填充与重放同款）；prevNav 在推进前取，用于涨跌幅
+      // 推进净值游标（前向填充与重放同款）。涨跌幅基准 prevNav 取
+      // 「当日之前的最后一条净值」：连续持有时与推进前的 lastNavMap 等价；
+      // 首次买入/清仓后再买回时游标当日才吞历史，必须从被吞序列里找回
+      // 前一交易日净值，否则涨跌幅会错记 0%（或吞下停持期的累计涨幅）
       const navList = navSeries.get(fundCode);
-      const prevNav = lastNavMap.get(fundCode) ?? -1;
+      let prevNav = lastNavMap.get(fundCode) ?? -1;
       if (navList && navList.length > 0) {
         let idx = navIdxMap.get(fundCode) ?? 0;
         while (idx < navList.length && navList[idx].navDate <= date) {
+          // navDate < date 的最后一条即前一交易日净值（当日净值自身不作基准）
+          if (navList[idx].navDate < date) {
+            prevNav = navList[idx].unitNav;
+          }
           lastNavMap.set(fundCode, navList[idx].unitNav);
           idx++;
         }
