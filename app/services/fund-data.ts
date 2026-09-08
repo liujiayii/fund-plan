@@ -668,8 +668,10 @@ export async function fetchFundDetail(
       // 稳健档新增（2026-09-08 实测）：
       // 评级字段是 RLEVEL_SZ（上证星级，"--" 或 "1"~"5"；移动端 H5 的
       // fundGrade 就是读它拼「上证X星评级」），计划预期的 JJPJ 不存在；
-      // 拉不到给 0，页面显示 —，缓存 1 天后自然刷新带上真值
-      rating: Number(d.RLEVEL_SZ) || 0,
+      // 拉不到给 0，页面显示 —，缓存 1 天后自然刷新带上真值。
+      // 钳到 0~5（CodeRabbit 评审）：负数会让 "★".repeat 在渲染期抛
+      // RangeError 白屏，超界值会把概况卡撑破——钳在解析处，消费方全保护
+      rating: Math.min(5, Math.max(0, Number(d.RLEVEL_SZ) || 0)),
       // 投资风格：实测 FundMNDetailInformation 没有风格字段（网页版 f10 的
       // 「投资风格」九宫格是一张静态图片，移动端 API 家族无文本源）——
       // 保留两个解析位兜底，当前恒为空串，页面显示 —

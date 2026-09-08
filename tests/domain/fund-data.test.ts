@@ -492,6 +492,24 @@ describe("fetchFundDetail 基金详情", () => {
     expect((await fetchFundDetail(fakeEnv(), "000001"))!.scaleYuan).toBeNull();
   });
 
+  it("评级 RLEVEL_SZ 异常值钳到 0~5：负数归 0、超界封顶 5", async () => {
+    // CodeRabbit 评审：rating 透传东财，负数会让 "★".repeat 在渲染期抛
+    // RangeError（整页白屏），超界值会把概况卡撑破——钳制做在解析处，
+    // 该字段的所有消费方一起受保护
+    const stubWith = (rlvel: string) =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) =>
+          url.includes("FundMNNBasicInformation")
+            ? new Response(JSON.stringify(basicResp))
+            : new Response(JSON.stringify({ Datas: { ...detailResp.Datas, RLEVEL_SZ: rlvel } }))),
+      );
+    stubWith("-2");
+    expect((await fetchFundDetail(fakeEnv(), "000001"))!.rating).toBe(0);
+    stubWith("9");
+    expect((await fetchFundDetail(fakeEnv(), "000001"))!.rating).toBe(5);
+  });
+
   it("网络异常返回 null", async () => {
     vi.stubGlobal(
       "fetch",

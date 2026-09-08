@@ -169,7 +169,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
 
   // 旧深链兼容：?tab=trade|dca|orders 是三页签时代的寻址方式，
   // /me 持仓行的「卖出」深链（feat/me-page-refactor Task 6）仍在用 ?tab=trade。
-  // 挂载时消费一次：trade→开卖出抽屉、dca→开定投抽屉、
+  // 每进入一只基金消费一次：trade→开卖出抽屉、dca→开定投抽屉、
   // orders→replace 跳过滤后的交易记录；随后清参，刷新不重复触发。
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -182,7 +182,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
       return;
     }
     if (tab === "trade")
-      // eslint-disable-next-line react/set-state-in-effect -- 深链是挂载期一次性副作用，effect 正是该用的工具
+      // eslint-disable-next-line react/set-state-in-effect -- 深链是进场一次性副作用，effect 正是该用的工具
       setSellOpen(true);
     else if (tab === "dca")
       // eslint-disable-next-line react/set-state-in-effect -- 同上
@@ -195,9 +195,10 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
       },
       { replace: true },
     );
-    // 刻意只跑一次：深链是「进入页面这一次」的意图，后续参数变化不该重放
-    // eslint-disable-next-line react/exhaustive-deps -- 刻意只跑一次
-  }, []);
+    // 依赖 params.code（CodeRabbit 评审）：同路由换基金时组件被复用、不重挂载，
+    // 深链须随之重放；同基金内清参/换 tab 不触发（deps 只看 code）
+    // eslint-disable-next-line react/exhaustive-deps -- 刻意只依赖 code
+  }, [params.code]);
 
   // 昨日收益：该基金最新有净值交易日的归因收益（净值延迟同步、周末顺延，
   // 标注「截至 M月D日」而非字面的昨天）
