@@ -1,7 +1,7 @@
 import type { Route } from "./+types/funds.$code";
 import type { RedeemTier } from "~/domain/redeem";
 import type { DcaPlanView, HoldingBrief } from "~/services/portfolio-service";
-import { Alert, Button, Progress, Segmented, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Segmented, Space, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useState } from "react";
 import { Link, useFetcher } from "react-router";
@@ -9,7 +9,9 @@ import { AssetAllocationChart } from "~/components/AssetAllocationChart";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { DcaDrawer } from "~/components/DcaDrawer";
 import { NavChart } from "~/components/NavChart";
-import { PeriodReturnTable } from "~/components/PeriodReturnTable";
+import { PeriodReturnGrid } from "~/components/PeriodReturnGrid";
+import { PositionList } from "~/components/PositionList";
+import { BottomActionBar } from "~/components/ui/BottomActionBar";
 import { DataRow } from "~/components/ui/DataRow";
 import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
@@ -35,7 +37,7 @@ import {
 import { getCurrentUser } from "~/services/guard";
 import { getDcaPlans, getHoldingBrief, getNavSeries } from "~/services/portfolio-service";
 import { isWatched } from "~/services/watchlist-service";
-import { NUM_FONT, pnlColor } from "~/theme";
+import { pnlColor } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -280,7 +282,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             <NavButton size="large" to="/funds">
               继续搜索
             </NavButton>
-            {/* 自选/买入/定投统一收进页面底部「交易操作」卡（支付宝式） */}
+            {/* 自选/买入/定投统一收进页面底部固定操作条（支付宝式） */}
           </Space>
         </Space>
       </SectionCard>
@@ -293,7 +295,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
       </SectionCard>
 
       <SectionCard title="阶段涨幅">
-        <PeriodReturnTable returns={loaderData.periodReturns} />
+        <PeriodReturnGrid returns={loaderData.periodReturns} />
         <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
           基于本地历史净值计算，前向填充非交易日。数据不足的区间显示「—」。
         </Paragraph>
@@ -391,108 +393,32 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           )}
 
           {activePosView === "stocks" && (
-            <>
-              {/* 桌面视图：股票 5 列 Table（原重仓股卡原样搬入） */}
-              <div className="fp-desktop">
-                <Table
-                  size="small"
-                  pagination={false}
-                  rowKey="code"
-                  dataSource={loaderData.position.stocks.slice(0, 10)}
-                  columns={[
-                    { title: "代码", dataIndex: "code" },
-                    { title: "简称", dataIndex: "name" },
-                    {
-                      title: "占净值比",
-                      dataIndex: "ratio",
-                      align: "right",
-                      render: (v: number) => rateToPercent(v),
-                    },
-                    { title: "行业", dataIndex: "industry" },
-                    { title: "增减持", dataIndex: "changeType" },
-                  ]}
-                />
-              </div>
-              {/* 窄屏：降级成 DataRow，字段不缺（原重仓股卡原样搬入） */}
-              <div className="fp-mobile">
-                {loaderData.position.stocks.slice(0, 10).map(p => (
-                  <div key={p.code} style={{ marginBottom: 8 }}>
-                    <Text strong style={{ fontSize: 13 }}>
-                      {p.name}
-                      （
-                      {p.code}
-                      ）
-                    </Text>
-                    <DataRow label="占净值比" value={rateToPercent(p.ratio)} mono />
-                    <DataRow label="行业" value={p.industry} />
-                    <DataRow label="增减持" value={p.changeType} last />
-                  </div>
-                ))}
-              </div>
-            </>
+            <PositionList
+              items={loaderData.position.stocks.slice(0, 10).map(s => ({
+                name: s.name,
+                sub: `${s.code} · ${s.industry}${s.changeType ? ` · ${s.changeType}` : ""}`,
+                ratio: s.ratio,
+              }))}
+            />
           )}
 
           {activePosView === "bonds" && (
-            <>
-              <div className="fp-desktop">
-                <Table
-                  size="small"
-                  pagination={false}
-                  rowKey="code"
-                  dataSource={loaderData.position.bonds}
-                  columns={[
-                    { title: "代码", dataIndex: "code" },
-                    { title: "名称", dataIndex: "name" },
-                    {
-                      title: "占净值比",
-                      dataIndex: "ratio",
-                      align: "right",
-                      render: (v: number) => rateToPercent(v),
-                    },
-                  ]}
-                />
-              </div>
-              <div className="fp-mobile">
-                {loaderData.position.bonds.map((b, i) => (
-                  <div key={b.code} style={{ marginBottom: 8 }}>
-                    <Text strong style={{ fontSize: 13 }}>
-                      {b.name}
-                      （
-                      {b.code}
-                      ）
-                    </Text>
-                    <DataRow
-                      label="占净值比"
-                      value={rateToPercent(b.ratio)}
-                      mono
-                      last={i === loaderData.position.bonds.length - 1}
-                    />
-                  </div>
-                ))}
-              </div>
-            </>
+            <PositionList
+              items={loaderData.position.bonds.map(b => ({
+                name: b.name,
+                sub: b.code,
+                ratio: b.ratio,
+              }))}
+            />
           )}
 
           {activePosView === "industries" && (
-            <div>
-              {loaderData.position.industries.map(ind => (
-                <div key={ind.name} style={{ marginBottom: 8 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 13,
-                      marginBottom: 4,
-                    }}
-                  >
-                    <span>{ind.name}</span>
-                    <span style={{ fontFamily: NUM_FONT }}>{rateToPercent(ind.ratio)}</span>
-                  </div>
-                  {/* ratio 是万分之（645 = 6.45%），Progress 吃百分数 */}
-                  <Progress percent={ind.ratio / 100} showInfo={false} size="small" />
-                </div>
-              ))}
-            </div>
+            <PositionList
+              items={loaderData.position.industries.map(ind => ({
+                name: ind.name,
+                ratio: ind.ratio,
+              }))}
+            />
           )}
         </SectionCard>
       )}
@@ -546,56 +472,48 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         />
       )}
 
-      {/* 底部操作卡：定投 / 买入 / 自选 三入口收拢（spec §6.1 ⑪）。
-          买入走 BuyDrawer（提交到 /me/trade 资源路由）；定投走 DcaDrawer
-          （提交到 /me/dca 的 action）；自选沿用 fetcher post /me/watchlist */}
-      <SectionCard title="交易操作">
-        {!isLoggedIn
+      {/* 页底固定操作条：定投 / 买入 / 自选（ux-polish spec §4①）。
+          按钮语义与旧「交易操作」卡一致：无净值禁买入；自选 fetcher 照旧 post /me/watchlist */}
+      <BottomActionBar
+        note={!latest ? "净值数据就绪后可在此下单" : undefined}
+        actions={!isLoggedIn
           ? (
               <NavButton type="primary" size="large" to="/register">
                 注册后即可买入
               </NavButton>
             )
           : (
-              <>
-                <Space size={16} wrap>
-                  <Button size="large" onClick={() => setDcaOpen(true)}>
-                    定投
+              <Space size={16} wrap>
+                <Button size="large" onClick={() => setDcaOpen(true)}>
+                  定投
+                </Button>
+                <Button
+                  type="primary"
+                  size="large"
+                  disabled={!latest}
+                  onClick={() => setBuyOpen(true)}
+                >
+                  买入
+                </Button>
+                <fetcher.Form method="post" action="/me/watchlist" style={{ display: "inline" }}>
+                  {/* intent 随当前态翻转：未自选→add，已自选→remove */}
+                  <input type="hidden" name="intent" value={watched ? "remove" : "add"} />
+                  <input type="hidden" name="fundCode" value={f.code} />
+                  {/* 一页只留一个 primary（买入）；自选态用 ✓ 反馈，不占红绿 */}
+                  <Button size="large" htmlType="submit">
+                    {watched ? "已自选 ✓" : "加自选"}
                   </Button>
-                  <Button
-                    type="primary"
-                    size="large"
-                    // 无净值无法定价：禁用并在下方柔和提示（原买入卡的守卫语义）
-                    disabled={!latest}
-                    onClick={() => setBuyOpen(true)}
-                  >
-                    买入
-                  </Button>
-                  <fetcher.Form method="post" action="/me/watchlist" style={{ display: "inline" }}>
-                    {/* intent 随当前态翻转：未自选→add，已自选→remove */}
-                    <input type="hidden" name="intent" value={watched ? "remove" : "add"} />
-                    <input type="hidden" name="fundCode" value={f.code} />
-                    {/* 一页只留一个 primary（买入）；自选态用 ✓ 反馈，不占红绿 */}
-                    <Button size="large" htmlType="submit">
-                      {watched ? "已自选 ✓" : "加自选"}
-                    </Button>
-                  </fetcher.Form>
-                </Space>
-                {!latest && (
-                  <Text type="secondary" style={{ display: "block", marginTop: 12 }}>
-                    净值数据就绪后可在此下单
-                  </Text>
-                )}
-                {/* 自选提交结果：成功/失败均显式提示，不靠 reload 刷新 */}
-                {fetcher.data?.ok && (
-                  <Alert type="success" showIcon message={fetcher.data.message} closable style={{ marginTop: 12 }} />
-                )}
-                {fetcher.data?.error && (
-                  <Alert type="error" showIcon message={fetcher.data.error} closable style={{ marginTop: 12 }} />
-                )}
-              </>
+                </fetcher.Form>
+              </Space>
             )}
-      </SectionCard>
+      />
+      {/* 自选提交结果：成功/失败均显式提示，不靠 reload 刷新（从旧卡搬来，置于 bar 上方） */}
+      {fetcher.data?.ok && (
+        <Alert type="success" showIcon message={fetcher.data.message} closable />
+      )}
+      {fetcher.data?.error && (
+        <Alert type="error" showIcon message={fetcher.data.error} closable />
+      )}
 
       {/* 抽屉：买入（现有壳）与定投（新壳） */}
       <BuyDrawer
