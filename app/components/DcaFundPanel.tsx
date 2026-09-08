@@ -19,7 +19,7 @@ export interface DcaFundPanelProps {
   fundName: string;
   /** 该基金的定投计划（loader 里 getDcaPlans(db, userId, code)） */
   plans: DcaPlanView[];
-  /** 提交到哪个 action（持仓详情页自身） */
+  /** 提交到哪个 action（定投三 intent 已统一归 /me/dca，DcaDrawer 里传死） */
   action: string;
 }
 
@@ -34,7 +34,8 @@ const WEEKDAYS = [
 ];
 
 /**
- * 持仓详情页「定投」页签：该基金的定投计划管理。
+ * 详情页「定投」抽屉（DcaDrawer 的弹层内容，持仓详情页与基金详情页共用）：
+ * 该基金的定投计划管理。
  *
  * 与全局 /me/dca 分工：这里是基金视角（代码锁定、直接创建），
  * 全局页管跨基金总览与无持仓基金的定投——intent 协议保持一致

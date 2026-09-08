@@ -1,10 +1,10 @@
 import type { Db } from "~/db/client";
 import type { DailyAsset, ReplayInput } from "~/domain/asset-timeline";
-import type { FundDayPnl, FundPnlInput } from "~/domain/fund-pnl";
+import type { FundCumPnlPoint, FundDayPnl, FundPnlInput } from "~/domain/fund-pnl";
 import { asc, eq, inArray } from "drizzle-orm";
 import { fund, orders, transactions } from "~/db/schema";
 import { replayDailyAssets } from "~/domain/asset-timeline";
-import { attributeFundPnlByDate } from "~/domain/fund-pnl";
+import { attributeFundPnlByDate, cumulateFundPnl } from "~/domain/fund-pnl";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getNavSeries } from "~/services/portfolio-service";
 
@@ -285,5 +285,51 @@ export async function getProfitDetail(
     latest: daily.length > 0 ? daily[daily.length - 1] : null,
     fundPnlByDate,
     fundNames,
+  };
+}
+
+/** 单只基金的收益明细视图（/me/holdings/:code 顶部与累计盈亏卡） */
+export interface FundProfitDetailView {
+  /** 该基金逐日收益（升序；仅当日有份额/现金流的日期出条目，含 0 收益日） */
+  dailyPnl: { date: string; dayPnlCents: number }[];
+  /** 最新一条（昨日收益用，「截至」标注取它的日期）；无条目 → null */
+  latest: { date: string; dayPnlCents: number } | null;
+  /** 累计盈亏序列（cumulateFundPnl 产出，升序） */
+  cumulative: FundCumPnlPoint[];
+  /** 首笔确认日（「持有以来」口径说明用）；无条目 → null */
+  firstDate: string | null;
+}
+
+/**
+ * 单只基金的收益明细：全量归因后过滤目标基金（spec §3 方案一）。
+ *
+ * 「全量重放后过滤」是与 /me、/me/profit 同源同口径的结构性保证——
+ * 归因不变量测试（Σ归因 === 当日总收益）直接覆盖单基金视图，
+ * 持仓页的昨日收益/累计盈亏与全局收益页数字永不打架。
+ * 代价是为一只基金付全组合重放（2+N 查询），量级与 /me 现状相同。
+ */
+export async function getFundProfitDetail(
+  db: Db,
+  userId: number,
+  fundCode: string,
+): Promise<FundProfitDetailView> {
+  const { fundPnlInput } = await buildReplayInput(db, userId);
+
+  // Map 的插入序 = dateAxis 升序，遍历天然有序；同日同基金至多一条
+  const dailyPnl: { date: string; dayPnlCents: number }[] = [];
+  for (const [date, entries] of attributeFundPnlByDate(fundPnlInput)) {
+    for (const e of entries) {
+      if (e.fundCode === fundCode) {
+        dailyPnl.push({ date, dayPnlCents: e.dayPnlCents });
+        break;
+      }
+    }
+  }
+
+  return {
+    dailyPnl,
+    latest: dailyPnl.length > 0 ? dailyPnl[dailyPnl.length - 1]! : null,
+    cumulative: cumulateFundPnl(dailyPnl),
+    firstDate: dailyPnl.length > 0 ? dailyPnl[0]!.date : null,
   };
 }

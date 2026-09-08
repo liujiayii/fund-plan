@@ -1,15 +1,17 @@
 import type { Route } from "./+types/me.orders";
-import { Pagination, Space, Typography } from "antd";
+import { Pagination, Space, Tag, Typography } from "antd";
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { OrderActions } from "~/components/OrderActions";
 import { OrderList } from "~/components/OrderList";
 import { OrderTimeline } from "~/components/OrderTimeline";
 import { EmptyState } from "~/components/ui/EmptyState";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { SHARE_SCALE, yuanToCents } from "~/domain/money";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
-import { getOrders } from "~/services/portfolio-service";
+import { getOrders, getOrdersByFund } from "~/services/portfolio-service";
 import { amendOrder, cancelOrder } from "~/services/trade";
 
 const { Title, Text, Paragraph } = Typography;
@@ -27,8 +29,23 @@ export function meta(_: Route.MetaArgs) {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
+
+  // ?fund= 过滤：持仓详情页「交易记录」入口带该参数进来（spec §8）
+  const fundCode = new URL(request.url).searchParams.get("fund");
+  if (fundCode) {
+    const orders = await getOrdersByFund(db, user.id, fundCode, 200);
+    // 过滤指示要显示基金名；where 回调风格与 me.dca.tsx 的 action 一致（不引 drizzle 帮手）
+    const f = await db.query.fund.findFirst({
+      where: (f, { eq }) => eq(f.code, fundCode),
+    });
+    return {
+      orders,
+      fundFilter: { code: fundCode, name: f?.name ?? fundCode },
+    };
+  }
+
   const orders = await getOrders(db, user.id, 200);
-  return { orders };
+  return { orders, fundFilter: null };
 }
 
 /**
@@ -82,7 +99,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeOrders({ loaderData }: Route.ComponentProps) {
-  const { orders } = loaderData;
+  const { orders, fundFilter } = loaderData;
+  // 过滤参数进 URL：持仓详情页深链进来；× 清参以 replace 重跑本页 loader（一次请求），无其他副作用
+  const [, setSearchParams] = useSearchParams();
   // 待确认委托独立成区：委托管理的主战场，撤单/改单按钮就在眼前，
   // 不再和已成交历史混在一条时间线里（主人反馈「撤单改单难发现」）
   const pendingOrders = orders.filter(o => o.status === "pending");
@@ -94,6 +113,27 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
       <Title level={3} style={{ marginBottom: 0 }}>
         我的订单
       </Title>
+
+      {/* 过滤指示：仅看某基金（来自持仓详情页入口）；× 清参回全量，旁挂返回持仓详情 */}
+      {fundFilter && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <Tag
+            color="blue"
+            closable
+            onClose={() => setSearchParams({}, { replace: true })}
+          >
+            仅看
+            {" "}
+            {fundFilter.name}
+            （
+            {fundFilter.code}
+            ）
+          </Tag>
+          <NavButton size="small" to={`/me/holdings/${fundFilter.code}`}>
+            ← 返回持仓详情
+          </NavButton>
+        </div>
+      )}
 
       {pendingOrders.length > 0 && (
         <SectionCard title={`待确认委托（${pendingOrders.length} 笔）`}>
@@ -108,7 +148,7 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
       <SectionCard title={`全部订单（${orders.length} 笔）`}>
         {orders.length === 0
           ? (
-              <EmptyState description="还没有交易记录" />
+              <EmptyState description={fundFilter ? "该基金还没有交易记录" : "还没有交易记录"} />
             )
           : (
               <>
