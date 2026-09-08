@@ -17,6 +17,7 @@ import {
   useNavigate,
 } from "react-router";
 import { MobileTabBar } from "~/components/MobileTabBar";
+import { NavProgressBar } from "~/components/NavProgressBar";
 import { NavButton } from "~/components/ui/NavButton";
 import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 import { getAppContext } from "~/services/context";
@@ -105,6 +106,8 @@ export default function App() {
       theme={{ algorithm: theme.defaultAlgorithm, ...ANTD_TOKEN }}
     >
       <AntLayout style={{ minHeight: "100vh" }}>
+        {/* 全局导航进度条：SPA 导航 pending 时视口顶部反馈（大陆慢链路下防重复点击） */}
+        <NavProgressBar />
         {/* Header 由 antd 默认的深色改为白底 + 底部细线，
             这是「后台管理系统」与「消费级理财 App」观感的分水岭 */}
         <Header
