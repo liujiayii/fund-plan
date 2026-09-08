@@ -9,11 +9,10 @@ import {
   Modal,
   Select,
   Space,
-  Tag,
   Typography,
 } from "antd";
 import { useEffect, useState } from "react";
-import { useFetcher, useSearchParams } from "react-router";
+import { useFetcher } from "react-router";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
@@ -139,7 +138,6 @@ const WEEKDAYS = [
 
 export default function MeDca({ loaderData }: Route.ComponentProps) {
   const { plans, fundFilter } = loaderData;
-  const [, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<typeof action>();
   const [open, setOpen] = useState(false);
   const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly">("monthly");
@@ -179,24 +177,6 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
       )}
       {fetcher.data?.error && (
         <Alert type="error" showIcon message={fetcher.data.error} closable />
-      )}
-
-      {/* 过滤指示：仅看某基金（来自持仓详情页入口）；× 清参回全量 */}
-      {fundFilter && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <Tag
-            color="blue"
-            closable
-            onClose={() => setSearchParams({}, { replace: true })}
-          >
-            仅看
-            {" "}
-            {fundFilter.name}
-            （
-            {fundFilter.code}
-            ）
-          </Tag>
-        </div>
       )}
 
       <SectionCard>
