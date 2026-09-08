@@ -85,35 +85,28 @@ Cloudflare Dashboard → Workers & Pages → 你的 Worker → Settings → Trig
 
 ## PR 预览环境
 
-每个 PR 会自动部署到预览环境（`.github/workflows/preview.yml`，
-配置在 `wrangler.preview.jsonc`）：独立 Worker `fund-plan-preview`，
-通过 `https://fund-plan-preview.<账户ID>.workers.dev` 访问，
-地址由机器人评论到 PR 上。
+每个 PR 会自动上传为生产 Worker `fund-plan` 的一个**预览版本**
+（`.github/workflows/preview.yml`，`wrangler versions upload --preview-alias pr-<PR号>`），
+地址固定为 `https://pr-<PR号>-fund-plan.<workers.dev子域>.workers.dev`，
+由机器人评论到 PR 上。
 
-### 隔离策略（2026-09-08 定案）：共享生产 D1/KV
+### 机制要点
 
-预览 Worker 实例独立，但 **D1 与 KV 与生产共享同一个库/命名空间**。
-个人测试站，接受以下代价换取零资源创建成本：
-
-- **PR 里的注册/下单/定投是真实写操作，直接进生产盘**——测试数据会出现在
-  `/admin`、排行榜与主理人的组合里，污染了得手写 SQL 清理
-- **KV 写额度（账户级 1000 次/天）两边共享**，预览拉基金档案/搜索会挤占
-- **preview.yml 刻意不做 D1 迁移**：迁移只由 deploy.yml（main Test 全绿后）
-  执行，PR 的 schema 变更不允许在合并前改生产库结构
-- **preview 配置绝不能加 crons**：否则 preview 与生产两个 Worker 每天各扫
-  一次定投/撮合，同一计划双倍下单、T+1 被提前撮合
-
-> 曾考虑官方 versions preview URL（`wrangler versions upload`）：预览版本
-> 与生产共享绑定，效果等价且 URL 不固定，无额外收益，不采用。
-> 日后若测试污染成为实际痛点，再切独立 D1/KV（免费版 10 库/100 namespace
-> 余量充足），只需换 `wrangler.preview.jsonc` 两个 ID。
-
-### 注意事项
-
-- workers.dev 在国内被 DNS 污染，**本机访问预览环境需挂代理**；CI 部署不受影响
-- 多个 PR 共用同一个预览 Worker，后推送的覆盖先前的
-- 预览 Worker 长期保留不吃多少额度；不想留了手动删：
-  `npx wrangler delete -c wrangler.preview.jsonc`
+- **versions upload 只上传版本**：不动生产流量、不碰自定义域名、不加 cron。
+  生产入口 `liujiayii.dpdns.org` 永远跑 main 合并后的版本
+- **绑定与生产共享**（D1/KV 同库同命名空间，2026-09-08 定案）：个人测试站，
+  接受测试数据混进生产盘 + KV 写额度（账户级）共享，换取零资源创建成本
+  与「预览天然有净值数据」（共享同一个 `fund_nav` 表，能测全交易流程）
+- **绝不能用 `-c` 指定自定义 wrangler 配置来另起 preview Worker**：
+  `pnpm build` 时 @cloudflare/vite-plugin 生成重定向配置
+  （`.wrangler/deploy/config.json` → `build/server/wrangler.json`，vite 产物
+  no_bundle 上传），`-c` 会绕开它导致 wrangler 对源码现打包、撞上
+  未解析的 `virtual:react-router/server-build`（PR #74 首跑踩坑）
+- **部署门控**：本人（所有者 liujiayii）的 PR 自动部署；他人 PR 走
+  environment `preview-review`（required reviewer），需在 Actions 里点批准
+- workers.dev 在国内被 DNS 污染，**本机访问预览地址需挂代理**；CI 不受影响
+- 预览版本不额外占额度；不想留的旧版本可在 Dashboard → Worker → Versions
+  里删除，或不管它（自动过期）
 
 ## 免费版额度说明
 
