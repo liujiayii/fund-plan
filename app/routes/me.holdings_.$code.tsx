@@ -4,7 +4,7 @@
  * 支付宝式三段布局（2026-09-07 详情页重构）：
  *   顶部 持仓总览（持有金额主位 + 昨日收益/持有收益/率，右上基金详情入口）
  *   腰部 功能入口（收益明细/交易记录/定投计划，跳全局页，后两者带 ?fund= 过滤）
- *   累计盈亏折线图（近1月/持有以来）+ 份额批次 + 底部操作卡（卖出/定投/买入弹抽屉）
+ *   累计盈亏折线图（近1月/持有以来）+ 份额批次 + 页底固定操作条（卖出/定投/买入弹抽屉）
  *
  * 口径注意（spec §10）：顶部「持有收益」是浮动口径（市值−成本，赎回后清零），
  * 「累计盈亏」图含已实现盈亏与全部费用——两数并存、标签分明；
@@ -27,6 +27,7 @@ import { DcaDrawer } from "~/components/DcaDrawer";
 import { FundPnlChart } from "~/components/FundPnlChart";
 import { QuickEntries } from "~/components/QuickEntries";
 import { SellDrawer } from "~/components/SellDrawer";
+import { BottomActionBar } from "~/components/ui/BottomActionBar";
 import { DataRow } from "~/components/ui/DataRow";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
@@ -341,34 +342,34 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         </Paragraph>
       </SectionCard>
 
-      {/* 底部操作卡：卖出 / 定投 / 买入（spec §5.1 ⑥） */}
-      <SectionCard title="交易操作">
-        <Space size={16} wrap>
-          <Button
-            size="large"
-            onClick={() => setSellOpen(true)}
-            disabled={d.availableShares <= 0}
-          >
-            卖出
-          </Button>
-          <Button size="large" onClick={() => setDcaOpen(true)}>
-            定投
-          </Button>
-          <Button
-            type="primary"
-            size="large"
-            onClick={() => setBuyOpen(true)}
-            disabled={!(d.navScaled > 0)}
-          >
-            买入
-          </Button>
-        </Space>
-        <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
-          {d.availableShares <= 0
-            ? "无可卖份额（待确认赎回单占用或已全部赎回）"
-            : "卖出按批次先进先出逐批计费；买入按 T+1 确认，现金在下单时冻结。"}
-        </Paragraph>
-      </SectionCard>
+      {/* 页底固定操作条：卖出 / 定投 / 买入。按钮语义与禁用逻辑原样来自旧「交易操作」卡 */}
+      <BottomActionBar
+        note={d.availableShares <= 0
+          ? "无可卖份额（待确认赎回单占用或已全部赎回）"
+          : "卖出按批次先进先出逐批计费；买入按 T+1 确认，现金在下单时冻结。"}
+        actions={(
+          <Space size={16} wrap>
+            <Button
+              size="large"
+              onClick={() => setSellOpen(true)}
+              disabled={d.availableShares <= 0}
+            >
+              卖出
+            </Button>
+            <Button size="large" onClick={() => setDcaOpen(true)}>
+              定投
+            </Button>
+            <Button
+              type="primary"
+              size="large"
+              onClick={() => setBuyOpen(true)}
+              disabled={!(d.navScaled > 0)}
+            >
+              买入
+            </Button>
+          </Space>
+        )}
+      />
 
       {/* 三抽屉：买入（现有壳）/ 卖出 / 定投（Task 7 壳） */}
       <BuyDrawer

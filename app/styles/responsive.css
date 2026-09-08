@@ -97,6 +97,11 @@
   .fp-header {
     justify-content: space-between;
   }
+
+  /* 窄屏操作条叠在 TabBar 上方：TabBar 56px + 安全区，不盖底部导航 */
+  .fp-bottom-bar {
+    bottom: calc(56px + env(safe-area-inset-bottom));
+  }
 }
 
 /* ══════════ 4. 底部 TabBar（spec §6）══════════ */
@@ -141,6 +146,18 @@
 
 .fp-tabbar-item .anticon {
   font-size: 22px;
+}
+
+/* ══════════ 4.5 页底固定操作条（ux-polish spec §4①）══════════ */
+
+/* 桌面基线：贴底全宽。z-index 15 < tabbar 20，两者分属不同区域互不重叠；
+   antd Drawer（1000）在其上，抽屉展开时正确盖住操作条 */
+.fp-bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
 }
 
 /* 767px 以下隐藏、768px+ 恢复 —— 与上面 .fp-desktop 的 !important 成对使用。
