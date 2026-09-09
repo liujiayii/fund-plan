@@ -48,7 +48,7 @@ async function seedUser(name = "alice") {
 beforeEach(resetAll);
 
 describe("getHoldingDetail", () => {
-  it("返回同源估值 + 批次升序 + 待赎回占用 + 费率档", async () => {
+  it("返回同源估值 + 批次倒序 + 待赎回占用 + 费率档", async () => {
     const db = getDb(env.DB);
     await seedFund();
     await seedNav("2026-08-25", 12345); // 1.2345
@@ -82,8 +82,8 @@ describe("getHoldingDetail", () => {
     expect(d!.sharesScaled).toBe(20000000);
     // 市值 = 2000 份 × 1.2345 × 100 = 246900 分
     expect(d!.marketValueCents).toBe(246900);
-    // 批次 FIFO 升序：老批在前
-    expect(d!.lots.map(l => l.confirmDate)).toEqual(["2026-01-05", "2026-08-01"]);
+    // 批次倒序（2026-09-09 起最新在前）：展示顺序与 FIFO 计算无关
+    expect(d!.lots.map(l => l.confirmDate)).toEqual(["2026-08-01", "2026-01-05"]);
     expect(d!.pendingShares).toBe(5000000);
     expect(d!.availableShares).toBe(15000000);
     expect(d!.tiers).toEqual(DEFAULT_REDEEM_TIERS);

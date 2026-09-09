@@ -10,8 +10,12 @@ import { COLOR, NUM_FONT, pnlColor } from "~/theme";
 export interface DailyPnlDetailProps {
   /** 选中的日期串（YYYY-MM-DD），标题用 */
   date: string;
-  /** 当日快照；理论上选中日必有（clickable 已限定 hasData），null 是防御 */
-  day: DailyAsset | null;
+  /**
+   * 当日快照；理论上选中日必有（clickable 已限定 hasData），null 是防御。
+   * 字段收窄成 Pick：全局口径喂 DailyAsset，单基金口径只给当日收益与
+   * 涨跌幅（dayPnlRate），总资产等组合字段对单基金没有意义
+   */
+  day: Pick<DailyAsset, "dayPnlCents" | "dayPnlRate"> | null;
   /** 当日各基金收益（原样传入，组件内按收益降序排） */
   entries: FundDayPnl[];
   /** fundCode → 基金名（含已清仓基金的历史条目） */

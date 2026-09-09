@@ -1,3 +1,4 @@
+import type { FundProfitDetailView } from "~/services/asset-service";
 import {
   Button,
   Skeleton,
@@ -9,6 +10,7 @@ import { useFetcher, useSearchParams } from "react-router";
 import { DcaPlanFormModal } from "~/components/DcaPlanFormModal";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { DcaPlanRowActions } from "~/components/DcaPlanRowActions";
+import { FundProfitContent } from "~/components/FundProfitContent";
 import { OrdersContent } from "~/components/OrdersContent";
 import { ProfitContent } from "~/components/ProfitContent";
 import { EmptyState } from "~/components/ui/EmptyState";
@@ -20,16 +22,20 @@ const { Text, Paragraph } = Typography;
 /**
  * 「收益明细 / 交易记录 / 定投计划」页内 Tabs（2026-09-09，替代 QuickEntries 跳页）。
  *
- * 消费方：/me（全局口径）与 /me/holdings/:code（传 fundCode，交易记录/定投
- * 只看这只基金——与旧 QuickEntries 深链 ?fund= 完全同源）。
+ * 消费方：/me（全局口径）与 /me/holdings/:code（传 fundCode + fundProfit，
+ * 交易记录/定投/收益明细三个 tab 都只看这只基金）。
  *
- * 数据通道：每个面板一个独立 fetcher，用 fetcher.load() 复用对应路由页的
- * loader（/me/profit、/me/orders、/me/dca）——tab 内容与深链页一份真相，
- * 路由页本身保留不删（外链/收藏夹照常可用）。
+ * 数据通道分两种：
+ *  - 收益明细：持仓详情页由宿主 loader 直接传 fundProfit（getFundProfitDetail
+ *    产物，单基金口径，复用同一份全量重放零额外请求）；/me 则走 fetcher.load
+ *    懒加载 /me/profit 的 loader（全局口径，与深链页一份真相）
+ *  - 交易记录/定投计划：每个面板一个独立 fetcher，用 fetcher.load() 复用
+ *    对应路由页的 loader（/me/orders、/me/dca）——tab 内容与深链页一份真相，
+ *    路由页本身保留不删（外链/收藏夹照常可用）。
  *
  * 面板本体是纯懒加载壳（fetcher + 骨架屏），内容体全在共享组件里：
- * OrdersContent / ProfitContent /（DcaPanel 内联，动作走 DcaPlanFormModal
- * 与 DcaPlanRowActions）——深链页与 tab 渲染同一份，不会漂移。
+ * OrdersContent / ProfitContent / FundProfitContent /（DcaPanel 内联，
+ * 动作走 DcaPlanFormModal 与 DcaPlanRowActions）——深链页与 tab 渲染同一份，不会漂移。
  *
  * 加载策略（stale-while-revalidate）：
  *  - 首次激活：fetcher.load 拉全量，期间 Skeleton（无数据时）
@@ -51,7 +57,17 @@ function PanelSkeleton() {
   return <Skeleton active title={false} paragraph={{ rows: 6 }} />;
 }
 
-export function MeTabs({ fundCode }: { fundCode?: string }) {
+export function MeTabs({ fundCode, fundProfit }: {
+  /** 持仓视角：三个 tab 全部只看这只基金（/me 不传 → 全局口径） */
+  fundCode?: string;
+  /**
+   * 单基金收益明细（getFundProfitDetail 产物）。传入时「收益明细」tab
+   * 走单基金口径（FundProfitContent，宿主 loader 数据直传，零额外请求）；
+   * 不传走全局口径（fetcher 懒加载 /me/profit loader）。
+   * 前提：传 fundProfit 必传 fundCode（持仓页才有单基金数据）
+   */
+  fundProfit?: FundProfitDetailView;
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const raw = searchParams.get("tab");
@@ -81,7 +97,7 @@ export function MeTabs({ fundCode }: { fundCode?: string }) {
       onChange={onChange}
       items={[
         // rc-tabs 惰性挂载：面板首次激活才 mount，图表类组件不会在隐藏容器里起 0×0 canvas
-        { key: "profit", label: "收益明细", children: <ProfitPanel active={active === "profit"} /> },
+        { key: "profit", label: "收益明细", children: <ProfitPanel active={active === "profit"} fundCode={fundCode} fundProfit={fundProfit} /> },
         { key: "orders", label: "交易记录", children: <OrdersPanel active={active === "orders"} fundCode={fundCode} /> },
         { key: "dca", label: "定投计划", children: <DcaPanel active={active === "dca"} fundCode={fundCode} /> },
       ]}
@@ -91,18 +107,35 @@ export function MeTabs({ fundCode }: { fundCode?: string }) {
 
 /* ─────────────────────── 收益明细 ─────────────────────── */
 
-function ProfitPanel({ active }: { active: boolean }) {
-  // fetcher.load 复用 /me/profit 的 loader：内容体在 ProfitContent（与深链页一份真相）
+function ProfitPanel({ active, fundCode, fundProfit }: {
+  active: boolean;
+  /** 持仓视角的基金代码（单基金口径分叉判据） */
+  fundCode?: string;
+  /** 宿主 loader 算好的单基金明细（持仓详情页传入；有它就不用 fetcher） */
+  fundProfit?: FundProfitDetailView;
+}) {
+  // 全局口径数据通道：fetcher.load 复用 /me/profit 的 loader
+  // （内容体在 ProfitContent，与深链页一份真相）。
+  // ⚠️ hook 不能放在下方条件 return 之后（rules-of-hooks），无条件先挂；
+  // 持仓视角分支不用它，load 也不触发（effect 只在 active 变化时跑）
   const fetcher = useFetcher<typeof import("~/routes/me.profit").loader>();
 
   useEffect(() => {
     // 激活且空闲时拉数据：首次无数据全量拉；切回时旧数据先展示、后台刷一遍。
+    // 持仓视角（fundProfit 直传）跳过加载——单基金数据已在手里
     // 刻意只依赖 active——effect 只在激活态翻转时跑一次，靠 state 守卫防并发重复
-    if (active && fetcher.state === "idle") {
+    if (active && !fundProfit && fetcher.state === "idle") {
       fetcher.load("/me/profit");
     }
     // eslint-disable-next-line react/exhaustive-deps -- fetcher 引用每渲染都换，进 deps 会配合「idle 即拉」退化成无限循环；此处只需激活沿触发
   }, [active]);
+
+  // 持仓视角：单基金口径，宿主 loader 数据直传（同一次全量重放的产物，
+  // 顶部「昨日收益」与这里同源同数；不再 fetch /me/profit——那是全局口径，
+  // 曾经让持仓页的收益明细/收益日历挂着全部基金的数据）
+  if (fundProfit && fundCode) {
+    return <FundProfitContent detail={fundProfit} />;
+  }
 
   const detail = fetcher.data?.detail;
   if (!detail) {
