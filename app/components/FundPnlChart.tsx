@@ -2,6 +2,7 @@ import type { LineConfig } from "@ant-design/charts";
 import type { FundCumPnlPoint } from "~/domain/fund-pnl";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
+import { FP_CHART_THEME } from "~/components/ui/chart-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { centsToYuan } from "~/domain/money";
@@ -47,16 +48,17 @@ export function FundPnlChart({ cumulative }: { cumulative: FundCumPnlPoint[] }) 
 
   if (cumulative.length === 0) {
     // 走 EmptyState 而不是裸 Empty：全站空态的留白由它统一
-    return <EmptyState description="暂无收益数据" />;
+    return <EmptyState description="暂无收益数据" hint="份额确认后的第一个交易日开始记账" />;
   }
 
   const config: LineConfig = {
     data: chartData,
     xField: "date",
     yField: "pnl",
+    // 全站图表统一主题（chart-theme.ts 单一出处）
+    theme: FP_CHART_THEME,
     // ⚠️ 刻意不传 height：G2 的 sizeOf 让显式 height 压过容器尺寸——
     // 高度由 responsive.css §6 的 .fp-chart-box 全权管理（与 NavChart 同款）
-    smooth: true,
     autoFit: true,
     // 累计盈亏要看正负分界，Y 轴必须含 0 基准线（AssetTrendChart 累计口径同款）
     scale: { y: { nice: true, zero: true } },
@@ -73,7 +75,9 @@ export function FundPnlChart({ cumulative }: { cumulative: FundCumPnlPoint[] }) 
         },
       ],
     },
-    style: { lineWidth: 2 },
+    // 平滑走 G2v5 形状通道 style.shape（smooth: true 是 plots v1 死配置，
+    // G2v5 无读取方——2026-09-09 走查修复时顺手转正，恢复曲线平滑意图）
+    style: { shape: "smooth", lineWidth: 2 },
   };
 
   return (
