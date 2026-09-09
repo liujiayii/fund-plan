@@ -128,12 +128,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         />
       </SectionCard>
 
-      {/* 腰部功能入口：收益明细 / 交易记录 / 定投计划 */}
-      <SectionCard>
-        <QuickEntries entries={ME_QUICK_ENTRIES} />
-      </SectionCard>
-
-      {/* 每日签到 */}
+      {/* 每日签到（主人 2026-09-09 要求上移：领本金是高频动作，放在功能入口之前） */}
       <SectionCard title="每日签到领本金">
         {fetcher.data?.ok && (
           <Alert type="success" showIcon message={fetcher.data.message} style={{ marginBottom: 16 }} />
@@ -193,6 +188,11 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
             </fetcher.Form>
           </Col>
         </Row>
+      </SectionCard>
+
+      {/* 腰部功能入口：收益明细 / 交易记录 / 定投计划 */}
+      <SectionCard>
+        <QuickEntries entries={ME_QUICK_ENTRIES} />
       </SectionCard>
 
       {/* 我的持仓：原 /me/holdings 列表页的职能全部并入——
