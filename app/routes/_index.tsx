@@ -6,6 +6,7 @@ import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { AdminNotReady } from "~/components/PortfolioView";
 import { ProfitCalendar } from "~/components/ProfitCalendar";
 import { fmtInt, fmtYuan } from "~/components/ui/format";
+import { Logo } from "~/components/ui/Logo";
 import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
@@ -16,7 +17,7 @@ import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
 import { getPortfolio } from "~/services/portfolio-service";
 import { getSiteStats } from "~/services/stats-service";
-import { CARD_SHADOW } from "~/theme";
+import { PRIMARY_GRADIENT } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -102,58 +103,87 @@ export default function Index({ loaderData }: Route.ComponentProps) {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      {/* 头图区 */}
-      <SectionCard>
-        <Title level={2} style={{ marginBottom: 8 }}>
-          用真实基金数据，玩一把不心疼的模拟盘
-        </Title>
-        <Paragraph type="secondary" style={{ fontSize: 15 }}>
-          注册即送
-          {" "}
-          <Text strong>
+      {/* 品牌渐变 hero（visual-refresh spec §6.2）：白字标语 + 双 CTA + 装饰曲线 */}
+      <div
+        className="fp-hero animate-fade-up relative overflow-hidden rounded-2xl text-white"
+        style={{ background: PRIMARY_GRADIENT, padding: "48px 40px" }}
+      >
+        {/* 装饰：低透明度白色净值曲线，沿 hero 底部流动（纯静态，SSR 安全） */}
+        <svg
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 w-full"
+          viewBox="0 0 1200 320"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M0,260 C200,240 350,180 520,190 C690,200 820,120 1000,110 C1090,105 1150,90 1200,80 L1200,320 L0,320 Z"
+            fill="#fff"
+            opacity="0.08"
+          />
+          <path
+            d="M0,260 C200,240 350,180 520,190 C690,200 820,120 1000,110 C1090,105 1150,90 1200,80"
+            stroke="#fff"
+            strokeWidth="2"
+            fill="none"
+            opacity="0.18"
+          />
+        </svg>
+        {/* 右侧浮动迷你持仓卡：用产品语言预演「这是理财工具」。
+            fp-hero-cards：窄屏隐藏（responsive.css），桌面绝对定位 */}
+        <div className="fp-hero-cards absolute top-8 right-8 hidden gap-3 lg:flex lg:flex-col">
+          <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+            <div className="text-xs opacity-80">昨日收益</div>
+            <div className="font-num text-lg font-medium">+82.33 元</div>
+          </div>
+          <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+            <div className="text-xs opacity-80">累计收益</div>
+            <div className="font-num text-lg font-medium">+2,310.66 元</div>
+          </div>
+        </div>
+
+        <div className="relative z-10">
+          <div className="mb-3 flex items-center gap-2 text-sm tracking-wide opacity-90">
+            <Logo size={22} />
+            模拟基金
+          </div>
+          {/* 主标：spec §6.2 钉死的文案结构（真实感 + 零风险） */}
+          <h2 className="m-0 text-3xl leading-tight font-bold">用真数据，练真盘感</h2>
+          <p className="mt-3 mb-0 max-w-xl text-sm leading-6 opacity-90">
+            东方财富实时净值 · 真实 T+1 撮合 · 零风险练手。注册即送
+            {" "}
             {fmtYuan(INITIAL_CASH_CENTS)}
             {" "}
-            元
-          </Text>
-          {" "}
-          模拟本金，
-          每日签到再领
-          {" "}
-          <Text strong>
+            元模拟本金，每日签到再领
+            {" "}
             {fmtYuan(CHECKIN_BASE_CENTS)}
             ~
             {fmtYuan(CHECKIN_MAX_CENTS)}
             {" "}
-            元
-          </Text>
-          。
-          申购赎回按真实规则计费，让你在不亏真钱的前提下，把基金交易规则吃透。
-        </Paragraph>
-        <Space wrap>
-          {me
-            ? (
-                <>
-                  <NavButton type="primary" size="large" to="/me">
-                    去我的盘
-                  </NavButton>
-                  <NavButton size="large" to="/funds">
-                    挑只基金
-                  </NavButton>
-                </>
-              )
-            : (
-                <>
-                  <NavButton type="primary" size="large" to="/register">
-                    免费注册，领 10 万本金
-                  </NavButton>
-                  {/* 目标为 /master：刻意保持原生 <a>（游客态走边缘缓存，SPA 跳转反而绕开缓存），勿换 NavButton */}
-                  <Button size="large" href="/master">
-                    先围观主理人的盘
-                  </Button>
-                </>
-              )}
-        </Space>
-      </SectionCard>
+            元。
+          </p>
+          <div className="mt-6">
+            {/* hero 内 CTA 逻辑与原头图区一致：登录态去我的盘，游客引导注册 */}
+            {me
+              ? (
+                  <>
+                    <NavButton type="primary" size="large" to="/me">去我的盘</NavButton>
+                    {/* 次按钮是「渐变上的幽灵样式」：antd default 自带白底，
+                        只染白字会白底白字看不清（2026-09-09 走查修复）——
+                        显式压成半透明白 10% + 毛玻璃，与右侧迷你卡同语言 */}
+                    <NavButton size="large" className="!border-white/40 !bg-white/10 !text-white backdrop-blur-sm hover:bg-white/20!" to="/funds">挑只基金</NavButton>
+                  </>
+                )
+              : (
+                  <>
+                    <NavButton type="primary" size="large" to="/register">免费注册，领 10 万本金</NavButton>
+                    {/* 保持原生 <a>：游客态走边缘缓存，SPA 跳转反而绕开缓存（原注释纪律）。
+                        幽灵样式同上：半透明白底+毛玻璃，防白底白字 */}
+                    <Button size="large" className="!border-white/40 !bg-white/10 !text-white backdrop-blur-sm hover:bg-white/20!" href="/master">先围观主理人的盘</Button>
+                  </>
+                )}
+          </div>
+        </div>
+      </div>
 
       {/* 主理人的盘 */}
       {loaderData.admin === null
@@ -247,11 +277,13 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         {FEATURES.map(f => (
           <Col xs={24} sm={12} lg={6} key={f.title}>
             {/* 裸 Card 是为了拿 className（等高栅格），但外观必须跟 SectionCard 一致：
-                同一页上一张有边框、一张有阴影，看起来像两套设计 */}
+                同一页上一张有边框、一张有阴影，看起来像两套设计。
+                静止影改走 shadow-card 类而非内联 style——内联 box-shadow 的
+                优先级压过任何类，hover:shadow-card-hover 会永远不生效（Task 5）。
+                transition-[box-shadow] + duration-[240ms]：hover 抬升有过渡不生硬 */}
             <Card
-              className="h-full"
+              className="h-full shadow-card transition-[box-shadow] duration-[240ms] hover:shadow-card-hover"
               variant="borderless"
-              style={{ boxShadow: CARD_SHADOW }}
             >
               <Title level={5} className="mt-0">
                 {f.title}
@@ -264,12 +296,12 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         ))}
       </Row>
 
-      {/* 同上：裸 Card 只为拿 className（居中），外观仍对齐 SectionCard */}
+      {/* 同上：裸 Card 只为拿 className（居中），外观仍对齐 SectionCard；
+          阴影与 hover 同 FEATURES 卡（内联 style 会让 hover 失效，见上） */}
       {!me && (
         <Card
-          className="text-center"
+          className="text-center shadow-card transition-[box-shadow] duration-[240ms] hover:shadow-card-hover"
           variant="borderless"
-          style={{ boxShadow: CARD_SHADOW }}
         >
           <Title level={4}>准备好开自己的盘了吗？</Title>
           <Paragraph type="secondary">

@@ -19,11 +19,17 @@ import {
 } from "react-router";
 import { MobileTabBar } from "~/components/MobileTabBar";
 import { NavProgressBar } from "~/components/NavProgressBar";
+import { Logo } from "~/components/ui/Logo";
 import { NavButton } from "~/components/ui/NavButton";
 import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { ANTD_TOKEN, COLOR } from "~/theme";
+// 数字品牌字体：Space Grotesk 三字重（自托管 woff2 随构建产物走）。
+// 只覆盖拉丁字符，中文继续系统栈——体积 ~50KB，国内加载零风险（spec §3.3）
+import "@fontsource/space-grotesk/400.css";
+import "@fontsource/space-grotesk/500.css";
+import "@fontsource/space-grotesk/700.css";
 // antd v6 起全局重置样式需手动引入。link 顺序上必须早于 UnoCSS，
 // 才能让 UnoCSS 工具类在同级覆盖 reset；antd 组件样式走 cssinjs 运行时注入，
 // 顺序不受此处影响，故 reset 放在所有值导入之后即可。
@@ -132,15 +138,13 @@ export default function App() {
             zIndex: 10,
           }}
         >
+          {/* 品牌 Logo + 站名：Logo 视觉锤（渐变方块+净值曲线），文字随字号 clamp 缩放 */}
           <a
             href="/"
-            style={{
-              color: COLOR.primary,
-              fontWeight: 700,
-              fontSize: "clamp(16px, 4vw, 18px)",
-              whiteSpace: "nowrap",
-            }}
+            className="flex items-center gap-2 font-bold text-primary"
+            style={{ fontSize: "clamp(16px, 4vw, 18px)", whiteSpace: "nowrap" }}
           >
+            <Logo size={26} />
             模拟基金
           </a>
           {/* 桌面顶栏导航。窄屏整体隐藏（display:none），职责移交底部 TabBar ——
