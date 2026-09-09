@@ -197,10 +197,12 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         <NavButton size="small" to="/me">← 返回持仓</NavButton>
       </Space>
 
-      {/* 持仓总览：持有金额主位 + 三小格，右上基金详情入口（spec §5.1 ②） */}
+      {/* 持仓总览：持有金额主位 + 三小格，右上基金详情入口（spec §5.1 ②）。
+          animate-fade-up：区块进场淡入（首卡无延迟） */}
       <SectionCard
         title="持仓总览"
         extra={<NavButton size="small" to={`/funds/${d.fundCode}`}>基金详情 →</NavButton>}
+        className="animate-fade-up"
       >
         <StatBig label="持有金额" value={fmtYuan(d.marketValueCents)} suffix="元" />
         <Row gutter={[24, 16]} style={{ marginTop: 16 }}>
@@ -239,13 +241,14 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
 
       {/* 功能入口 tabs：三个 tab 全部只看这只基金。收益明细传宿主 loader 的
           fundProfit（单基金口径，摘要/曲线/日历三件套都只算这只基金）；
-          旧独立「累计盈亏」卡已并入该 tab（内容同源，删除重复叙事） */}
-      <SectionCard>
+          旧独立「累计盈亏」卡已并入该 tab（内容同源，删除重复叙事）。
+          交错进场：第 N 卡延迟 (N-1)×60ms（animate-delay 写法的坑见 uno.config.ts） */}
+      <SectionCard className="animate-fade-up animate-delay-[60ms]">
         <MeTabs fundCode={d.fundCode} fundProfit={profit} />
       </SectionCard>
 
       {/* 份额批次：让 FIFO 阶梯费率这个系统最独特的设计对用户可见（原样保留） */}
-      <SectionCard title={`份额批次（${d.lots.length} 批）`}>
+      <SectionCard title={`份额批次（${d.lots.length} 批）`} className="animate-fade-up animate-delay-[120ms]">
         {d.lots.length === 0
           ? (
               <EmptyState description="无在持批次" />

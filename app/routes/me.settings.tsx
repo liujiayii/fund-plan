@@ -136,7 +136,8 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
         <Alert type="error" showIcon message={fetcher.data.error} closable />
       )}
 
-      <SectionCard title="账户信息">
+      {/* animate-fade-up：区块进场淡入（首卡无延迟） */}
+      <SectionCard title="账户信息" className="animate-fade-up">
         <DataRow label="用户名" value={user.username} />
         <DataRow
           label="角色"
@@ -157,7 +158,8 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
         />
       </SectionCard>
 
-      <SectionCard title="修改密码">
+      {/* 交错进场：第 N 卡延迟 (N-1)×60ms（animate-delay 写法的坑见 uno.config.ts） */}
+      <SectionCard title="修改密码" className="animate-fade-up animate-delay-[60ms]">
         {/* min(420px, 100%)：显式兜底窄屏（Task 10），不再依赖外层 padding 的巧合 */}
         <fetcher.Form method="post" style={{ maxWidth: "min(420px, 100%)" }}>
           <input type="hidden" name="intent" value="changePassword" />
@@ -179,7 +181,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </SectionCard>
 
-      <SectionCard title="重置模拟盘">
+      <SectionCard title="重置模拟盘" className="animate-fade-up animate-delay-[120ms]">
         <Space direction="vertical" style={{ width: "100%" }}>
           <Alert
             type="warning"

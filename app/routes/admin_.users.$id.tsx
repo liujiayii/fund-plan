@@ -73,8 +73,10 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
       <NavButton to="/admin">← 返回用户列表</NavButton>
 
       {/* 总览与收益三件套：与 /me 同款布局（ux-polish #11）。
-          只读铁律不变——没有任何操作按钮 */}
-      <SectionCard>
+          只读铁律不变——没有任何操作按钮。
+          animate-fade-up：区块进场淡入（首卡无延迟），第 N 卡延迟 (N-1)×60ms
+          （animate-delay 写法的坑见 uno.config.ts 注释） */}
+      <SectionCard className="animate-fade-up">
         <AssetOverviewCard
           summary={portfolio.summary}
           daily={loaderData.profit.daily}
@@ -88,20 +90,20 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
           四小格的昨日/累计收益重复，曲线末点 + tooltip 全覆盖 */}
       {loaderData.profit.daily.length > 0 && (
         <>
-          <SectionCard title="资产走势">
+          <SectionCard title="资产走势" className="animate-fade-up animate-delay-[60ms]">
             <AssetTrendChart data={loaderData.profit.daily} />
           </SectionCard>
-          <SectionCard title="收益日历">
+          <SectionCard title="收益日历" className="animate-fade-up animate-delay-[120ms]">
             <ProfitCalendarCard detail={loaderData.profit} />
           </SectionCard>
         </>
       )}
 
-      <SectionCard title={`持仓（${portfolio.holdings.length} 只）`}>
+      <SectionCard title={`持仓（${portfolio.holdings.length} 只）`} className="animate-fade-up animate-delay-[180ms]">
         <HoldingListReadonly holdings={portfolio.holdings} />
       </SectionCard>
 
-      <SectionCard title={`订单（最近 ${orders.length} 条）`}>
+      <SectionCard title={`订单（最近 ${orders.length} 条）`} className="animate-fade-up animate-delay-[240ms]">
         {/* detailed 模式：成交净值/份额/手续费全展开，failed 的原因在
             OrderList 的 failReason Tooltip 里——排查「为什么没成交」就靠它。
             renderActions 刻意不传：admin 只读，绝不出现撤单/改单按钮 */}

@@ -138,8 +138,9 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
       </div>
 
       {/* 资产总览：总资产主位 + 一行四格（口径注释见 AssetOverviewCard）。
-          pendingBuyCents 把申购中在途并回持仓金额与总资产（仅 /me） */}
-      <SectionCard>
+          pendingBuyCents 把申购中在途并回持仓金额与总资产（仅 /me）。
+          animate-fade-up：区块进场淡入（首卡无延迟） */}
+      <SectionCard className="animate-fade-up">
         <AssetOverviewCard
           summary={portfolio.summary}
           daily={timeline.daily}
@@ -149,8 +150,9 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         />
       </SectionCard>
 
-      {/* 每日签到（主人 2026-09-09 要求上移：领本金是高频动作，放在功能入口之前） */}
-      <SectionCard title="每日签到领本金">
+      {/* 每日签到（主人 2026-09-09 要求上移：领本金是高频动作，放在功能入口之前）。
+          交错进场：第 N 卡延迟 (N-1)×60ms（animate-delay 写法的坑见 uno.config.ts） */}
+      <SectionCard title="每日签到领本金" className="animate-fade-up animate-delay-[60ms]">
         {fetcher.data?.ok && (
           <Alert type="success" showIcon message={fetcher.data.message} style={{ marginBottom: 16 }} />
         )}
@@ -213,7 +215,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
 
       {/* 功能入口 tabs：收益明细/交易记录/定投计划页内切换 + 后台懒加载
           （旧 QuickEntries 跳页退役；三个深链路由保留，外链照常可用） */}
-      <SectionCard>
+      <SectionCard className="animate-fade-up animate-delay-[120ms]">
         <MeTabs />
       </SectionCard>
 
@@ -222,6 +224,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
           行内详情/卖出深链，底部批次说明 */}
       <SectionCard
         title={`我的持仓（${holdings.length} 只 · 市值 ${fmtYuan(summary.marketValueCents)} 元）`}
+        className="animate-fade-up animate-delay-[180ms]"
         extra={(
           <PeriodTabs
             options={[

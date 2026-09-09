@@ -2,6 +2,7 @@ import type { DailyAsset } from "~/domain/asset-timeline";
 import type { PortfolioValuation } from "~/domain/portfolio";
 import { Col, Row } from "antd";
 import Decimal from "decimal.js";
+import { CountUpText } from "~/components/ui/count-up";
 import { fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { StatBig } from "~/components/ui/StatBig";
@@ -68,7 +69,13 @@ export function AssetOverviewCard({
     <div>
       <StatBig
         label="总资产"
-        value={fmtYuan(summary.totalAssetCents + inFlightCents)}
+        value={(
+          // 数字滚动：SSR 直出终值，客户端从 0 滚到位（spec §5 #3）
+          <CountUpText
+            value={summary.totalAssetCents + inFlightCents}
+            format={v => fmtYuan(Math.round(v))}
+          />
+        )}
         suffix="元"
       />
       {/* 一行四格（xs 两列 / sm+ 单行）：四小格共用 size 20，
@@ -78,7 +85,14 @@ export function AssetOverviewCard({
           {/* 昨日收益（原三小格版原样保留） */}
           <StatBig
             label="昨日收益"
-            value={latest ? signedYuan(latest.dayPnlCents) : "—"}
+            value={latest
+              ? (
+                  <CountUpText
+                    value={latest.dayPnlCents}
+                    format={v => signedYuan(Math.round(v))}
+                  />
+                )
+              : "—"}
             suffix={latest ? "元" : undefined}
             color={latest ? pnlColor(latest.dayPnlCents) : undefined}
             size={20}
