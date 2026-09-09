@@ -1,5 +1,6 @@
 import type { Route } from "./+types/master";
-import { Pagination, Space, Tag, Typography } from "antd";
+import type { DcaPlanView, HoldingView, OrderView, TransactionView } from "~/services/portfolio-service";
+import { Pagination, Space, Tabs, Tag, Typography } from "antd";
 import { useState } from "react";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { AssetPnlSummary } from "~/components/AssetPnlSummary";
@@ -64,13 +65,8 @@ export async function loader({ context }: Route.LoaderArgs) {
 }
 
 export default function Master({ loaderData }: Route.ComponentProps) {
-  // 客户端分页：两个 tab 各自一份页码，互不影响。
-  // ⚠️ 必须放在下面「主理人未注册」的提前 return **之前** ——
-  // hook 调用数量要在两条渲染路径上一致，否则 React 报
-  // Rendered fewer hooks than expected
-  const [orderPage, setOrderPage] = useState(1);
-  const [txPage, setTxPage] = useState(1);
-
+  // 「主理人未注册」的提前 return 前没有 hook 了——分页状态全部收进各 tab 面板
+  // 组件里（面板被 rc-tabs 惰性挂载且切走不卸载，翻页状态天然各自独立）
   if (!loaderData.admin) {
     return (
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -98,7 +94,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
-      {/* 顶部与 /me 同款总览卡（四小格版，Task 3 已升级） */}
+      {/* 顶部与 /me 同款总览卡（一行四格版） */}
       <SectionCard>
         <AssetOverviewCard
           summary={portfolio.summary}
@@ -121,64 +117,104 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         </>
       )}
 
-      {/* 四块内容拆 Tab 平铺：信息一目了然，不用点来点去（ux-polish #9 决策） */}
-      <SectionCard title={`持仓（${portfolio.holdings.length} 只）`}>
-        <HoldingListReadonly holdings={portfolio.holdings} />
-      </SectionCard>
-
-      <SectionCard title="定投计划">
-        {plans.length === 0
-          ? <EmptyState description="暂无定投计划" />
-          : <DcaPlanList plans={plans} />}
-      </SectionCard>
-
-      <SectionCard title={`交易记录（最近 ${orders.length} 条）`}>
-        {orders.length === 0
-          ? <EmptyState description="暂无交易记录" />
-          : (
-              <>
-                <OrderList orders={orders.slice((orderPage - 1) * PAGE_SIZE, orderPage * PAGE_SIZE)} detailed />
-                {orders.length > PAGE_SIZE && (
-                  // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
-                  <div className="fp-h-scroll" style={{ marginTop: 16 }}>
-                    <Pagination
-                      align="end"
-                      responsive
-                      current={orderPage}
-                      pageSize={PAGE_SIZE}
-                      total={orders.length}
-                      showSizeChanger={false}
-                      onChange={setOrderPage}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-      </SectionCard>
-
-      <SectionCard title={`资金流水（最近 ${txs.length} 条）`}>
-        {txs.length === 0
-          ? <EmptyState description="暂无流水" />
-          : (
-              <>
-                <TxList txs={txs.slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE)} />
-                {txs.length > PAGE_SIZE && (
-                  // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
-                  <div className="fp-h-scroll" style={{ marginTop: 16 }}>
-                    <Pagination
-                      align="end"
-                      responsive
-                      current={txPage}
-                      pageSize={PAGE_SIZE}
-                      total={txs.length}
-                      showSizeChanger={false}
-                      onChange={setTxPage}
-                    />
-                  </div>
-                )}
-              </>
-            )}
+      {/* 持仓/定投/交易/流水四块合一 tab：平铺版页面太长（ux-polish #9 的决策
+          被主人 2026-09-09 推翻），条数进 tab 标签、一眼可扫；数据 loader
+          全量带回（查询数零变化），纯展示层重组 */}
+      <SectionCard>
+        <Tabs
+          defaultActiveKey="holdings"
+          items={[
+            {
+              key: "holdings",
+              label: `持仓（${portfolio.holdings.length}）`,
+              children: <HoldingsPane holdings={portfolio.holdings} />,
+            },
+            {
+              key: "dca",
+              label: `定投计划（${plans.length}）`,
+              children: <DcaPane plans={plans} />,
+            },
+            {
+              key: "orders",
+              label: `交易记录（${orders.length}）`,
+              children: <OrdersPane orders={orders} />,
+            },
+            {
+              key: "txs",
+              label: `资金流水（${txs.length}）`,
+              children: <TxsPane txs={txs} />,
+            },
+          ]}
+        />
       </SectionCard>
     </Space>
   );
+}
+
+/* ─────────── 四个 tab 面板：只读展示 + 各自的空态与分页 ─────────── */
+
+/** 持仓面板：只读列表（与 /me 的可操作版共用 HoldingList 家族） */
+function HoldingsPane({ holdings }: { holdings: HoldingView[] }) {
+  return holdings.length === 0
+    ? <EmptyState description="暂无持仓" />
+    : <HoldingListReadonly holdings={holdings} />;
+}
+
+/** 定投面板：只读计划列表 */
+function DcaPane({ plans }: { plans: DcaPlanView[] }) {
+  return plans.length === 0
+    ? <EmptyState description="暂无定投计划" />
+    : <DcaPlanList plans={plans} />;
+}
+
+/** 交易记录面板：只读订单卡 + 客户端分页 */
+function OrdersPane({ orders }: { orders: OrderView[] }) {
+  // 翻页状态在面板内：切 tab 再切回不丢（rc-tabs 切走不卸载）
+  const [page, setPage] = useState(1);
+  return orders.length === 0
+    ? <EmptyState description="暂无交易记录" />
+    : (
+        <>
+          <OrderList orders={orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)} detailed />
+          {orders.length > PAGE_SIZE && (
+            // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
+            <div className="fp-h-scroll" style={{ marginTop: 16 }}>
+              <Pagination
+                align="end"
+                responsive
+                current={page}
+                pageSize={PAGE_SIZE}
+                total={orders.length}
+                showSizeChanger={false}
+                onChange={setPage}
+              />
+            </div>
+          )}
+        </>
+      );
+}
+
+/** 资金流水面板：只读流水卡 + 客户端分页 */
+function TxsPane({ txs }: { txs: TransactionView[] }) {
+  const [page, setPage] = useState(1);
+  return txs.length === 0
+    ? <EmptyState description="暂无流水" />
+    : (
+        <>
+          <TxList txs={txs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)} />
+          {txs.length > PAGE_SIZE && (
+            <div className="fp-h-scroll" style={{ marginTop: 16 }}>
+              <Pagination
+                align="end"
+                responsive
+                current={page}
+                pageSize={PAGE_SIZE}
+                total={txs.length}
+                showSizeChanger={false}
+                onChange={setPage}
+              />
+            </div>
+          )}
+        </>
+      );
 }

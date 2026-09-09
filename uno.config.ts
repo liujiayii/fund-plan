@@ -5,7 +5,7 @@ import {
   transformerDirectives,
   transformerVariantGroup,
 } from "unocss";
-import { CARD_SHADOW, COLOR, NUM_FONT } from "./app/theme";
+import { BAR_SHADOW, CARD_SHADOW, COLOR, NUM_FONT } from "./app/theme";
 
 /**
  * UnoCSS 配置。
@@ -94,6 +94,8 @@ export default defineConfig({
     boxShadow: {
       // 卡片阴影：shadow-card，替代内联 boxShadow: CARD_SHADOW
       card: CARD_SHADOW,
+      // 页底固定操作条阴影（朝上、重一档）：shadow-bar
+      bar: BAR_SHADOW,
     },
     /**
      * 断点显式对齐 antd 栅格（responsiveObserver：xs 480 / sm 576 / md 768 /

@@ -1,3 +1,4 @@
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/me._index";
 import type { HoldingView } from "~/services/portfolio-service";
 import {
@@ -15,7 +16,7 @@ import { useFetcher } from "react-router";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
-import { ME_QUICK_ENTRIES, QuickEntries } from "~/components/QuickEntries";
+import { MeTabs } from "~/components/MeTabsPanels";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
@@ -27,7 +28,7 @@ import { getAssetTimeline } from "~/services/asset-service";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
-import { getPortfolio } from "~/services/portfolio-service";
+import { getPendingBuyCents, getPortfolio } from "~/services/portfolio-service";
 import { COLOR } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
@@ -40,13 +41,36 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
 
-  const [portfolio, checkinStatus, timeline] = await Promise.all([
+  // 在途资金（pending 买单）单独一查：/me 总览卡把「申购中」并回持仓金额与总资产；
+  // /master 与首页刻意不查（公开镜像保持纯市值口径，别多背查询）
+  const [portfolio, checkinStatus, timeline, pendingBuyCents] = await Promise.all([
     getPortfolio(db, user.id),
     getCheckinStatus(db, user.id),
     getAssetTimeline(db, user.id),
+    getPendingBuyCents(db, user.id),
   ]);
 
-  return { user, portfolio, checkinStatus, timeline };
+  return { user, portfolio, checkinStatus, timeline, pendingBuyCents };
+}
+
+/**
+ * 仅 ?tab= 变化（MeTabs 切 tab）时跳过 loader 重跑（CodeRabbit 复审指正）。
+ *
+ * 本页 loader 是 12+ 条 D1 查询（组合/签到/时间线/在途），tab 切换不改变
+ * 任何数据，重跑纯属浪费——大陆慢链路下每次点 tab 都平白多一轮往返。
+ * 其余一切导航（含 action 提交后的 revalidate，formMethod 非 GET）走默认。
+ */
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  // 动作提交后的 revalidate 必须保留：签到/撤单等依赖它刷新数据
+  if (formMethod && formMethod !== "GET")
+    return defaultShouldRevalidate;
+  if (currentUrl.pathname !== nextUrl.pathname)
+    return true;
+  const c = new URLSearchParams(currentUrl.search);
+  const n = new URLSearchParams(nextUrl.search);
+  c.delete("tab");
+  n.delete("tab");
+  return c.toString() !== n.toString();
 }
 
 /** 签到 action */
@@ -67,7 +91,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
-  const { user, portfolio, checkinStatus, timeline } = loaderData;
+  const { user, portfolio, checkinStatus, timeline, pendingBuyCents } = loaderData;
   // summary 的合计市值供持仓卡标题用；其余总览数字全部交给 AssetOverviewCard
   const { summary, holdings } = portfolio;
   const fetcher = useFetcher<typeof action>();
@@ -113,22 +137,19 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         )}
       </div>
 
-      {/* 资产总览：总资产主位 + 昨日/累计/余额（口径注释见 AssetOverviewCard） */}
+      {/* 资产总览：总资产主位 + 一行四格（口径注释见 AssetOverviewCard）。
+          pendingBuyCents 把申购中在途并回持仓金额与总资产（仅 /me） */}
       <SectionCard>
         <AssetOverviewCard
           summary={portfolio.summary}
           daily={timeline.daily}
           latest={timeline.latest}
           totalDepositedCents={timeline.totalDepositedCents}
+          pendingBuyCents={pendingBuyCents}
         />
       </SectionCard>
 
-      {/* 腰部功能入口：收益明细 / 交易记录 / 定投计划 */}
-      <SectionCard>
-        <QuickEntries entries={ME_QUICK_ENTRIES} />
-      </SectionCard>
-
-      {/* 每日签到 */}
+      {/* 每日签到（主人 2026-09-09 要求上移：领本金是高频动作，放在功能入口之前） */}
       <SectionCard title="每日签到领本金">
         {fetcher.data?.ok && (
           <Alert type="success" showIcon message={fetcher.data.message} style={{ marginBottom: 16 }} />
@@ -188,6 +209,12 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
             </fetcher.Form>
           </Col>
         </Row>
+      </SectionCard>
+
+      {/* 功能入口 tabs：收益明细/交易记录/定投计划页内切换 + 后台懒加载
+          （旧 QuickEntries 跳页退役；三个深链路由保留，外链照常可用） */}
+      <SectionCard>
+        <MeTabs />
       </SectionCard>
 
       {/* 我的持仓：原 /me/holdings 列表页的职能全部并入——

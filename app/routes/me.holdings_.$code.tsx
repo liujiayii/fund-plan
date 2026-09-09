@@ -1,3 +1,4 @@
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 /**
  * 单只持仓详情页：`/me/holdings/:code`
  *
@@ -17,15 +18,14 @@
  * 命名保留防止有人「顺手规整」文件名重踩旧坑。
  */
 import type { Route } from "./+types/me.holdings_.$code";
-import { FieldTimeOutlined, LineChartOutlined, ProfileOutlined } from "@ant-design/icons";
 import { Button, Col, Row, Space, Table, Tag, Typography } from "antd";
 import { eq } from "drizzle-orm";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { DcaDrawer } from "~/components/DcaDrawer";
 import { FundPnlChart } from "~/components/FundPnlChart";
-import { QuickEntries } from "~/components/QuickEntries";
+import { MeTabs } from "~/components/MeTabsPanels";
 import { SellDrawer } from "~/components/SellDrawer";
 import { BottomActionBar } from "~/components/ui/BottomActionBar";
 import { DataRow } from "~/components/ui/DataRow";
@@ -85,6 +85,26 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 }
 
 /**
+ * 仅 ?tab= 变化（MeTabs 切 tab）时跳过 loader 重跑（CodeRabbit 复审指正）。
+ *
+ * 本页 loader 含 2+N 的 getFundProfitDetail 全量重放，tab 切换不改变数据，
+ * 重跑纯属浪费。同路由换基金（params.code 变化）pathname 也变，走默认重跑。
+ * action 提交后的 revalidate（卖出等）走 formMethod 分支保留。
+ */
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  // 动作提交后的 revalidate 必须保留：卖出下单等依赖它刷新数据
+  if (formMethod && formMethod !== "GET")
+    return defaultShouldRevalidate;
+  if (currentUrl.pathname !== nextUrl.pathname)
+    return true;
+  const c = new URLSearchParams(currentUrl.search);
+  const n = new URLSearchParams(nextUrl.search);
+  c.delete("tab");
+  n.delete("tab");
+  return c.toString() !== n.toString();
+}
+
+/**
  * 卖出是持仓页专属语义（placeSellOrder 需要路由参数的基金上下文），action 只留
  * intent=sell；定投三 intent 已归拢到 /me/dca 的 action，由 DcaDrawer 里的
  * DcaFundPanel 统一提交（持仓页与基金页共用一个真相）。
@@ -136,26 +156,15 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
   const [sellOpen, setSellOpen] = useState(false);
   const [dcaOpen, setDcaOpen] = useState(false);
 
-  // 旧深链兼容：?tab=trade|dca|orders 是三页签时代的寻址方式，
-  // /me 持仓行的「卖出」深链（feat/me-page-refactor Task 6）仍在用 ?tab=trade。
-  // 每进入一只基金消费一次：trade→开卖出抽屉、dca→开定投抽屉、
-  // orders→replace 跳过滤后的交易记录；随后清参，刷新不重复触发。
+  // 旧深链兼容：?tab=trade 是 /me 持仓行「卖出」按钮的寻址方式（feat/me-page-refactor）。
+  // 其余 tab 值（orders/dca）现在是 MeTabs 的真实 tab 状态（?tab= 直读），
+  // 不再需要跳转或开抽屉——只有 trade 消费一次：开卖出抽屉后清参，刷新不重复触发。
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (!tab)
+    if (searchParams.get("tab") !== "trade")
       return;
-    if (tab === "orders") {
-      navigate(`/me/orders?fund=${params.code}`, { replace: true });
-      return;
-    }
-    if (tab === "trade")
-      // eslint-disable-next-line react/set-state-in-effect -- 深链是进场一次性副作用，effect 正是该用的工具
-      setSellOpen(true);
-    else if (tab === "dca")
-      // eslint-disable-next-line react/set-state-in-effect -- 同上
-      setDcaOpen(true);
+    // eslint-disable-next-line react/set-state-in-effect -- 深链是进场一次性副作用，effect 正是该用的工具
+    setSellOpen(true);
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
@@ -165,9 +174,9 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
       { replace: true },
     );
     // 依赖 params.code（CodeRabbit 评审）：同路由换基金时组件被复用、不重挂载，
-    // 深链须随之重放；同基金内清参/换 tab 不触发（deps 只看 code）
+    // 深链须随之重放；同基金内清参/换 tab 不触发（deps 只看 code 与 params 对象）
     // eslint-disable-next-line react/exhaustive-deps -- 刻意只依赖 code
-  }, [params.code]);
+  }, [params.code, searchParams]);
 
   // 昨日收益：该基金最新有净值交易日的归因收益（净值延迟同步、周末顺延，
   // 标注「截至 M月D日」而非字面的昨天）
@@ -227,15 +236,10 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         </Row>
       </SectionCard>
 
-      {/* 腰部功能入口：跳全局页（交易记录/定投带 ?fund= 过滤；收益明细是全局口径） */}
+      {/* 功能入口 tabs：交易记录/定投计划带 fundCode 只看这只基金（收益明细全局口径）。
+          页内切换 + 后台懒加载，旧「跳全局页 + ?fund= 过滤」的 QuickEntries 退役 */}
       <SectionCard>
-        <QuickEntries
-          entries={[
-            { to: "/me/profit", label: "收益明细", sub: "每日收益一览", icon: <LineChartOutlined /> },
-            { to: `/me/orders?fund=${d.fundCode}`, label: "交易记录", sub: "申购赎回全记录", icon: <ProfileOutlined /> },
-            { to: `/me/dca?fund=${d.fundCode}`, label: "定投计划", sub: "自动下单管理", icon: <FieldTimeOutlined /> },
-          ]}
-        />
+        <MeTabs fundCode={d.fundCode} />
       </SectionCard>
 
       {/* 累计盈亏：含已实现盈亏与全部费用，与收益明细页同口径；

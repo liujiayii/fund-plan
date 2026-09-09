@@ -39,6 +39,13 @@ export const COLOR = {
 export const CARD_SHADOW = "0 1px 2px rgba(0, 0, 0, 0.04)";
 
 /**
+ * 页底固定操作条阴影。方向朝上（条浮在内容之上），比卡片阴影重一档——
+ * 操作条是全页唯一的「悬浮层」，轻了读不出浮起。与 CARD_SHADOW 同在
+ * theme.ts 定死，组件里别写字面量。
+ */
+export const BAR_SHADOW = "0 -2px 12px rgba(0, 0, 0, 0.08)";
+
+/**
  * 数字用等宽字体栈，保证金额纵向对齐 ——
  * 比例字体下 "1" 比 "8" 窄，一列金额会参差不齐。
  */

@@ -1,6 +1,6 @@
 /* 全局导航进度条（NavProgressBar.tsx 专用）——原生 CSS 的唯一出处。
-   不走 UnoCSS：keyframes 动画需要原生 CSS，且工具类改了要重跑 uno:build；
-   也不写进 uno.gen.css（那是生成文件，禁止手改）。 */
+   不走 UnoCSS：进度条的时序编排（渐进推进/冲顶/淡出）由组件 JS 精确驱动，
+   工具类改了要重跑 uno:build；也不写进 uno.gen.css（那是生成文件，禁止手改）。 */
 
 .fp-nav-progress {
   position: fixed;
@@ -10,22 +10,14 @@
   z-index: 1100;
   width: 100%;
   height: 3px;
+  /* 初值与 SSR 首帧一致；显示后的 transform/opacity/transition 全由组件内联驱动 */
+  transform: scaleX(0);
   transform-origin: 0 50%;
-  /* 不确定型往返动画：大陆慢链路下 loader 动辄 2~5s，来回跑比单向循环更像「在推进」 */
-  animation: fp-nav-progress-slide 1.2s ease-in-out infinite;
-  transition: opacity 0.25s ease;
+  opacity: 0;
+  /* 兜底过渡（组件起跳后内联接管）：JS 未接管前的任何变化也不该跳变 */
+  transition:
+    transform 0.25s ease,
+    opacity 0.25s ease;
   /* 纯视觉指示，不能挡住底下内容的点击 */
   pointer-events: none;
-}
-
-@keyframes fp-nav-progress-slide {
-  0% {
-    transform: translateX(-60%) scaleX(0.3);
-  }
-  50% {
-    transform: translateX(15%) scaleX(0.55);
-  }
-  100% {
-    transform: translateX(100%) scaleX(0.3);
-  }
 }

@@ -40,14 +40,20 @@ export interface CreateDcaInput {
   now?: Date;
 }
 
-/** 创建定投计划。next_run 由领域函数算出，保证严格晚于今天 */
-export async function createDcaPlan(
+/**
+ * create/update 共用的排期校验（CodeRabbit 复审指正收拢）：
+ * 金额正整数 → 基金存在且过起购门槛 → 按频率算出严格晚于今天的下一期。
+ * 两处的口径（错误文案、交易日校准）从此只此一份，改规则不漂移。
+ */
+async function resolveNextRun(
   db: Db,
-  input: CreateDcaInput,
-): Promise<{ id: number }> {
-  const { userId, fundCode, amountCents, frequency, dayOfWeek, dayOfMonth } = input;
-  const now = input.now ?? new Date();
-
+  fundCode: string,
+  amountCents: number,
+  frequency: Frequency,
+  dayOfWeek: number | null,
+  dayOfMonth: number | null,
+  now: Date,
+): Promise<string> {
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     throw new Error("每期金额必须为正整数（分）");
   }
@@ -56,17 +62,31 @@ export async function createDcaPlan(
   if (!f)
     throw new Error(`基金 ${fundCode} 不存在，请先在基金页查看一次`);
   if (amountCents < f.minPurchase) {
-    throw new Error(`每期金额低于该基金起购金额`);
+    throw new Error("每期金额低于该基金起购金额");
   }
 
   const today = toBeijing(now).format("YYYY-MM-DD");
   // nextRunDate 会校验 dayOfWeek / dayOfMonth 的合法性
-  const nextRun = nextRunDate({
+  return nextRunDate({ frequency, dayOfWeek, dayOfMonth, from: today });
+}
+
+/** 创建定投计划。next_run 由领域函数算出，保证严格晚于今天 */
+export async function createDcaPlan(
+  db: Db,
+  input: CreateDcaInput,
+): Promise<{ id: number }> {
+  const { userId, fundCode, amountCents, frequency, dayOfWeek, dayOfMonth } = input;
+  const now = input.now ?? new Date();
+
+  const nextRun = await resolveNextRun(
+    db,
+    fundCode,
+    amountCents,
     frequency,
-    dayOfWeek: dayOfWeek ?? null,
-    dayOfMonth: dayOfMonth ?? null,
-    from: today,
-  });
+    dayOfWeek ?? null,
+    dayOfMonth ?? null,
+    now,
+  );
 
   const [created] = await db
     .insert(dcaPlan)
@@ -119,6 +139,72 @@ export async function deleteDcaPlan(
   assertOwnership(userId, plan.userId);
 
   await db.delete(dcaPlan).where(eq(dcaPlan.id, planId));
+}
+
+/** 修改计划的输入（金额/频率/日子；基金与状态不在此列，理由见 updateDcaPlan） */
+export interface UpdateDcaInput {
+  /** 每期金额（分） */
+  amountCents: number;
+  frequency: Frequency;
+  /** 周几（weekly 用，1-7） */
+  dayOfWeek?: number | null;
+  /** 每月几号（monthly 用，1-28） */
+  dayOfMonth?: number | null;
+  /** 修改时刻，默认现在 */
+  now?: Date;
+}
+
+/**
+ * 修改定投计划（金额/频率/日子）。只能改自己的。
+ *
+ * - **基金不可改**：计划的身份就是「对这只基金定投」，换基金 = 删除重建
+ * - **next_run 按新频率从今天重算**：旧频率的下次执行日作废，
+ *   与 createDcaPlan 同一套 nextRunDate（含交易日校准），行为一致
+ * - **与频率无关的日子字段清空**：weekly 改 monthly 后 dayOfWeek 留着就是脏数据
+ * - **状态不动**：暂停中的计划照样能改、改完仍暂停（启用/暂停走 toggle）
+ */
+export async function updateDcaPlan(
+  db: Db,
+  userId: number,
+  planId: number,
+  input: UpdateDcaInput,
+): Promise<void> {
+  const { amountCents, frequency, dayOfWeek, dayOfMonth } = input;
+  const now = input.now ?? new Date();
+
+  const plan = await db.query.dcaPlan.findFirst({
+    where: eq(dcaPlan.id, planId),
+  });
+  if (!plan)
+    throw new Error("定投计划不存在");
+  assertOwnership(userId, plan.userId);
+
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    throw new Error("每期金额必须为正整数（分）");
+  }
+  // 排期校验与 create 同一份（resolveNextRun）：改完后下一期也得下得了单，
+  // 基金用计划自身的（前端编辑表单本就不开放改基金）
+  const nextRun = await resolveNextRun(
+    db,
+    plan.fundCode,
+    amountCents,
+    frequency,
+    dayOfWeek ?? null,
+    dayOfMonth ?? null,
+    now,
+  );
+
+  await db
+    .update(dcaPlan)
+    .set({
+      amount: amountCents,
+      frequency,
+      // 只留当前频率对应的日子字段，另一边清 null
+      dayOfWeek: frequency === "weekly" ? (dayOfWeek ?? null) : null,
+      dayOfMonth: frequency === "monthly" ? (dayOfMonth ?? null) : null,
+      nextRun,
+    })
+    .where(eq(dcaPlan.id, planId));
 }
 
 /**
