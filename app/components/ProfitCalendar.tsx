@@ -235,9 +235,11 @@ function ProfitCalendarInner({
             ? cellBgColor(d.dayPnlCents, d.dayPnlRate, rateTiers)
             : `${COLOR.neutral}${NEUTRAL_ALPHA}`;
 
-          // 收益金额颜色：走 pnlColor（与背景同色系，但用实色保证可读）
+          // 收益金额颜色：统一 textPrimary 深色（2026-09-09 主理人定夺）。
+          // 涨跌语义全交给背景色（红/绿底 + 深浅分档）——此前文字走 pnlColor
+          // 与背景同色系实色，深档（50%~70% 不透明）下红字贴红底看不清
           const pnlFg = hasData && d.dayPnlCents !== 0
-            ? pnlColor(d.dayPnlCents)
+            ? COLOR.textPrimary
             : undefined;
 
           // 有数据且调用方要交互时，格子可点（键盘可达：role + tabIndex + Enter/Space）

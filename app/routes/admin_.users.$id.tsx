@@ -1,7 +1,6 @@
 import type { Route } from "./+types/admin_.users.$id";
 import { Space, Tag, Typography } from "antd";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
-import { AssetPnlSummary } from "~/components/AssetPnlSummary";
 import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { OrderList } from "~/components/OrderList";
 import { HoldingListReadonly } from "~/components/PortfolioView";
@@ -84,11 +83,12 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
         />
       </SectionCard>
 
-      {/* 走势与日历仅 daily 非空时渲染：该用户从没交易过就不摆空图（/master 同款守卫） */}
+      {/* 走势与日历仅 daily 非空时渲染：该用户从没交易过就不摆空图（/master 同款守卫）。
+          走势卡不再叠 AssetPnlSummary 两格（2026-09-09 删）：与顶部总览
+          四小格的昨日/累计收益重复，曲线末点 + tooltip 全覆盖 */}
       {loaderData.profit.daily.length > 0 && (
         <>
           <SectionCard title="资产走势">
-            <AssetPnlSummary daily={loaderData.profit.daily} latest={loaderData.profit.latest} />
             <AssetTrendChart data={loaderData.profit.daily} />
           </SectionCard>
           <SectionCard title="收益日历">
