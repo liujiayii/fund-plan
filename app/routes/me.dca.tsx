@@ -24,6 +24,7 @@ import {
   createDcaPlan,
   deleteDcaPlan,
   toggleDcaPlan,
+  updateDcaPlan,
 } from "~/services/dca-service";
 import { searchFunds } from "~/services/fund-data";
 import { requireUser } from "~/services/guard";
@@ -57,6 +58,29 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { plans, fundFilter };
 }
 
+/**
+ * create/update 共用的定投字段解析（金额/频率/日子）。
+ * fundCode 只属于 create、id 只属于 update，由各自分支取。
+ */
+function parseScheduleFields(fd: FormData): {
+  amountCents: number;
+  frequency: "daily" | "weekly" | "monthly";
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+} | { error: string } {
+  const amount = String(fd.get("amount") ?? "");
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0)
+    return { error: "请输入正确的金额" };
+  const frequency = String(fd.get("frequency") ?? "monthly") as
+    | "daily"
+    | "weekly"
+    | "monthly";
+  const dayOfWeek = fd.get("dayOfWeek") ? Number(fd.get("dayOfWeek")) : null;
+  const dayOfMonth = fd.get("dayOfMonth") ? Number(fd.get("dayOfMonth")) : null;
+  return { amountCents: yuanToCents(amount), frequency, dayOfWeek, dayOfMonth };
+}
+
 export async function action({ request, context }: Route.ActionArgs) {
   const { db, env } = getAppContext(context);
   const user = await requireUser(request, db);
@@ -67,17 +91,9 @@ export async function action({ request, context }: Route.ActionArgs) {
   try {
     if (intent === "create") {
       const fundCode = String(fd.get("fundCode") ?? "").trim();
-      const amount = String(fd.get("amount") ?? "");
-      const frequency = String(fd.get("frequency") ?? "monthly") as
-        | "daily"
-        | "weekly"
-        | "monthly";
-      const dayOfWeek = fd.get("dayOfWeek") ? Number(fd.get("dayOfWeek")) : null;
-      const dayOfMonth = fd.get("dayOfMonth") ? Number(fd.get("dayOfMonth")) : null;
-
-      const n = Number(amount);
-      if (!Number.isFinite(n) || n <= 0)
-        return { error: "请输入正确的金额" };
+      const fields = parseScheduleFields(fd);
+      if ("error" in fields)
+        return { error: fields.error };
       if (!/^\d{6}$/.test(fundCode))
         return { error: "请输入 6 位基金代码" };
 
@@ -98,12 +114,18 @@ export async function action({ request, context }: Route.ActionArgs) {
       await createDcaPlan(db, {
         userId: user.id,
         fundCode,
-        amountCents: yuanToCents(amount),
-        frequency,
-        dayOfWeek,
-        dayOfMonth,
+        ...fields,
       });
       return { ok: true, message: "定投计划已创建" };
+    }
+
+    if (intent === "update") {
+      const id = Number(fd.get("id"));
+      const fields = parseScheduleFields(fd);
+      if ("error" in fields)
+        return { error: fields.error };
+      await updateDcaPlan(db, user.id, id, fields);
+      return { ok: true, message: "计划已更新，下次执行按新计划排期" };
     }
 
     if (intent === "toggle") {
