@@ -21,6 +21,8 @@ import "../styles/nav-progress.css";
  *
  * 实现注记：进度全部走 ref 直接写 DOM（transform/opacity/transition），
  * 不走 React state——每帧 setState 会反过来拖慢正在加载的导航本身。
+ * 定时器登记在 Set 里、回调触发时自删（CodeRabbit 复审指正）：tick 链
+ * 每 220ms 排一个，数组只增不减会在长导航期间无限累积。
  * SSR 首帧与 CSS 初值一致（scaleX(0) + opacity:0），无 hydration 分歧。
  * 只覆盖 SPA 导航——表单提交（useFetcher）已各自有按钮 loading，互不重复；
  * 游客整页跳转（/ 与 /master 的原生 <a>）由浏览器标签页自带 spinner 反馈。
@@ -33,11 +35,13 @@ export function NavProgressBar() {
   // 小型状态机全走 ref（理由见组件头注释）
   const progressRef = useRef(0); // 当前进度 0~1
   const shownRef = useRef(false); // 本次导航是否已显示过（决定结束时要不要冲顶收尾）
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]); // 本组件排的所有定时器（推进 tick 链 + 收尾）
+  // 已排未触发的定时器（推进 tick 链 + 收尾）。回调触发时自删，Set 不累积
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   // 卸载兜底：掐掉余留定时器（定时器里写的已是分离 DOM，无害，纯粹求干净）
   useEffect(() => () => {
     for (const t of timersRef.current) clearTimeout(t);
+    timersRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -48,24 +52,32 @@ export function NavProgressBar() {
     /** 掐掉所有余留定时器：effect cleanup 用；也防快速连续导航时上一轮收尾打扰新一轮 */
     const clearTimers = () => {
       for (const t of timersRef.current) clearTimeout(t);
-      timersRef.current = [];
+      timersRef.current.clear();
     };
-    /** 排一个定时器并登记——保证任何路径排的定时器都能被 clearTimers 掐掉 */
+    /** 排一个定时器并登记，触发时自删——长导航期间 Set 不会无限增长 */
     const later = (fn: () => void, ms: number) => {
-      const t = setTimeout(fn, ms);
-      timersRef.current.push(t);
+      const t = setTimeout(() => {
+        timersRef.current.delete(t);
+        fn();
+      }, ms);
+      timersRef.current.add(t);
     };
 
     if (active) {
+      // 上一轮收尾到一半（正冲顶/淡出）又开新导航：立即无过渡藏掉旧状态，
+      // 不让满格条在新导航的 50ms 起跳延迟里残留（CodeRabbit 复审指正）。
+      // 正常路径（上一轮早已归零）这里是幂等 no-op
+      el.style.transition = "none";
+      el.style.opacity = "0";
+      el.style.transform = "scaleX(0)";
+      progressRef.current = 0;
+      void el.offsetWidth; // 强制 reflow：让「归零」先生效，再恢复过渡
+      el.style.transition = "";
+
+      // 起跳延迟 50ms：更快的反馈（主人反馈「出现太慢」，原 150ms）；
+      // 50ms 内就结束的导航 → 条从未出现过，零闪烁
       later(() => {
         shownRef.current = true;
-        // 干净起跳：快速连续导航时上一轮可能正冲顶/淡出到一半，
-        // 先无过渡归零再进场，不倒放、不从满格倒着走
-        el.style.transition = "none";
-        el.style.transform = "scaleX(0)";
-        void el.offsetWidth; // 强制 reflow：让「归零」先生效，再恢复过渡
-        el.style.transition = "";
-
         progressRef.current = 0.08;
         el.style.opacity = "1";
         el.style.transform = `scaleX(${progressRef.current})`;

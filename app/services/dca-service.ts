@@ -40,14 +40,20 @@ export interface CreateDcaInput {
   now?: Date;
 }
 
-/** 创建定投计划。next_run 由领域函数算出，保证严格晚于今天 */
-export async function createDcaPlan(
+/**
+ * create/update 共用的排期校验（CodeRabbit 复审指正收拢）：
+ * 金额正整数 → 基金存在且过起购门槛 → 按频率算出严格晚于今天的下一期。
+ * 两处的口径（错误文案、交易日校准）从此只此一份，改规则不漂移。
+ */
+async function resolveNextRun(
   db: Db,
-  input: CreateDcaInput,
-): Promise<{ id: number }> {
-  const { userId, fundCode, amountCents, frequency, dayOfWeek, dayOfMonth } = input;
-  const now = input.now ?? new Date();
-
+  fundCode: string,
+  amountCents: number,
+  frequency: Frequency,
+  dayOfWeek: number | null,
+  dayOfMonth: number | null,
+  now: Date,
+): Promise<string> {
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     throw new Error("每期金额必须为正整数（分）");
   }
@@ -56,17 +62,31 @@ export async function createDcaPlan(
   if (!f)
     throw new Error(`基金 ${fundCode} 不存在，请先在基金页查看一次`);
   if (amountCents < f.minPurchase) {
-    throw new Error(`每期金额低于该基金起购金额`);
+    throw new Error("每期金额低于该基金起购金额");
   }
 
   const today = toBeijing(now).format("YYYY-MM-DD");
   // nextRunDate 会校验 dayOfWeek / dayOfMonth 的合法性
-  const nextRun = nextRunDate({
+  return nextRunDate({ frequency, dayOfWeek, dayOfMonth, from: today });
+}
+
+/** 创建定投计划。next_run 由领域函数算出，保证严格晚于今天 */
+export async function createDcaPlan(
+  db: Db,
+  input: CreateDcaInput,
+): Promise<{ id: number }> {
+  const { userId, fundCode, amountCents, frequency, dayOfWeek, dayOfMonth } = input;
+  const now = input.now ?? new Date();
+
+  const nextRun = await resolveNextRun(
+    db,
+    fundCode,
+    amountCents,
     frequency,
-    dayOfWeek: dayOfWeek ?? null,
-    dayOfMonth: dayOfMonth ?? null,
-    from: today,
-  });
+    dayOfWeek ?? null,
+    dayOfMonth ?? null,
+    now,
+  );
 
   const [created] = await db
     .insert(dcaPlan)
@@ -162,25 +182,17 @@ export async function updateDcaPlan(
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     throw new Error("每期金额必须为正整数（分）");
   }
-  // 起购校验与 create 同源：改完后下一期也得下得了单（基金用计划自身的，
-  // 前端编辑表单本就不开放改基金）
-  const f = await db.query.fund.findFirst({
-    where: eq(fund.code, plan.fundCode),
-  });
-  if (!f)
-    throw new Error(`基金 ${plan.fundCode} 不存在`);
-  if (amountCents < f.minPurchase) {
-    throw new Error("每期金额低于该基金起购金额");
-  }
-
-  const today = toBeijing(now).format("YYYY-MM-DD");
-  // nextRunDate 会校验 dayOfWeek / dayOfMonth 的合法性
-  const nextRun = nextRunDate({
+  // 排期校验与 create 同一份（resolveNextRun）：改完后下一期也得下得了单，
+  // 基金用计划自身的（前端编辑表单本就不开放改基金）
+  const nextRun = await resolveNextRun(
+    db,
+    plan.fundCode,
+    amountCents,
     frequency,
-    dayOfWeek: dayOfWeek ?? null,
-    dayOfMonth: dayOfMonth ?? null,
-    from: today,
-  });
+    dayOfWeek ?? null,
+    dayOfMonth ?? null,
+    now,
+  );
 
   await db
     .update(dcaPlan)

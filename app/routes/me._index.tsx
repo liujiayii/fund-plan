@@ -1,3 +1,4 @@
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/me._index";
 import type { HoldingView } from "~/services/portfolio-service";
 import {
@@ -50,6 +51,26 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   ]);
 
   return { user, portfolio, checkinStatus, timeline, pendingBuyCents };
+}
+
+/**
+ * 仅 ?tab= 变化（MeTabs 切 tab）时跳过 loader 重跑（CodeRabbit 复审指正）。
+ *
+ * 本页 loader 是 12+ 条 D1 查询（组合/签到/时间线/在途），tab 切换不改变
+ * 任何数据，重跑纯属浪费——大陆慢链路下每次点 tab 都平白多一轮往返。
+ * 其余一切导航（含 action 提交后的 revalidate，formMethod 非 GET）走默认。
+ */
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  // 动作提交后的 revalidate 必须保留：签到/撤单等依赖它刷新数据
+  if (formMethod && formMethod !== "GET")
+    return defaultShouldRevalidate;
+  if (currentUrl.pathname !== nextUrl.pathname)
+    return true;
+  const c = new URLSearchParams(currentUrl.search);
+  const n = new URLSearchParams(nextUrl.search);
+  c.delete("tab");
+  n.delete("tab");
+  return c.toString() !== n.toString();
 }
 
 /** 签到 action */

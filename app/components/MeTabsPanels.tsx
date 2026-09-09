@@ -58,7 +58,12 @@ export function MeTabs({ fundCode }: { fundCode?: string }) {
   const active: TabKey
     = (TAB_KEYS as readonly string[]).includes(raw ?? "") ? (raw as TabKey) : "profit";
 
-  /** 切 tab = 写 ?tab=（push 进历史，浏览器后退可回上一个 tab） */
+  /**
+   * 切 tab = 写 ?tab=（push 进历史，浏览器后退可回上一个 tab）。
+   * preventScrollReset：切 tab 是原地换内容，不该触发 ScrollRestoration 滚回顶部。
+   * 宿主 loader 的开销由两条路由的 shouldRevalidate 挡掉（仅 tab 变化不重跑，
+   * 见 me._index / me.holdings_.$code），这里不用再操心
+   */
   const onChange = (key: string) => {
     setSearchParams(
       (prev) => {
@@ -66,6 +71,7 @@ export function MeTabs({ fundCode }: { fundCode?: string }) {
         p.set("tab", key);
         return p;
       },
+      { preventScrollReset: true },
     );
   };
 
@@ -114,12 +120,15 @@ function OrdersPanel({ active, fundCode }: { active: boolean; fundCode?: string 
   const url = fundCode ? `/me/orders?fund=${encodeURIComponent(fundCode)}` : "/me/orders";
 
   useEffect(() => {
-    // 加载策略与 ProfitPanel 同款（见其注释）
+    // 激活且空闲时拉数据：首次无数据全量拉；切回时旧数据先展示、后台刷一遍。
+    // deps 带 url：持仓详情页同路由换基金时组件被复用（CodeRabbit 复审指正），
+    // url 变了必须重拉，否则 B 基金的页面挂着 A 基金的旧数据。
+    // 靠 state 守卫防并发重复；fetcher 引用每渲染都换，刻意不进 deps
     if (active && fetcher.state === "idle") {
       fetcher.load(url);
     }
-    // eslint-disable-next-line react/exhaustive-deps -- url 由 fundCode 定死（组件生命周期内不变），fetcher 见上条同理
-  }, [active]);
+    // eslint-disable-next-line react/exhaustive-deps -- fetcher 进 deps 会配合「idle 即拉」退化成无限循环
+  }, [active, url]);
 
   const data = fetcher.data;
   if (!data) {
@@ -138,12 +147,12 @@ function DcaPanel({ active, fundCode }: { active: boolean; fundCode?: string }) 
   const url = fundCode ? `/me/dca?fund=${encodeURIComponent(fundCode)}` : "/me/dca";
 
   useEffect(() => {
-    // 加载策略与 ProfitPanel 同款（见其注释）
+    // 加载策略与 OrdersPanel 同款（见其注释，含 url 进 deps 的理由）
     if (active && dataFetcher.state === "idle") {
       dataFetcher.load(url);
     }
-    // eslint-disable-next-line react/exhaustive-deps -- url 由 fundCode 定死，dataFetcher 见上条同理
-  }, [active]);
+    // eslint-disable-next-line react/exhaustive-deps -- dataFetcher 进 deps 会配合「idle 即拉」退化成无限循环
+  }, [active, url]);
 
   const [createOpen, setCreateOpen] = useState(false);
 

@@ -34,6 +34,12 @@ export function OrdersContent({ orders, fundCode }: OrdersContentProps) {
   // 客户端分页（loader 已带回全量 200 条）
   const [page, setPage] = useState(1);
 
+  // 撤单等动作 revalidate 后订单变短，停在第末页的 page 可能越界——
+  // slice 出空数组渲染成空白时间线（CodeRabbit 复审指正）。
+  // 渲染期夹取：显示层永远落在合法页，翻页器点击后 state 自然归位
+  const pageCount = Math.max(1, Math.ceil(orders.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+
   // 待确认委托独立成区：撤单/改单的主战场，不和历史成交混在一条时间线里
   const pendingOrders = orders.filter(o => o.status === "pending");
 
@@ -69,7 +75,7 @@ export function OrdersContent({ orders, fundCode }: OrdersContentProps) {
         : (
             <>
               <OrderTimeline
-                orders={orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+                orders={orders.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)}
                 // 待确认行内挂撤单/改单（OrderActions 自行判断 pending 才渲染）
                 renderActions={o => <OrderActions order={o} />}
               />
@@ -79,7 +85,7 @@ export function OrdersContent({ orders, fundCode }: OrdersContentProps) {
                   <Pagination
                     align="end"
                     responsive
-                    current={page}
+                    current={current}
                     pageSize={PAGE_SIZE}
                     total={orders.length}
                     showSizeChanger={false}

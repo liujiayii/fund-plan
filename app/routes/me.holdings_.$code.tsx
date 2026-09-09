@@ -1,3 +1,4 @@
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 /**
  * 单只持仓详情页：`/me/holdings/:code`
  *
@@ -81,6 +82,26 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     // 批次「持有天数」列的参照日；server 算好传下去，组件内不 new Date()
     today: toBeijing(new Date()).format("YYYY-MM-DD"),
   };
+}
+
+/**
+ * 仅 ?tab= 变化（MeTabs 切 tab）时跳过 loader 重跑（CodeRabbit 复审指正）。
+ *
+ * 本页 loader 含 2+N 的 getFundProfitDetail 全量重放，tab 切换不改变数据，
+ * 重跑纯属浪费。同路由换基金（params.code 变化）pathname 也变，走默认重跑。
+ * action 提交后的 revalidate（卖出等）走 formMethod 分支保留。
+ */
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  // 动作提交后的 revalidate 必须保留：卖出下单等依赖它刷新数据
+  if (formMethod && formMethod !== "GET")
+    return defaultShouldRevalidate;
+  if (currentUrl.pathname !== nextUrl.pathname)
+    return true;
+  const c = new URLSearchParams(currentUrl.search);
+  const n = new URLSearchParams(nextUrl.search);
+  c.delete("tab");
+  n.delete("tab");
+  return c.toString() !== n.toString();
 }
 
 /**
