@@ -121,6 +121,80 @@ export async function deleteDcaPlan(
   await db.delete(dcaPlan).where(eq(dcaPlan.id, planId));
 }
 
+/** 修改计划的输入（金额/频率/日子；基金与状态不在此列，理由见 updateDcaPlan） */
+export interface UpdateDcaInput {
+  /** 每期金额（分） */
+  amountCents: number;
+  frequency: Frequency;
+  /** 周几（weekly 用，1-7） */
+  dayOfWeek?: number | null;
+  /** 每月几号（monthly 用，1-28） */
+  dayOfMonth?: number | null;
+  /** 修改时刻，默认现在 */
+  now?: Date;
+}
+
+/**
+ * 修改定投计划（金额/频率/日子）。只能改自己的。
+ *
+ * - **基金不可改**：计划的身份就是「对这只基金定投」，换基金 = 删除重建
+ * - **next_run 按新频率从今天重算**：旧频率的下次执行日作废，
+ *   与 createDcaPlan 同一套 nextRunDate（含交易日校准），行为一致
+ * - **与频率无关的日子字段清空**：weekly 改 monthly 后 dayOfWeek 留着就是脏数据
+ * - **状态不动**：暂停中的计划照样能改、改完仍暂停（启用/暂停走 toggle）
+ */
+export async function updateDcaPlan(
+  db: Db,
+  userId: number,
+  planId: number,
+  input: UpdateDcaInput,
+): Promise<void> {
+  const { amountCents, frequency, dayOfWeek, dayOfMonth } = input;
+  const now = input.now ?? new Date();
+
+  const plan = await db.query.dcaPlan.findFirst({
+    where: eq(dcaPlan.id, planId),
+  });
+  if (!plan)
+    throw new Error("定投计划不存在");
+  assertOwnership(userId, plan.userId);
+
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    throw new Error("每期金额必须为正整数（分）");
+  }
+  // 起购校验与 create 同源：改完后下一期也得下得了单（基金用计划自身的，
+  // 前端编辑表单本就不开放改基金）
+  const f = await db.query.fund.findFirst({
+    where: eq(fund.code, plan.fundCode),
+  });
+  if (!f)
+    throw new Error(`基金 ${plan.fundCode} 不存在`);
+  if (amountCents < f.minPurchase) {
+    throw new Error("每期金额低于该基金起购金额");
+  }
+
+  const today = toBeijing(now).format("YYYY-MM-DD");
+  // nextRunDate 会校验 dayOfWeek / dayOfMonth 的合法性
+  const nextRun = nextRunDate({
+    frequency,
+    dayOfWeek: dayOfWeek ?? null,
+    dayOfMonth: dayOfMonth ?? null,
+    from: today,
+  });
+
+  await db
+    .update(dcaPlan)
+    .set({
+      amount: amountCents,
+      frequency,
+      // 只留当前频率对应的日子字段，另一边清 null
+      dayOfWeek: frequency === "weekly" ? (dayOfWeek ?? null) : null,
+      dayOfMonth: frequency === "monthly" ? (dayOfMonth ?? null) : null,
+      nextRun,
+    })
+    .where(eq(dcaPlan.id, planId));
+}
+
 /**
  * 扫描并触发到期的定投计划。由 Cron 每日调用。
  *
