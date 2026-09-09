@@ -209,8 +209,14 @@ dev SSR 里变成 undefined、每页 500**（真 Node / 生产 build / CI 全都
 源码里恰好长得像工具类的词（`"m1"` 数据 key、注释里的「fixed 条」）会生成无人
 引用的规则，**无害，不要追杀**。
 
-无 preflight 的连带代价：`border-b` 只出宽度不出 style，div 默认 `border-style: none`
-边框会隐身——**写边框必须带 `border-solid`**（如 `border-b border-solid border-line`）。
+无 preflight 的连带代价：`border-b` 只出宽度不出 style，缺了 style 边框会隐身。
+**补 style 千万别用 `border-solid`**——它把 `border-style: solid` 应用到**四个边**，
+而没给宽度的边走初始值 `medium`（=3px），元素被 3px 浅灰框住（2026-09-09 排行榜
+实测踩坑，Playwright 计算样式取证）。单边边框的正确姿势是任意属性类只补那一边：
+
+```tsx
+className = "border-b border-line [border-bottom-style:solid]";
+```
 
 `--fp-*` CSS 变量（`uno.config.ts` 的 preflight 从 theme.ts 全量输出）是手写 CSS
 （`app/styles/*.css`）共享 token 的唯一通道，别在 CSS 里写字面量色值。
@@ -283,7 +289,7 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 
 - 颜色不写裸值（`text-[#8a9099]` 禁用），一律主题类；页面局部装饰色（如排行榜金银铜）可用任意值
 - `theme.ts` 加新 token 时**必须同步** `uno.config.ts` 的 theme 映射
-- 写边框必须带 `border-solid`（原因见「已知陷阱」）
+- 单边边框用 `border-b border-line [border-bottom-style:solid]`，**禁用 `border-solid`**（它给四边补 style，没宽度的边走 `medium`=3px，详见「已知陷阱」）
 - `text-xs` 这类字号类会连 line-height 一起设（Tailwind 惯例）；要保留原行高用 `text-[12px]`
 - 设计系统组件（`app/components/ui/`）存量内联不强制迁移；新写的尽量用类
 - 范本：`app/routes/leaderboard.tsx`（四类场景一页全有）

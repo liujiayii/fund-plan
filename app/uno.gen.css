@@ -67,6 +67,7 @@
 .block{display:block;}
 .hidden{display:none;}
 .ease{--un-ease:var(--ease-DEFAULT);transition-timing-function:var(--ease-DEFAULT);}
+.\[border-bottom-style\:solid\]{border-bottom-style:solid;}
 .items-center{align-items:center;}
 .justify-center{justify-content:center;}
 .fixed{position:fixed;}

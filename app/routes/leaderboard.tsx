@@ -61,10 +61,12 @@ function LeaderRow({
   const isMe = meId !== null && entry.userId === meId;
   return (
     // 自己的条目淡蓝高亮：bg-primary/6 = 主色 6% 透明度（原 rgba(22,119,255,0.06)）
-    // border-solid 必须带：preflight 重置已关（让位 antd），wind4 的 border-b 只出
-    // 宽度不出 style，缺了它 div 默认 border-style:none，边框隐身
+    // ⚠️ 单边边框的正确姿势是 border-b + [border-bottom-style:solid]：
+    //   border-b 只出宽度不出 style，但千万别用 border-solid 补——它把 solid
+    //   应用到四边，没给宽度的三边走初始值 medium（=3px），整行被 3px 浅灰
+    //   框住（PR #76 上线后实测踩坑，Playwright 计算样式取证）
     <div
-      className={`flex items-center gap-3 border-b border-solid border-line py-3 ${isMe ? "bg-primary/6" : ""}`}
+      className={`flex items-center gap-3 border-b border-line py-3 [border-bottom-style:solid] ${isMe ? "bg-primary/6" : ""}`}
     >
       <RankBadge rank={entry.rank} />
       <div className="min-w-0 flex-1 overflow-hidden">
