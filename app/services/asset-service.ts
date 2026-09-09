@@ -291,12 +291,20 @@ export async function getProfitDetail(
   };
 }
 
-/** 单只基金的收益明细视图（/me/holdings/:code 顶部与累计盈亏卡） */
+/** 单只基金的收益明细视图（/me/holdings/:code 顶部与收益明细 tab） */
 export interface FundProfitDetailView {
-  /** 该基金逐日收益（升序；仅当日有份额/现金流的日期出条目，含 0 收益日） */
-  dailyPnl: { date: string; dayPnlCents: number }[];
-  /** 最新一条（昨日收益用，「截至」标注取它的日期）；无条目 → null */
-  latest: { date: string; dayPnlCents: number } | null;
+  /** 目标基金代码（消费方拼归因条目形状用） */
+  fundCode: string;
+  /**
+   * 该基金逐日收益（升序；仅当日有份额/现金流的日期出条目，含 0 收益日）。
+   * dayNavRate 供收益日历按涨跌幅分档配色（ProfitCalendar 的 RATE_TIERS）
+   */
+  dailyPnl: { date: string; dayPnlCents: number; dayNavRate: number }[];
+  /**
+   * 最新一条（昨日收益用，「截至」标注取它的日期）。dayNavRate 与
+   * dailyPnl 末条同值（同一对象）；无条目 → null
+   */
+  latest: { date: string; dayPnlCents: number; dayNavRate: number } | null;
   /** 累计盈亏序列（cumulateFundPnl 产出，升序） */
   cumulative: FundCumPnlPoint[];
   /** 首笔确认日（「持有以来」口径说明用）；无条目 → null */
@@ -319,17 +327,18 @@ export async function getFundProfitDetail(
   const { fundPnlInput } = await buildReplayInput(db, userId);
 
   // Map 的插入序 = dateAxis 升序，遍历天然有序；同日同基金至多一条
-  const dailyPnl: { date: string; dayPnlCents: number }[] = [];
+  const dailyPnl: FundProfitDetailView["dailyPnl"] = [];
   for (const [date, entries] of attributeFundPnlByDate(fundPnlInput)) {
     for (const e of entries) {
       if (e.fundCode === fundCode) {
-        dailyPnl.push({ date, dayPnlCents: e.dayPnlCents });
+        dailyPnl.push({ date, dayPnlCents: e.dayPnlCents, dayNavRate: e.dayNavRate });
         break;
       }
     }
   }
 
   return {
+    fundCode,
     dailyPnl,
     latest: dailyPnl.length > 0 ? dailyPnl[dailyPnl.length - 1]! : null,
     cumulative: cumulateFundPnl(dailyPnl),

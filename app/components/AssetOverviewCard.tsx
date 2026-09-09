@@ -52,7 +52,7 @@ export function AssetOverviewCard({
   // 在途资金：未传（公开镜像）视为 0，四个数字退化为纯市值口径
   const inFlightCents = pendingBuyCents ?? 0;
 
-  // 累计收益：分整数域求和（远低于 2^53，零误差），与 AssetPnlSummary/曲线同口径
+  // 累计收益：分整数域求和（远低于 2^53，零误差），与资产走势曲线同口径
   const totalPnlCents = daily.reduce((s, d) => s + d.dayPnlCents, 0);
   // 累计收益率：Decimal 除法（精度铁律：率也要走 Decimal）
   const totalRate = totalDepositedCents > 0

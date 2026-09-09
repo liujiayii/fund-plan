@@ -105,16 +105,17 @@ describe("getFundProfitDetail 单基金收益明细", () => {
     const detail = await getFundProfitDetail(db, userId, "000001");
     const calc = calcPurchase({ amountCents: 100000, navScaled: 15000, purchaseRate: 150 });
 
-    // 首日：确认日 = −申购费（内扣法，当日无净值差）
-    expect(detail.dailyPnl[0]).toEqual({ date: "2026-08-25", dayPnlCents: -calc.feeCents });
-    // 次日：市值变动（份额×Δ净值，取整入口与归因同源，期望值也走它算）
+    // 首日：确认日 = −申购费（内扣法，当日无净值差）；dayNavRate 首见净值日记 0
+    expect(detail.dailyPnl[0]).toEqual({ date: "2026-08-25", dayPnlCents: -calc.feeCents, dayNavRate: 0 });
+    // 次日：市值变动（份额×Δ净值，取整入口与归因同源，期望值也走它算）；
+    // 涨跌幅 = 1.56/1.50 − 1 = 0.04
     const mv1 = fundMarketValueCents(calc.sharesScaled, 15000);
     const mv2 = fundMarketValueCents(calc.sharesScaled, 15600);
-    expect(detail.dailyPnl[1]).toEqual({ date: "2026-08-26", dayPnlCents: mv2 - mv1 });
+    expect(detail.dailyPnl[1]).toEqual({ date: "2026-08-26", dayPnlCents: mv2 - mv1, dayNavRate: 0.04 });
     expect(detail.dailyPnl).toHaveLength(2);
 
     expect(detail.firstDate).toBe("2026-08-25");
-    expect(detail.latest).toEqual({ date: "2026-08-26", dayPnlCents: mv2 - mv1 });
+    expect(detail.latest).toEqual({ date: "2026-08-26", dayPnlCents: mv2 - mv1, dayNavRate: 0.04 });
     // 累计末值 === Σ每日（cumulateFundPnl 的不变量）
     expect(detail.cumulative.at(-1)!.cumPnlCents)
       .toBe(detail.dailyPnl.reduce((s, d) => s + d.dayPnlCents, 0));

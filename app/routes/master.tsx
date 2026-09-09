@@ -3,7 +3,6 @@ import type { DcaPlanView, HoldingView, OrderView, TransactionView } from "~/ser
 import { Pagination, Space, Tabs, Tag, Typography } from "antd";
 import { useState } from "react";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
-import { AssetPnlSummary } from "~/components/AssetPnlSummary";
 import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { OrderList } from "~/components/OrderList";
@@ -104,11 +103,12 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         />
       </SectionCard>
 
-      {/* 资产走势与收益日历：主理人没交易过（daily 为空）时不渲染，空盘不摆空图 */}
+      {/* 资产走势与收益日历：主理人没交易过（daily 为空）时不渲染，空盘不摆空图。
+          走势卡不再叠 AssetPnlSummary 两格（2026-09-09 删）：与顶部总览
+          四小格的昨日/累计收益重复，曲线末点 + tooltip 全覆盖 */}
       {profit.daily.length > 0 && (
         <>
           <SectionCard title="资产走势">
-            <AssetPnlSummary daily={profit.daily} latest={profit.latest} />
             <AssetTrendChart data={profit.daily} />
           </SectionCard>
           <SectionCard title="收益日历">

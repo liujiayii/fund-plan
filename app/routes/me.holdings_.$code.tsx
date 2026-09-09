@@ -4,12 +4,15 @@ import type { ShouldRevalidateFunctionArgs } from "react-router";
  *
  * 支付宝式三段布局（2026-09-07 详情页重构）：
  *   顶部 持仓总览（持有金额主位 + 昨日收益/持有收益/率，右上基金详情入口）
- *   腰部 功能入口（收益明细/交易记录/定投计划，跳全局页，后两者带 ?fund= 过滤）
- *   累计盈亏折线图（近1月/持有以来）+ 份额批次 + 页底固定操作条（卖出/定投/买入弹抽屉）
+ *   腰部 功能入口 tabs（收益明细/交易记录/定投计划，三个 tab 都只看这只基金；
+ *   收益明细 = 单基金口径三件套：摘要两格 + 累计盈亏曲线 + 收益日历，
+ *   2026-09-09 起旧独立「累计盈亏」卡并入该 tab——两处数字同源，
+ *   分开摆是重复叙事）
+ *   份额批次（倒序，最新在前）+ 页底固定操作条（卖出/定投/买入弹抽屉）
  *
  * 口径注意（spec §10）：顶部「持有收益」是浮动口径（市值−成本，赎回后清零），
- * 「累计盈亏」图含已实现盈亏与全部费用——两数并存、标签分明；
- * 昨日收益与累计盈亏走 getFundProfitDetail（全量归因后过滤单基金），
+ * 「累计盈亏」含已实现盈亏与全部费用——两数并存、标签分明；
+ * 昨日收益与收益明细 tab 走 getFundProfitDetail（全量归因后过滤单基金），
  * 与 /me、/me/profit 严格同源同口径，两页数字永不打架。
  *
  * ⚠️ 文件名里的 `holdings_` 尾下划线是刻意的：断开与 me.holdings.tsx 的嵌套
@@ -24,7 +27,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { DcaDrawer } from "~/components/DcaDrawer";
-import { FundPnlChart } from "~/components/FundPnlChart";
 import { MeTabs } from "~/components/MeTabsPanels";
 import { SellDrawer } from "~/components/SellDrawer";
 import { BottomActionBar } from "~/components/ui/BottomActionBar";
@@ -64,8 +66,9 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     throw new Response(`没找到 ${code} 的持仓`, { status: 404 });
   }
 
-  // 现金（买入抽屉）、该基金定投计划（定投抽屉）、单基金收益明细（昨日收益 + 累计盈亏图）
-  // 三查互相独立，一波并行；getFundProfitDetail 是 2+N 的全量重放（spec §3 方案一）
+  // 现金（买入抽屉）、该基金定投计划（定投抽屉）、单基金收益明细
+  // （昨日收益 + 收益明细 tab 三件套）三查互相独立，一波并行；
+  // getFundProfitDetail 是 2+N 的全量重放（spec §3 方案一）
   const [acc, plans, profit] = await Promise.all([
     db.query.account.findFirst({ where: eq(account.userId, user.id) }),
     getDcaPlans(db, user.id, code),
@@ -182,10 +185,6 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
   // 标注「截至 M月D日」而非字面的昨天）
   const latestPnl = profit.latest;
   const untilLabel = latestPnl ? `截至 ${fmtDateLabel(latestPnl.date)}` : null;
-  // 累计盈亏当前值：曲线末点（含已实现盈亏与全部费用）
-  const cumPnlCents = profit.cumulative.length > 0
-    ? profit.cumulative[profit.cumulative.length - 1]!.cumPnlCents
-    : null;
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -216,13 +215,15 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
             />
           </Col>
           <Col xs={24} sm={8}>
-            {/* 浮动口径：市值−成本（赎回后即清零，与「累计盈亏」的含已实现口径刻意区分） */}
+            {/* 浮动口径：市值−成本（赎回后即清零，与「累计盈亏」的含已实现口径刻意区分）。
+                extra「自 X 持有以来」= 首笔确认日（2026-09-09 从收益明细卡挪来） */}
             <StatBig
               label="持有收益"
               value={signedYuan(d.pnlCents)}
               suffix="元"
               color={pnlColor(d.pnlCents)}
               size={24}
+              extra={profit.firstDate ? `自 ${profit.firstDate} 持有以来` : undefined}
             />
           </Col>
           <Col xs={24} sm={8}>
@@ -236,34 +237,11 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
         </Row>
       </SectionCard>
 
-      {/* 功能入口 tabs：交易记录/定投计划带 fundCode 只看这只基金（收益明细全局口径）。
-          页内切换 + 后台懒加载，旧「跳全局页 + ?fund= 过滤」的 QuickEntries 退役 */}
+      {/* 功能入口 tabs：三个 tab 全部只看这只基金。收益明细传宿主 loader 的
+          fundProfit（单基金口径，摘要/曲线/日历三件套都只算这只基金）；
+          旧独立「累计盈亏」卡已并入该 tab（内容同源，删除重复叙事） */}
       <SectionCard>
-        <MeTabs fundCode={d.fundCode} />
-      </SectionCard>
-
-      {/* 累计盈亏：含已实现盈亏与全部费用，与收益明细页同口径；
-          窗口（近1月/持有以来）只裁剪显示范围，不重置累计基准（spec §5.1 ④） */}
-      <SectionCard title="累计盈亏">
-        {cumPnlCents === null
-          ? (
-              <EmptyState description="暂无收益数据" />
-            )
-          : (
-              <>
-                <StatBig
-                  label="累计盈亏"
-                  value={signedYuan(cumPnlCents)}
-                  suffix="元"
-                  color={pnlColor(cumPnlCents)}
-                  extra={profit.firstDate ? `自 ${profit.firstDate} 持有以来` : undefined}
-                />
-                <FundPnlChart cumulative={profit.cumulative} />
-                <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
-                  含已实现盈亏与全部费用，与收益明细页同口径；「近 1 月」只裁剪显示范围，不重置累计基准。
-                </Paragraph>
-              </>
-            )}
+        <MeTabs fundCode={d.fundCode} fundProfit={profit} />
       </SectionCard>
 
       {/* 份额批次：让 FIFO 阶梯费率这个系统最独特的设计对用户可见（原样保留） */}
@@ -313,14 +291,16 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
                 </div>
                 {/* 窄屏：批次降级成 DataRow。它是 FIFO 阶梯费率可见性的载体
                     （share_lot 存在的唯一理由），不能只横滚。
-                    五字段一个不少：确认日并进标题行「第 N 批 · 日期」 */}
+                    五字段一个不少：确认日并进标题行「第 N 批 · 日期」。
+                    N 是 FIFO 序号（最早 = 第 1 批），列表倒序展示后
+                    从尾部倒数取号，语义与赎回消耗顺序一致 */}
                 <div className="fp-mobile">
                   {d.lots.map((l, i) => (
                     <div key={l.id} style={{ marginBottom: 8 }}>
                       <Text strong style={{ fontSize: 13 }}>
                         第
                         {" "}
-                        {i + 1}
+                        {d.lots.length - i}
                         {" "}
                         批 ·
                         {" "}

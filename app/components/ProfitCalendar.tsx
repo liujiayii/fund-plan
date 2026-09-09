@@ -12,22 +12,33 @@ import { COLOR, NUM_FONT, pnlColor } from "~/theme";
 /** 表头：周日始 */
 const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"] as const;
 
+/** 单档配置：|收益率| ≥ threshold 时取 alpha（hex8 后缀） */
+interface RateTier {
+  threshold: number;
+  alpha: string;
+}
+
 /**
- * 收益率绝对值 → 背景色透明度分档（hex8 后缀）。
- *
- * 4 档阈值（从强到弱）：
- *   ≥1.5%  → B3（约 70% 不透明）——大涨/大跌，最深
- *   ≥0.8%  → 80（约 50% 不透明）
- *   ≥0.3%  → 4D（约 30% 不透明）
- *   >0     → 28（约 16% 不透明）——微涨/微跌，最浅
- *
- * 拼法：`${COLOR.up}B3` → `#F5222DB3`，基色来自 COLOR，不写色值字面量。
+ * 全组合日历分档（/me、/me/profit、/master）。
+ * 基金组合的单日波动天然被多只基金摊薄，阈值收得紧。
  */
-const RATE_TIERS = [
-  { threshold: 0.015, alpha: "B3" },
+const RATE_TIERS: readonly RateTier[] = [
+  { threshold: 0.015, alpha: "B3" }, // ≥1.5%：最深
   { threshold: 0.008, alpha: "80" },
   { threshold: 0.003, alpha: "4D" },
-  { threshold: 0, alpha: "28" },
+  { threshold: 0, alpha: "28" }, // >0：最浅
+] as const;
+
+/**
+ * 单基金日历分档（持仓页收益明细 tab）。基金净值单日 1%~2% 很常见，
+ * 套全组合阈值满屏深色、文字看不清——阈值放宽一档（2026-09-09 主理人反馈）。
+ * export：FundProfitContent 作为 rateTiers 传入
+ */
+export const FUND_RATE_TIERS: readonly RateTier[] = [
+  { threshold: 0.03, alpha: "B3" }, // ≥3%：最深
+  { threshold: 0.015, alpha: "80" },
+  { threshold: 0.008, alpha: "4D" },
+  { threshold: 0, alpha: "28" }, // >0：最浅
 ] as const;
 
 /** 无数据 / 中性（收益为 0）格子的透明度 */
@@ -42,20 +53,20 @@ const NEUTRAL_ALPHA = "1A"; // ~10%，极浅灰底
  * dayPnlCents > 0 时 base 取 COLOR.up，< 0 取 COLOR.down；
  * 返回拼好的 hex8 色串（如 `#F5222D80`）。
  */
-function cellBgColor(dayPnlCents: number, dayPnlRate: number): string {
+function cellBgColor(dayPnlCents: number, dayPnlRate: number, tiers: readonly RateTier[]): string {
   const base = pnlColor(dayPnlCents); // up / down / neutral
   if (dayPnlCents === 0) {
     return `${COLOR.neutral}${NEUTRAL_ALPHA}`;
   }
   const absRate = Math.abs(dayPnlRate);
   // 从强档往弱档找，命中即停
-  for (const tier of RATE_TIERS) {
+  for (const tier of tiers) {
     if (absRate >= tier.threshold) {
       return `${base}${tier.alpha}`;
     }
   }
   // 理论不可达（threshold=0 兜底），保险回退
-  return `${base}${RATE_TIERS[3]!.alpha}`;
+  return `${base}${tiers[tiers.length - 1]!.alpha}`;
 }
 
 /**
@@ -84,13 +95,27 @@ export function ProfitCalendar({
   data,
   onPickDate,
   selectedDate,
+  rateTiers: rateTiersProp,
 }: {
-  data: DailyAsset[];
+  /**
+   * 逐日快照。字段收窄成 Pick：全局口径喂 DailyAsset，单基金口径
+   * 喂 FundProfitDetailView 的 dailyPnl（只有日历要用的三件套）
+   */
+  data: Pick<DailyAsset, "date" | "dayPnlCents" | "dayPnlRate">[];
   /** 点击有数据日期的回调（收益明细页消费）；不传则纯展示（首页） */
   onPickDate?: (date: string) => void;
   /** 当前选中日（可选）：格子加主色描边。与 onPickDate 配合由调用方驱动 */
   selectedDate?: string;
+  /**
+   * 背景色分档（单基金口径传 FUND_RATE_TIERS，不传走全组合分档）。
+   * ⚠️ 只接受非空数组：空数组会让 cellBgColor 的兜底读到
+   * tiers[-1]（undefined）拼出坏色串——类型上保证不了「非空」，
+   * 运行时回退 RATE_TIERS（CodeRabbit PR #78 建议）
+   */
+  rateTiers?: readonly RateTier[];
 }) {
+  // 空数组防御：回退全组合分档，cellBgColor 的 tiers[-1] 兜底永不为 undefined
+  const rateTiers = rateTiersProp && rateTiersProp.length > 0 ? rateTiersProp : RATE_TIERS;
   // 空数据直接走空态
   if (data.length === 0) {
     return <EmptyState description="暂无收益日历" />;
@@ -104,6 +129,7 @@ export function ProfitCalendar({
     <ProfitCalendarInner
       data={data}
       lastDataMonth={lastDataMonth}
+      rateTiers={rateTiers}
       onPickDate={onPickDate}
       selectedDate={selectedDate}
     />
@@ -117,11 +143,14 @@ export function ProfitCalendar({
 function ProfitCalendarInner({
   data,
   lastDataMonth,
+  rateTiers,
   onPickDate,
   selectedDate,
 }: {
-  data: DailyAsset[];
+  data: Pick<DailyAsset, "date" | "dayPnlCents" | "dayPnlRate">[];
   lastDataMonth: string;
+  /** 背景色分档（外层透传，语义见 ProfitCalendar 的 props 注释） */
+  rateTiers: readonly RateTier[];
   onPickDate?: (date: string) => void;
   /** 当前选中日（可选）：格子加主色描边，与外层同参透传 */
   selectedDate?: string;
@@ -131,7 +160,7 @@ function ProfitCalendarInner({
 
   // O(1) 查表：日期串 → 当日资产数据（data 不变时 Map 只建一次）
   const lookup = useMemo(() => {
-    const m = new Map<string, DailyAsset>();
+    const m = new Map<string, Pick<DailyAsset, "date" | "dayPnlCents" | "dayPnlRate">>();
     for (const d of data) {
       m.set(d.date, d);
     }
@@ -203,12 +232,14 @@ function ProfitCalendarInner({
 
           // 格子背景色
           const bg = hasData
-            ? cellBgColor(d.dayPnlCents, d.dayPnlRate)
+            ? cellBgColor(d.dayPnlCents, d.dayPnlRate, rateTiers)
             : `${COLOR.neutral}${NEUTRAL_ALPHA}`;
 
-          // 收益金额颜色：走 pnlColor（与背景同色系，但用实色保证可读）
+          // 收益金额颜色：统一 textPrimary 深色（2026-09-09 主理人定夺）。
+          // 涨跌语义全交给背景色（红/绿底 + 深浅分档）——此前文字走 pnlColor
+          // 与背景同色系实色，深档（50%~70% 不透明）下红字贴红底看不清
           const pnlFg = hasData && d.dayPnlCents !== 0
-            ? pnlColor(d.dayPnlCents)
+            ? COLOR.textPrimary
             : undefined;
 
           // 有数据且调用方要交互时，格子可点（键盘可达：role + tabIndex + Enter/Space）

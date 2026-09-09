@@ -329,7 +329,10 @@ export async function getNavSeries(
  * 赎回试算所需信息，供 /me/holdings/:code 详情页使用。
  */
 export interface HoldingDetailView extends HoldingView {
-  /** 份额批次，FIFO 升序：confirmDate 升、id 升 */
+  /**
+   * 份额批次，展示倒序（confirmDate 降、id 降，最新在前）；
+   * FIFO 消耗顺序由 calcRedeem 内部自行升序重排，与本展示序无关
+   */
   lots: ShareLotInput[];
   /** 待确认赎回单占用份额 ×10000 */
   pendingShares: number;
@@ -377,12 +380,13 @@ export async function getHoldingDetail(
     navScaled,
   });
 
-  // 份额批次，FIFO 升序：确认日升、id 升
+  // 份额批次，倒序（最新在前）：FIFO 计算不依赖这里（calcRedeem 自行
+  // 按确认日升序重排），列表展示顺序只服务人眼——最新的批次排最上面
   const lotRows = await db
     .select()
     .from(shareLot)
     .where(and(eq(shareLot.userId, userId), eq(shareLot.fundCode, fundCode)))
-    .orderBy(shareLot.confirmDate, shareLot.id);
+    .orderBy(desc(shareLot.confirmDate), desc(shareLot.id));
   const lots: ShareLotInput[] = lotRows.map(l => ({
     id: l.id,
     sharesScaled: l.shares,
