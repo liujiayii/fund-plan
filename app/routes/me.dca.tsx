@@ -1,21 +1,12 @@
 import type { Route } from "./+types/me.dca";
-import {
-  Alert,
-  Button,
-  Dropdown,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Space,
-  Typography,
-} from "antd";
-import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { Button, Space, Typography } from "antd";
+import { useState } from "react";
+import { DcaPlanFormModal } from "~/components/DcaPlanFormModal";
 import { DcaPlanList } from "~/components/DcaPlanList";
+import { DcaPlanRowActions } from "~/components/DcaPlanRowActions";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
+import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { yuanToCents } from "~/domain/money";
@@ -30,7 +21,7 @@ import { searchFunds } from "~/services/fund-data";
 import { requireUser } from "~/services/guard";
 import { getDcaPlans } from "~/services/portfolio-service";
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: "我的定投 · 模拟基金" }];
@@ -40,8 +31,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
 
-  // ?fund= 过滤：持仓详情页「定投计划」入口带该参数进来。
-  // getDcaPlans 本就吃可选 fundCode（持仓详情页定投面板同款），零 service 改动。
+  // ?fund= 过滤：/me 与持仓详情页的定投 tab 懒加载共用本 loader。
+  // getDcaPlans 本就吃可选 fundCode，零 service 改动。
   // 空串（手输裸 ?fund=）视同未过滤——`??` 不吃空串会把 eq(fundCode, "") 查成
   // 空列表吓到用户，`||` 与 me.orders 的 `if (fundCode)` 口径对齐（评审修正）
   const fundCode = new URL(request.url).searchParams.get("fund");
@@ -81,6 +72,11 @@ function parseScheduleFields(fd: FormData): {
   return { amountCents: yuanToCents(amount), frequency, dayOfWeek, dayOfMonth };
 }
 
+/**
+ * 定投四 intent 的统一 action（create/update/toggle/delete）。
+ * 消费方：本页、MeTabsPanels 的 DcaPanel、DcaFundPanel（基金/持仓页抽屉）、
+ * DcaPlanRowActions / DcaPlanFormModal——全部显式指到这里，一个真相。
+ */
 export async function action({ request, context }: Route.ActionArgs) {
   const { db, env } = getAppContext(context);
   const user = await requireUser(request, db);
@@ -148,40 +144,20 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
 }
 
-const WEEKDAYS = [
-  { value: 1, label: "周一" },
-  { value: 2, label: "周二" },
-  { value: 3, label: "周三" },
-  { value: 4, label: "周四" },
-  { value: 5, label: "周五" },
-  { value: 6, label: "周六" },
-  { value: 7, label: "周日" },
-];
-
+/**
+ * 我的定投页（深链 /me/dca、/me/dca?fund=）。
+ *
+ * 页面本体只剩骨架：统计、列表、新建入口——表单弹窗与行内操作全部走
+ * 共享组件（DcaPlanFormModal / DcaPlanRowActions），与 /me 的定投 tab
+ * （MeTabsPanels.DcaPanel 懒加载本路由 loader）、基金/持仓页的定投抽屉
+ * （DcaFundPanel）一份真相。
+ */
 export default function MeDca({ loaderData }: Route.ComponentProps) {
   const { plans, fundFilter } = loaderData;
-  const fetcher = useFetcher<typeof action>();
-  const [open, setOpen] = useState(false);
-  const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly">("monthly");
-  // 受控的频率参数，避免用 document.querySelector 去改隐藏域
-  const [dayOfWeek, setDayOfWeek] = useState(1);
-  const [dayOfMonth, setDayOfMonth] = useState(15);
+  const [createOpen, setCreateOpen] = useState(false);
 
-  const submitting = fetcher.state === "submitting";
   const totalInvested = plans.reduce((s, p) => s + p.totalInvested, 0);
   const activeCount = plans.filter(p => p.status === "active").length;
-
-  // 创建成功后关掉弹窗。
-  // 这里 eslint 会提示「不要在 effect 里同步调 setState」——但那条规则针对的是
-  // 「用 effect 同步派生状态」的反模式。本场景是「异步提交完成后触发副作用」，
-  // effect 正是该用的工具：改成派生状态反而会出 bug（fetcher.data 会一直保留
-  // ok=true，导致弹窗关掉后再也打不开）。故定向豁免。
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.ok) {
-      // eslint-disable-next-line react/set-state-in-effect
-      setOpen(false);
-    }
-  }, [fetcher.state, fetcher.data]);
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -189,20 +165,20 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
         <Title level={3} style={{ marginBottom: 0 }}>
           我的定投
         </Title>
-        <Button type="primary" onClick={() => setOpen(true)}>
+        <Button type="primary" onClick={() => setCreateOpen(true)}>
           新建定投计划
         </Button>
       </Space>
 
-      {fetcher.data?.ok && (
-        <Alert type="success" showIcon message={fetcher.data.message} closable />
-      )}
-      {fetcher.data?.error && (
-        <Alert type="error" showIcon message={fetcher.data.error} closable />
+      {/* 来自 ?fund= 深链时旁挂返回入口；过滤口径由 URL 与列表内容自明 */}
+      {fundFilter && (
+        <NavButton size="small" to={`/me/holdings/${fundFilter.code}`}>
+          ← 返回持仓详情
+        </NavButton>
       )}
 
       <SectionCard>
-        {/* [16,16]：统计行间距降档（Task 10），窄屏折行后 rowGap 不再是 48 */}
+        {/* [16,16]：统计行间距降档，窄屏折行后不撑高 */}
         <Space size={[16, 16]} wrap>
           <StatBig label="计划总数" value={plans.length} suffix="个" size={24} />
           <StatBig label="执行中" value={activeCount} suffix="个" size={24} />
@@ -216,7 +192,7 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
         <Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
           系统每天北京时间
           {" "}
-          <Text strong>10:00</Text>
+          <Typography.Text strong>10:00</Typography.Text>
           {" "}
           扫描到期的定投计划并自动下单，
           当晚 20:30 按当日净值撮合确认。现金不足时该期跳过，不影响其他计划。
@@ -227,7 +203,7 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
         {plans.length === 0
           ? (
               <EmptyState description="还没有定投计划">
-                <Button type="primary" onClick={() => setOpen(true)}>
+                <Button type="primary" onClick={() => setCreateOpen(true)}>
                   创建第一个计划
                 </Button>
               </EmptyState>
@@ -235,132 +211,19 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
           : (
               <DcaPlanList
                 plans={plans}
-                // 行操作收进「···」Dropdown（Task 10）：行内「暂停/删除」两按钮
-                // 在 375px 挤不下，删除确认也从行内 Popconfirm 移到菜单里的
-                // Modal.confirm（点两步进删除）。桌面窄窗口同款，一处实现
-                renderActions={p => (
-                  <Dropdown
-                    menu={{
-                      items: [
-                        {
-                          key: "toggle",
-                          label: p.status === "active" ? "暂停" : "启用",
-                        },
-                        {
-                          key: "delete",
-                          label: "删除",
-                          danger: true,
-                        },
-                      ],
-                      onClick: ({ key }) => {
-                        if (key === "toggle") {
-                          fetcher.submit(
-                            {
-                              intent: "toggle",
-                              id: String(p.id),
-                              status: p.status === "active" ? "paused" : "active",
-                            },
-                            { method: "post" },
-                          );
-                        }
-                        else if (key === "delete") {
-                          Modal.confirm({
-                            title: "确定删除这个定投计划？",
-                            content: "已产生的订单和持仓不受影响。",
-                            okText: "删除",
-                            okButtonProps: { danger: true },
-                            cancelText: "取消",
-                            onOk: () =>
-                              fetcher.submit(
-                                { intent: "delete", id: String(p.id) },
-                                { method: "post" },
-                              ),
-                          });
-                        }
-                      },
-                    }}
-                  >
-                    <Button size="small">···</Button>
-                  </Dropdown>
-                )}
+                renderActions={p => <DcaPlanRowActions plan={p} />}
               />
             )}
       </SectionCard>
 
-      {/* 新建计划弹窗 */}
-      <Modal
-        title="新建定投计划"
-        open={open}
-        onCancel={() => setOpen(false)}
-        footer={null}
-        destroyOnHidden
-      >
-        <fetcher.Form method="post">
-          <input type="hidden" name="intent" value="create" />
-
-          <Form.Item
-            label="基金代码"
-            layout="vertical"
-            extra="6 位数字。需先在基金详情页访问过一次，系统才会收录该基金"
-          >
-            <Input
-              name="fundCode"
-              placeholder="如 000001"
-              maxLength={6}
-              defaultValue={fundFilter?.code}
-            />
-          </Form.Item>
-
-          <Form.Item label="每期金额（元）" layout="vertical">
-            <Input name="amount" inputMode="decimal" placeholder="如 500" suffix="元" />
-          </Form.Item>
-
-          <Form.Item label="定投频率" layout="vertical">
-            <Select
-              value={frequency}
-              onChange={v => setFrequency(v)}
-              options={[
-                { value: "daily", label: "每日" },
-                { value: "weekly", label: "每周" },
-                { value: "monthly", label: "每月" },
-              ]}
-            />
-            <input type="hidden" name="frequency" value={frequency} />
-          </Form.Item>
-
-          {frequency === "weekly" && (
-            <Form.Item label="每周几" layout="vertical">
-              <Select
-                value={dayOfWeek}
-                options={WEEKDAYS}
-                onChange={v => setDayOfWeek(v)}
-              />
-              <input type="hidden" name="dayOfWeek" value={dayOfWeek} />
-            </Form.Item>
-          )}
-
-          {frequency === "monthly" && (
-            <Form.Item
-              label="每月几号"
-              layout="vertical"
-              extra="限 1-28 号，避免 2 月没有 29/30/31 号的问题"
-            >
-              <InputNumber
-                min={1}
-                max={28}
-                value={dayOfMonth}
-                style={{ width: "100%" }}
-                onChange={v => setDayOfMonth(v ?? 15)}
-              />
-              <input type="hidden" name="dayOfMonth" value={dayOfMonth} />
-            </Form.Item>
-          )}
-
-          <Button type="primary" htmlType="submit" block loading={submitting}>
-            创建计划
-          </Button>
-        </fetcher.Form>
-      </Modal>
+      {/* 条件渲染 = 每次打开全新实例，表单初始值不用手动重置 */}
+      {createOpen && (
+        <DcaPlanFormModal
+          open
+          onClose={() => setCreateOpen(false)}
+          defaultFundCode={fundFilter?.code}
+        />
+      )}
     </Space>
   );
 }

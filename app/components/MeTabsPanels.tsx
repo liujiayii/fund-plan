@@ -1,13 +1,6 @@
 import {
-  Alert,
   Button,
-  Dropdown,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
   Pagination,
-  Select,
   Skeleton,
   Tabs,
   Typography,
@@ -16,7 +9,9 @@ import { useEffect, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 import { AssetPnlSummary } from "~/components/AssetPnlSummary";
 import { AssetTrendChart } from "~/components/AssetTrendChart";
+import { DcaPlanFormModal } from "~/components/DcaPlanFormModal";
 import { DcaPlanList } from "~/components/DcaPlanList";
+import { DcaPlanRowActions } from "~/components/DcaPlanRowActions";
 import { OrderActions } from "~/components/OrderActions";
 import { OrderList } from "~/components/OrderList";
 import { OrderTimeline } from "~/components/OrderTimeline";
@@ -226,21 +221,11 @@ function OrdersPanel({ active, fundCode }: { active: boolean; fundCode?: string 
 
 /* ─────────────────────── 定投计划 ─────────────────────── */
 
-const WEEKDAYS = [
-  { value: 1, label: "周一" },
-  { value: 2, label: "周二" },
-  { value: 3, label: "周三" },
-  { value: 4, label: "周四" },
-  { value: 5, label: "周五" },
-  { value: 6, label: "周六" },
-  { value: 7, label: "周日" },
-];
-
 function DcaPanel({ active, fundCode }: { active: boolean; fundCode?: string }) {
-  // 两个 fetcher 分工：dataFetcher 只 load（数据），actionFetcher 只 submit（动作）。
-  // 合一会让「最后一次请求」在 load/POST 之间漂移，revalidate 语义不清
+  // 只 load 数据：动作（创建/修改/暂停/删除）全部内聚在共享组件里
+  // （DcaPlanFormModal / DcaPlanRowActions），它们提交到 /me/dca action 后
+  // react-router 自动 revalidate，本 fetcher 随之拿到新数据
   const dataFetcher = useFetcher<typeof import("~/routes/me.dca").loader>();
-  const actionFetcher = useFetcher<typeof import("~/routes/me.dca").action>();
   const url = fundCode ? `/me/dca?fund=${encodeURIComponent(fundCode)}` : "/me/dca";
 
   useEffect(() => {
@@ -251,20 +236,7 @@ function DcaPanel({ active, fundCode }: { active: boolean; fundCode?: string }) 
     // eslint-disable-next-line react/exhaustive-deps -- url 由 fundCode 定死，dataFetcher 见上条同理
   }, [active]);
 
-  const [open, setOpen] = useState(false);
-  // 受控的频率参数，避免用 document.querySelector 去改隐藏域
-  const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly">("monthly");
-  const [dayOfWeek, setDayOfWeek] = useState(1);
-  const [dayOfMonth, setDayOfMonth] = useState(15);
-
-  // 创建成功后关掉弹窗（me.dca 深链页同款 effect：异步提交完成的副作用，
-  // effect 正是该用的工具，改派生状态反而出 fetcher.data 残留 bug）
-  useEffect(() => {
-    if (actionFetcher.state === "idle" && actionFetcher.data?.ok) {
-      // eslint-disable-next-line react/set-state-in-effect -- 提交完成的副作用，非派生状态
-      setOpen(false);
-    }
-  }, [actionFetcher.state, actionFetcher.data]);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const data = dataFetcher.data;
   if (!data) {
@@ -272,19 +244,11 @@ function DcaPanel({ active, fundCode }: { active: boolean; fundCode?: string }) 
   }
 
   const plans = data.plans;
-  const submitting = actionFetcher.state !== "idle";
   const totalInvested = plans.reduce((s, p) => s + p.totalInvested, 0);
   const activeCount = plans.filter(p => p.status === "active").length;
 
   return (
     <div>
-      {actionFetcher.data?.ok && (
-        <Alert type="success" showIcon message={actionFetcher.data.message} closable className="mb-4" />
-      )}
-      {actionFetcher.data?.error && (
-        <Alert type="error" showIcon message={actionFetcher.data.error} closable className="mb-4" />
-      )}
-
       {/* [16,16]：统计行间距降档，窄屏折行后不撑高 */}
       <div className="flex flex-wrap gap-x-6 gap-y-4">
         <StatBig label="计划总数" value={plans.length} suffix="个" size={24} />
@@ -304,7 +268,7 @@ function DcaPanel({ active, fundCode }: { active: boolean; fundCode?: string }) 
       {plans.length === 0
         ? (
             <EmptyState description="还没有定投计划">
-              <Button type="primary" onClick={() => setOpen(true)}>
+              <Button type="primary" onClick={() => setCreateOpen(true)}>
                 创建第一个计划
               </Button>
             </EmptyState>
@@ -313,137 +277,27 @@ function DcaPanel({ active, fundCode }: { active: boolean; fundCode?: string }) 
             <>
               <div className="flex items-center justify-between">
                 <Text strong>计划列表</Text>
-                <Button size="small" onClick={() => setOpen(true)}>
+                <Button size="small" onClick={() => setCreateOpen(true)}>
                   新建计划
                 </Button>
               </div>
+              {/* 行内操作（修改/暂停/删除）与表单弹窗全走共享组件——与
+                  me.dca 深链页、基金/持仓页的定投抽屉一份真相 */}
               <DcaPlanList
                 plans={plans}
-                // 行操作收进「···」Dropdown（与 me.dca 深链页同款）；提交显式指到
-                // /me/dca 的 action（面板不在那个路由上，不能吃默认同路由提交）
-                renderActions={p => (
-                  <Dropdown
-                    menu={{
-                      items: [
-                        {
-                          key: "toggle",
-                          label: p.status === "active" ? "暂停" : "启用",
-                        },
-                        {
-                          key: "delete",
-                          label: "删除",
-                          danger: true,
-                        },
-                      ],
-                      onClick: ({ key }) => {
-                        if (key === "toggle") {
-                          actionFetcher.submit(
-                            {
-                              intent: "toggle",
-                              id: String(p.id),
-                              status: p.status === "active" ? "paused" : "active",
-                            },
-                            { method: "post", action: "/me/dca" },
-                          );
-                        }
-                        else if (key === "delete") {
-                          Modal.confirm({
-                            title: "确定删除这个定投计划？",
-                            content: "已产生的订单和持仓不受影响。",
-                            okText: "删除",
-                            okButtonProps: { danger: true },
-                            cancelText: "取消",
-                            onOk: () =>
-                              actionFetcher.submit(
-                                { intent: "delete", id: String(p.id) },
-                                { method: "post", action: "/me/dca" },
-                              ),
-                          });
-                        }
-                      },
-                    }}
-                  >
-                    <Button size="small">···</Button>
-                  </Dropdown>
-                )}
+                renderActions={p => <DcaPlanRowActions plan={p} />}
               />
             </>
           )}
 
-      {/* 新建计划弹窗（与 me.dca 深链页同款；表单显式 action 到 /me/dca） */}
-      <Modal
-        title="新建定投计划"
-        open={open}
-        onCancel={() => setOpen(false)}
-        footer={null}
-        destroyOnHidden
-      >
-        <actionFetcher.Form method="post" action="/me/dca">
-          <input type="hidden" name="intent" value="create" />
-
-          <Form.Item
-            label="基金代码"
-            layout="vertical"
-            extra="6 位数字。需先在基金详情页访问过一次，系统才会收录该基金"
-          >
-            <Input
-              name="fundCode"
-              placeholder="如 000001"
-              maxLength={6}
-              defaultValue={fundCode}
-            />
-          </Form.Item>
-
-          <Form.Item label="每期金额（元）" layout="vertical">
-            <Input name="amount" inputMode="decimal" placeholder="如 500" suffix="元" />
-          </Form.Item>
-
-          <Form.Item label="定投频率" layout="vertical">
-            <Select
-              value={frequency}
-              onChange={v => setFrequency(v)}
-              options={[
-                { value: "daily", label: "每日" },
-                { value: "weekly", label: "每周" },
-                { value: "monthly", label: "每月" },
-              ]}
-            />
-            <input type="hidden" name="frequency" value={frequency} />
-          </Form.Item>
-
-          {frequency === "weekly" && (
-            <Form.Item label="每周几" layout="vertical">
-              <Select
-                value={dayOfWeek}
-                options={WEEKDAYS}
-                onChange={v => setDayOfWeek(v)}
-              />
-              <input type="hidden" name="dayOfWeek" value={dayOfWeek} />
-            </Form.Item>
-          )}
-
-          {frequency === "monthly" && (
-            <Form.Item
-              label="每月几号"
-              layout="vertical"
-              extra="限 1-28 号，避免 2 月没有 29/30/31 号的问题"
-            >
-              <InputNumber
-                min={1}
-                max={28}
-                value={dayOfMonth}
-                style={{ width: "100%" }}
-                onChange={v => setDayOfMonth(v ?? 15)}
-              />
-              <input type="hidden" name="dayOfMonth" value={dayOfMonth} />
-            </Form.Item>
-          )}
-
-          <Button type="primary" htmlType="submit" block loading={submitting}>
-            创建计划
-          </Button>
-        </actionFetcher.Form>
-      </Modal>
+      {/* 条件渲染 = 每次打开全新实例，表单初始值不用手动重置 */}
+      {createOpen && (
+        <DcaPlanFormModal
+          open
+          onClose={() => setCreateOpen(false)}
+          defaultFundCode={fundCode}
+        />
+      )}
     </div>
   );
 }
