@@ -3,7 +3,7 @@ import { Button } from "antd";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { EmptyState } from "~/components/ui/EmptyState";
-import { COLOR, NUM_FONT, pnlColor } from "~/theme";
+import { COLOR, pnlColor } from "~/theme";
 
 // ─────────────────────────────────────────────────────────────
 // 常量
@@ -51,7 +51,7 @@ const NEUTRAL_ALPHA = "1A"; // ~10%，极浅灰底
 /**
  * 按 |dayPnlRate| 绝对值选出透明度后缀。
  * dayPnlCents > 0 时 base 取 COLOR.up，< 0 取 COLOR.down；
- * 返回拼好的 hex8 色串（如 `#F5222D80`）。
+ * 返回拼好的 hex8 色串（如 `#F0443880`，即 COLOR.up #F04438 拼透明度）。
  */
 function cellBgColor(dayPnlCents: number, dayPnlRate: number, tiers: readonly RateTier[]): string {
   const base = pnlColor(dayPnlCents); // up / down / neutral
@@ -74,7 +74,7 @@ function cellBgColor(dayPnlCents: number, dayPnlRate: number, tiers: readonly Ra
  * 如 "+11.40"、"-6.98"。
  *
  * 刻意不加千分位：日历格子要的是紧凑（"+1234.56" 而非 "+1,234.56"），
- * 桌面格子宽约 145px、NUM_FONT 等宽 11px，8 字符绰绰有余；
+ * 桌面格子宽约 145px、font-num 数字（Space Grotesk tabular）11px，8 字符绰绰有余；
  * 移动端方形格子（10px）多数情况放得下，超长靠样式层 ellipsis 截断。
  *
  * 整数拼法零浮点：元整数部分与小数两位分别取，不经 cents/100 除法。
@@ -294,10 +294,9 @@ function ProfitCalendarInner({
               {hasData && d!.dayPnlCents !== 0 && (
                 <div
                   // fp-cal-pnl：窄屏字号降到 10px 在 responsive.css（spec §9），
-                  // inline 是桌面值 11
-                  className="fp-cal-pnl"
+                  // inline 是桌面值 11；font-num 类负责 Space Grotesk + tabular-nums
+                  className="fp-cal-pnl font-num"
                   style={{
-                    fontFamily: NUM_FONT,
                     fontSize: 11,
                     color: pnlFg,
                     textAlign: "center",

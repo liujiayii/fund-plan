@@ -1,7 +1,7 @@
 import type { TransactionView } from "~/services/portfolio-service";
 import { Tag } from "antd";
 import { fmtYuan } from "~/components/ui/format";
-import { COLOR, NUM_FONT } from "~/theme";
+import { COLOR } from "~/theme";
 
 /** 流水类型的中文与配色。⚠️ 本组件全程不用红绿——红绿专属涨跌，这里是资金流向分类 */
 const TX_TYPE_MAP: Record<TransactionView["type"], { color: string; text: string }> = {
@@ -72,8 +72,8 @@ export function TxList({ txs }: TxListProps) {
             </div>
             <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
               <div
+                className="font-num"
                 style={{
-                  fontFamily: NUM_FONT,
                   fontSize: 15,
                   color: COLOR.textPrimary,
                 }}
@@ -85,11 +85,11 @@ export function TxList({ txs }: TxListProps) {
                     这三处在 /master 是同一张卡的相邻 tab，单位写法不齐一眼就看出来 */}
                 <span style={{ fontSize: 12, color: COLOR.textSecondary }}> 元</span>
               </div>
-              {/* 余额也走 NUM_FONT：它和上面的金额同属一个右对齐数值列，
+              {/* 余额也走等宽数字：它和上面的金额同属一个右对齐数值列，
                   少了等宽字体，行与行之间金额对齐、余额却参差 */}
               <div
+                className="font-num"
                 style={{
-                  fontFamily: NUM_FONT,
                   fontSize: 12,
                   color: COLOR.textSecondary,
                   marginTop: 2,

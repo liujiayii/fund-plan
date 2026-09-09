@@ -4,7 +4,7 @@ import { Tag, Tooltip } from "antd";
 import { fmtYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { navToDisplay, sharesToDisplay } from "~/domain/money";
-import { COLOR, NUM_FONT } from "~/theme";
+import { COLOR } from "~/theme";
 
 /**
  * 状态标签。
@@ -93,8 +93,8 @@ export function OrderList({ orders, detailed, renderActions }: OrderListProps) {
             )}
             primary={(
               <span
+                className="font-num"
                 style={{
-                  fontFamily: NUM_FONT,
                   fontSize: 15,
                   color: COLOR.textPrimary,
                 }}

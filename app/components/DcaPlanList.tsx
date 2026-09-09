@@ -3,7 +3,7 @@ import type { DcaPlanView } from "~/services/portfolio-service";
 import { Tag } from "antd";
 import { fmtYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
-import { COLOR, NUM_FONT } from "~/theme";
+import { COLOR } from "~/theme";
 
 /** 周几的中文（索引 1-7 对应周一到周日，0 位留空占位） */
 const WEEKDAY_LABEL = ["", "一", "二", "三", "四", "五", "六", "日"];
@@ -62,8 +62,8 @@ export function DcaPlanList({ plans, renderActions }: DcaPlanListProps) {
           )}
           primary={(
             <span
+              className="font-num"
               style={{
-                fontFamily: NUM_FONT,
                 fontSize: 16,
                 color: COLOR.textPrimary,
               }}
