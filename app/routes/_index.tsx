@@ -129,14 +129,22 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           />
         </svg>
         {/* 右侧浮动迷你持仓卡：用产品语言预演「这是理财工具」。
-            fp-hero-cards：窄屏隐藏（responsive.css），桌面绝对定位 */}
+            fp-hero-cards：窄屏隐藏（responsive.css），桌面绝对定位。
+            数值是装饰性示例（CodeRabbit PR #79 修正：模拟盘语境下
+            不标注会被当成主理人真实收益），标题弱化标注「（示例）」 */}
         <div className="fp-hero-cards absolute top-8 right-8 hidden gap-3 lg:flex lg:flex-col">
           <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
-            <div className="text-xs opacity-80">昨日收益</div>
+            <div className="text-xs opacity-80">
+              昨日收益
+              <span className="opacity-60">（示例）</span>
+            </div>
             <div className="font-num text-lg font-medium">+82.33 元</div>
           </div>
           <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
-            <div className="text-xs opacity-80">累计收益</div>
+            <div className="text-xs opacity-80">
+              累计收益
+              <span className="opacity-60">（示例）</span>
+            </div>
             <div className="font-num text-lg font-medium">+2,310.66 元</div>
           </div>
         </div>
@@ -161,7 +169,9 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             {" "}
             元。
           </p>
-          <div className="mt-6">
+          {/* CTA 容器：flex + wrap + gap——两个 large 按钮在窄屏（390px）下
+              依宽度自然换行且保持间距，不再挤成一团（CodeRabbit PR #79 修正） */}
+          <div className="mt-6 flex flex-wrap gap-3">
             {/* hero 内 CTA 逻辑与原头图区一致：登录态去我的盘，游客引导注册 */}
             {me
               ? (

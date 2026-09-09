@@ -66,7 +66,10 @@ function LeaderRow({
     //   应用到四边，没给宽度的三边走初始值 medium（=3px），整行被 3px 浅灰
     //   框住（PR #76 上线后实测踩坑，Playwright 计算样式取证）
     <div
-      className={`flex items-center gap-3 border-b border-line py-3 [border-bottom-style:solid] transition-colors hover:bg-page ${isMe ? "bg-primary/6" : ""}`}
+      // hover 底色只给非本人的行：本人的 bg-primary/6 高亮若再叠 hover:bg-page
+      // 会被盖掉（产物同优先级、后者居后），悬停自己的行不该丢自己的高亮
+      // （CodeRabbit PR #79 修正）；transition-colors 全行保留，bg 固定时无副作用
+      className={`flex items-center gap-3 border-b border-line py-3 [border-bottom-style:solid] transition-colors ${isMe ? "bg-primary/6" : "hover:bg-page"}`}
     >
       <RankBadge rank={entry.rank} />
       <div className="min-w-0 flex-1 overflow-hidden">

@@ -31,12 +31,13 @@ export function useCountUp(value: number, durationMs = 600): number {
     const start = performance.now();
     const step = (now: number) => {
       const t = Math.min((now - start) / durationMs, 1);
-      setDisplay(from + (value - from) * easeOutCubic(t));
+      const current = from + (value - from) * easeOutCubic(t);
+      // 每帧写回当前值：若 value 在动画完成前再次变化（effect 重跑），
+      // 新动画从「最新显示值」续滚而非从旧起点回跳（CodeRabbit PR #79 修正）
+      fromRef.current = current;
+      setDisplay(current);
       if (t < 1) {
         rafRef.current = requestAnimationFrame(step);
-      }
-      else {
-        fromRef.current = value;
       }
     };
     rafRef.current = requestAnimationFrame(step);

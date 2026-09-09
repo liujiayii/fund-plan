@@ -129,6 +129,7 @@
 .bg-white\/10{background-color:color-mix(in srgb, var(--colors-white) 10%, transparent);}
 .hover\:bg-page:hover{background-color:color-mix(in srgb, var(--colors-page) var(--un-bg-opacity), transparent);}
 .hover\:bg-white\/20\!:hover{background-color:color-mix(in srgb, var(--colors-white) 20%, transparent) !important;}
+.opacity-60{opacity:60%;}
 .opacity-80{opacity:80%;}
 .opacity-90{opacity:90%;}
 .flex{display:flex;}
