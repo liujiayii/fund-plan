@@ -300,8 +300,11 @@ export interface FundProfitDetailView {
    * dayNavRate 供收益日历按涨跌幅分档配色（ProfitCalendar 的 RATE_TIERS）
    */
   dailyPnl: { date: string; dayPnlCents: number; dayNavRate: number }[];
-  /** 最新一条（昨日收益用，「截至」标注取它的日期）；无条目 → null */
-  latest: { date: string; dayPnlCents: number } | null;
+  /**
+   * 最新一条（昨日收益用，「截至」标注取它的日期）。dayNavRate 与
+   * dailyPnl 末条同值（同一对象）；无条目 → null
+   */
+  latest: { date: string; dayPnlCents: number; dayNavRate: number } | null;
   /** 累计盈亏序列（cumulateFundPnl 产出，升序） */
   cumulative: FundCumPnlPoint[];
   /** 首笔确认日（「持有以来」口径说明用）；无条目 → null */

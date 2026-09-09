@@ -95,7 +95,7 @@ export function ProfitCalendar({
   data,
   onPickDate,
   selectedDate,
-  rateTiers = RATE_TIERS,
+  rateTiers: rateTiersProp,
 }: {
   /**
    * 逐日快照。字段收窄成 Pick：全局口径喂 DailyAsset，单基金口径
@@ -106,9 +106,16 @@ export function ProfitCalendar({
   onPickDate?: (date: string) => void;
   /** 当前选中日（可选）：格子加主色描边。与 onPickDate 配合由调用方驱动 */
   selectedDate?: string;
-  /** 背景色分档（单基金口径传 FUND_RATE_TIERS，不传走全组合分档） */
+  /**
+   * 背景色分档（单基金口径传 FUND_RATE_TIERS，不传走全组合分档）。
+   * ⚠️ 只接受非空数组：空数组会让 cellBgColor 的兜底读到
+   * tiers[-1]（undefined）拼出坏色串——类型上保证不了「非空」，
+   * 运行时回退 RATE_TIERS（CodeRabbit PR #78 建议）
+   */
   rateTiers?: readonly RateTier[];
 }) {
+  // 空数组防御：回退全组合分档，cellBgColor 的 tiers[-1] 兜底永不为 undefined
+  const rateTiers = rateTiersProp && rateTiersProp.length > 0 ? rateTiersProp : RATE_TIERS;
   // 空数据直接走空态
   if (data.length === 0) {
     return <EmptyState description="暂无收益日历" />;
