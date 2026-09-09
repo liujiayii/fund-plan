@@ -1,21 +1,16 @@
 import {
   Button,
-  Pagination,
   Skeleton,
   Tabs,
   Typography,
 } from "antd";
 import { useEffect, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
-import { AssetPnlSummary } from "~/components/AssetPnlSummary";
-import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { DcaPlanFormModal } from "~/components/DcaPlanFormModal";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { DcaPlanRowActions } from "~/components/DcaPlanRowActions";
-import { OrderActions } from "~/components/OrderActions";
-import { OrderList } from "~/components/OrderList";
-import { OrderTimeline } from "~/components/OrderTimeline";
-import { ProfitCalendarCard } from "~/components/ProfitCalendarCard";
+import { OrdersContent } from "~/components/OrdersContent";
+import { ProfitContent } from "~/components/ProfitContent";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { StatBig } from "~/components/ui/StatBig";
@@ -31,6 +26,10 @@ const { Text, Paragraph } = Typography;
  * 数据通道：每个面板一个独立 fetcher，用 fetcher.load() 复用对应路由页的
  * loader（/me/profit、/me/orders、/me/dca）——tab 内容与深链页一份真相，
  * 路由页本身保留不删（外链/收藏夹照常可用）。
+ *
+ * 面板本体是纯懒加载壳（fetcher + 骨架屏），内容体全在共享组件里：
+ * OrdersContent / ProfitContent /（DcaPanel 内联，动作走 DcaPlanFormModal
+ * 与 DcaPlanRowActions）——深链页与 tab 渲染同一份，不会漂移。
  *
  * 加载策略（stale-while-revalidate）：
  *  - 首次激活：fetcher.load 拉全量，期间 Skeleton（无数据时）
@@ -87,7 +86,7 @@ export function MeTabs({ fundCode }: { fundCode?: string }) {
 /* ─────────────────────── 收益明细 ─────────────────────── */
 
 function ProfitPanel({ active }: { active: boolean }) {
-  // fetcher.load 复用 /me/profit 的 loader：收益明细数据结构与深链页一份真相
+  // fetcher.load 复用 /me/profit 的 loader：内容体在 ProfitContent（与深链页一份真相）
   const fetcher = useFetcher<typeof import("~/routes/me.profit").loader>();
 
   useEffect(() => {
@@ -100,38 +99,16 @@ function ProfitPanel({ active }: { active: boolean }) {
   }, [active]);
 
   const detail = fetcher.data?.detail;
-
   if (!detail) {
     return <PanelSkeleton />;
   }
-
-  const { daily, latest } = detail;
-
-  if (daily.length === 0) {
-    return <EmptyState description="买入第一只基金后，这里会展示每日收益" />;
-  }
-
-  // 与 /me/profit 深链页同款内容：摘要 + 走势 + 日历（tab 内不套内层 SectionCard，
-  // 用间距分隔）
-  return (
-    <div>
-      <AssetPnlSummary daily={daily} latest={latest} />
-      <AssetTrendChart data={daily} />
-      <div className="mt-6" />
-      <ProfitCalendarCard detail={detail} />
-      <Paragraph type="secondary" className="mb-0 mt-3 text-xs">
-        点击日期切换查看当日各基金收益明细
-      </Paragraph>
-    </div>
-  );
+  return <ProfitContent detail={detail} />;
 }
 
 /* ─────────────────────── 交易记录 ─────────────────────── */
 
-/** 每页条数。与 /me/orders 深链页一致的翻页手感 */
-const ORDERS_PAGE_SIZE = 20;
-
 function OrdersPanel({ active, fundCode }: { active: boolean; fundCode?: string }) {
+  // fetcher.load 复用 /me/orders 的 loader；内容体在 OrdersContent（与深链页一份真相）
   const fetcher = useFetcher<typeof import("~/routes/me.orders").loader>();
   // ?fund= 过滤：持仓详情页只看这只基金（与旧 QuickEntries 深链同参数）
   const url = fundCode ? `/me/orders?fund=${encodeURIComponent(fundCode)}` : "/me/orders";
@@ -144,79 +121,11 @@ function OrdersPanel({ active, fundCode }: { active: boolean; fundCode?: string 
     // eslint-disable-next-line react/exhaustive-deps -- url 由 fundCode 定死（组件生命周期内不变），fetcher 见上条同理
   }, [active]);
 
-  // 客户端分页（loader 已带回全量 200 条）；翻页状态在面板内，切 tab 不丢
-  const [page, setPage] = useState(1);
-
   const data = fetcher.data;
   if (!data) {
     return <PanelSkeleton />;
   }
-
-  const orders = data.orders;
-  // 待确认委托独立成区：撤单/改单的主战场（与深链页同款分区）
-  const pendingOrders = orders.filter(o => o.status === "pending");
-
-  return (
-    <div>
-      {pendingOrders.length > 0 && (
-        <>
-          <Text strong>
-            待确认委托（
-            {pendingOrders.length}
-            {" "}
-            笔）
-          </Text>
-          <OrderList orders={pendingOrders} renderActions={o => <OrderActions order={o} />} />
-          <Paragraph type="secondary" className="mb-0 mt-3 text-xs">
-            真实基金是 T+1 成交：交易日 15:00 前下单按当日净值，之后顺延至下一交易日。
-            系统每晚 20:30 拉取当日净值并撮合，此前均可撤单或改单。
-          </Paragraph>
-          <div className="mt-6" />
-        </>
-      )}
-
-      <Text strong>
-        全部订单（
-        {orders.length}
-        {" "}
-        笔）
-      </Text>
-      {orders.length === 0
-        ? (
-            <EmptyState description={fundCode ? "该基金还没有交易记录" : "还没有交易记录"} />
-          )
-        : (
-            <>
-              <OrderTimeline
-                orders={orders.slice((page - 1) * ORDERS_PAGE_SIZE, page * ORDERS_PAGE_SIZE)}
-                // 待确认行内挂撤单/改单（OrderActions 自行判断 pending 才渲染）
-                renderActions={o => <OrderActions order={o} />}
-              />
-              {orders.length > ORDERS_PAGE_SIZE && (
-                <div className="fp-h-scroll mt-4">
-                  <Pagination
-                    align="end"
-                    responsive
-                    current={page}
-                    pageSize={ORDERS_PAGE_SIZE}
-                    total={orders.length}
-                    showSizeChanger={false}
-                    onChange={setPage}
-                  />
-                </div>
-              )}
-            </>
-          )}
-      <Paragraph type="secondary" className="mb-0 mt-3 text-xs">
-        申购采用真实的
-        <Text strong>内扣法</Text>
-        ：手续费从申购金额中扣除，
-        剩余净额除以确认日净值得到份额。赎回按
-        <Text strong>先进先出</Text>
-        逐批计费。
-      </Paragraph>
-    </div>
-  );
+  return <OrdersContent orders={data.orders} fundCode={fundCode} />;
 }
 
 /* ─────────────────────── 定投计划 ─────────────────────── */

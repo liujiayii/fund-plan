@@ -1,25 +1,14 @@
 import type { Route } from "./+types/me.orders";
-import { Pagination, Space, Typography } from "antd";
-import { useState } from "react";
-import { OrderActions } from "~/components/OrderActions";
-import { OrderList } from "~/components/OrderList";
-import { OrderTimeline } from "~/components/OrderTimeline";
-import { EmptyState } from "~/components/ui/EmptyState";
+import { Space, Typography } from "antd";
+import { OrdersContent } from "~/components/OrdersContent";
 import { NavButton } from "~/components/ui/NavButton";
-import { SectionCard } from "~/components/ui/SectionCard";
 import { SHARE_SCALE, yuanToCents } from "~/domain/money";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getOrders, getOrdersByFund } from "~/services/portfolio-service";
 import { amendOrder, cancelOrder } from "~/services/trade";
 
-const { Title, Text, Paragraph } = Typography;
-
-/**
- * 每页条数。沿用被卡片列表取代的那张旧 Table 的 `pageSize: 20`，
- * 翻页手感与改版前一致 —— loader 一次取 200 条，全铺在一页上是 200 张卡片。
- */
-const PAGE_SIZE = 20;
+const { Title } = Typography;
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: "我的订单 · 模拟基金" }];
@@ -97,13 +86,15 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
 }
 
+/**
+ * 我的订单页（深链 /me/orders、/me/orders?fund=）。
+ *
+ * 页面本体只剩标题与返回入口——内容体全在共享组件 OrdersContent 里，
+ * 与 /me、持仓详情页的「交易记录」tab（MeTabsPanels.OrdersPanel 懒加载
+ * 本路由 loader）一份真相。撤单/改单走 OrderActions（提交到本 action）。
+ */
 export default function MeOrders({ loaderData }: Route.ComponentProps) {
   const { orders, fundFilter } = loaderData;
-  // 待确认委托独立成区：委托管理的主战场，撤单/改单按钮就在眼前，
-  // 不再和已成交历史混在一条时间线里（主人反馈「撤单改单难发现」）
-  const pendingOrders = orders.filter(o => o.status === "pending");
-  // 客户端分页：loader 已经把 200 条全取回来了，翻页不用再请求服务端
-  const [page, setPage] = useState(1);
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -111,61 +102,14 @@ export default function MeOrders({ loaderData }: Route.ComponentProps) {
         我的订单
       </Title>
 
-      {/* 来自持仓详情页深链时旁挂返回入口；「仅看某基金」Tag 已按主人要求撤下，
-          过滤口径由 URL ?fund= 与列表内容自明（ux-polish #3） */}
+      {/* 来自 ?fund= 深链时旁挂返回入口；过滤口径由 URL 与列表内容自明 */}
       {fundFilter && (
         <NavButton size="small" to={`/me/holdings/${fundFilter.code}`}>
           ← 返回持仓详情
         </NavButton>
       )}
 
-      {pendingOrders.length > 0 && (
-        <SectionCard title={`待确认委托（${pendingOrders.length} 笔）`}>
-          <OrderList orders={pendingOrders} renderActions={o => <OrderActions order={o} />} />
-          <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
-            真实基金是 T+1 成交：交易日 15:00 前下单按当日净值，之后顺延至下一交易日。
-            系统每晚 20:30 拉取当日净值并撮合，此前均可撤单或改单。
-          </Paragraph>
-        </SectionCard>
-      )}
-
-      <SectionCard title={`全部订单（${orders.length} 笔）`}>
-        {orders.length === 0
-          ? (
-              <EmptyState description={fundFilter ? "该基金还没有交易记录" : "还没有交易记录"} />
-            )
-          : (
-              <>
-                <OrderTimeline
-                  orders={orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
-                  // 待确认行内挂撤单/改单（OrderActions 自行判断 pending 才渲染）
-                  renderActions={o => <OrderActions order={o} />}
-                />
-                {orders.length > PAGE_SIZE && (
-                  // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
-                  <div className="fp-h-scroll" style={{ marginTop: 16 }}>
-                    <Pagination
-                      align="end"
-                      responsive
-                      current={page}
-                      pageSize={PAGE_SIZE}
-                      total={orders.length}
-                      showSizeChanger={false}
-                      onChange={setPage}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-        <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
-          申购采用真实的
-          <Text strong>内扣法</Text>
-          ：手续费从申购金额中扣除，
-          剩余净额除以确认日净值得到份额。赎回按
-          <Text strong>先进先出</Text>
-          逐批计费。
-        </Paragraph>
-      </SectionCard>
+      <OrdersContent orders={orders} fundCode={fundFilter?.code} />
     </Space>
   );
 }
