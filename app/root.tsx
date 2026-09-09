@@ -193,8 +193,13 @@ export default function App() {
                     >
                       {avatarText}
                     </Avatar>
-                    <span style={{ color: COLOR.textPrimary }}>
-                      {user.username}
+                    {/* 用户名顶宽 120px：长名不再撑宽整个触发区（下拉框跟着变宽），
+                        超长省略号、悬停 title 看全名；「（主理人）」后缀放省略区外，
+                        不会被长名吃掉。max-w-[120px] 是布局尺寸非色值，任意值类合规 */}
+                    <span className="inline-flex max-w-[200px] items-center gap-1 text-ink">
+                      <span className="max-w-[120px] truncate" title={user.username}>
+                        {user.username}
+                      </span>
                       {user.role === "admin" ? "（主理人）" : ""}
                     </span>
                   </Space>
