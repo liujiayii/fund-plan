@@ -177,7 +177,8 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
         </NavButton>
       )}
 
-      <SectionCard>
+      {/* animate-fade-up：区块进场淡入（首卡无延迟） */}
+      <SectionCard className="animate-fade-up">
         {/* [16,16]：统计行间距降档，窄屏折行后不撑高 */}
         <Space size={[16, 16]} wrap>
           <StatBig label="计划总数" value={plans.length} suffix="个" size={24} />
@@ -199,7 +200,8 @@ export default function MeDca({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </SectionCard>
 
-      <SectionCard title="计划列表">
+      {/* 交错进场：第 2 卡延迟 60ms（animate-delay 写法的坑见 uno.config.ts） */}
+      <SectionCard title="计划列表" className="animate-fade-up animate-delay-[60ms]">
         {plans.length === 0
           ? (
               <EmptyState description="还没有定投计划">

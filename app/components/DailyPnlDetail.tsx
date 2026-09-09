@@ -3,9 +3,10 @@ import type { FundDayPnl } from "~/domain/fund-pnl";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
+import { PnlBadge } from "~/components/ui/PnlBadge";
 import { PnlText } from "~/components/ui/PnlText";
 import { StatBig } from "~/components/ui/StatBig";
-import { COLOR, NUM_FONT, pnlColor } from "~/theme";
+import { COLOR, pnlColor } from "~/theme";
 
 export interface DailyPnlDetailProps {
   /** 选中的日期串（YYYY-MM-DD），标题用 */
@@ -42,11 +43,11 @@ export function DailyPnlDetail({ date, day, entries, fundNames }: DailyPnlDetail
 
   return (
     <div>
+      {/* 当日金额走 PnlBadge 浅底胶囊（visual-refresh §6.5 强调位）：
+          徽章自带「元」与红绿浅底，StatBig 的 suffix/color 不再传；日期标题与收益率副行保持原样 */}
       <StatBig
         label={`${fmtDateLabel(date)} 收益`}
-        value={day ? signedYuan(day.dayPnlCents) : "—"}
-        suffix={day ? "元" : undefined}
-        color={day ? pnlColor(day.dayPnlCents) : undefined}
+        value={day ? <PnlBadge cents={day.dayPnlCents} /> : "—"}
         extra={day ? `收益率 ${day.dayPnlRate > 0 ? "+" : ""}${(day.dayPnlRate * 100).toFixed(2)}%` : undefined}
       />
       <div style={{ marginTop: 8 }}>
@@ -64,8 +65,8 @@ export function DailyPnlDetail({ date, day, entries, fundNames }: DailyPnlDetail
                 last={i === sorted.length - 1}
                 primary={(
                   <span
+                    className="font-num"
                     style={{
-                      fontFamily: NUM_FONT,
                       fontSize: 16,
                       color: pnlColor(f.dayPnlCents),
                     }}

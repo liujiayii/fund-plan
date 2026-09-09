@@ -1,6 +1,6 @@
 import { Progress } from "antd";
 import { rateToPercent } from "~/domain/money";
-import { COLOR, NUM_FONT } from "~/theme";
+import { COLOR } from "~/theme";
 
 export interface PositionItem {
   /** 名称（股票/债券/行业名） */
@@ -39,7 +39,7 @@ export function PositionList({ items }: { items: PositionItem[] }) {
               )}
             </span>
             {/* 占比大数字：等宽字体右对齐，与行业视图旧实现同款 */}
-            <span style={{ fontFamily: NUM_FONT, fontSize: 14, whiteSpace: "nowrap" }}>
+            <span className="font-num" style={{ fontSize: 14, whiteSpace: "nowrap" }}>
               {rateToPercent(p.ratio)}
             </span>
           </div>

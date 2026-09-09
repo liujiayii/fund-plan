@@ -91,7 +91,8 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
-      <SectionCard>
+      {/* animate-fade-up：区块进场淡入（首卡无延迟） */}
+      <SectionCard className="animate-fade-up">
         {/* 全局监控三格。主位是用户数（本页主题），其余次位 24 */}
         <Space size={[16, 16]} wrap>
           <StatBig label="注册用户" value={fmtInt(stats.users)} />
@@ -100,7 +101,8 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
         </Space>
       </SectionCard>
 
-      <SectionCard title={`用户（${users.length}）`}>
+      {/* 交错进场：第 2 卡延迟 60ms（animate-delay 写法的坑见 uno.config.ts） */}
+      <SectionCard title={`用户（${users.length}）`} className="animate-fade-up animate-delay-[60ms]">
         <Table
           rowKey="id"
           columns={columns}

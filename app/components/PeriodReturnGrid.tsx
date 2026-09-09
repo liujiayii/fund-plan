@@ -1,6 +1,6 @@
 import type { PeriodReturns } from "~/domain/performance";
 import { Col, Row } from "antd";
-import { COLOR, NUM_FONT, pnlColor } from "~/theme";
+import { COLOR, pnlColor } from "~/theme";
 
 const CARDS: { label: string; key: keyof PeriodReturns }[] = [
   { label: "近 1 周", key: "w1" },
@@ -39,9 +39,9 @@ export function PeriodReturnGrid({ returns }: PeriodReturnGridProps) {
             >
               <div style={{ fontSize: 12, color: COLOR.textSecondary }}>{c.label}</div>
               <div
+                className="font-num"
                 style={{
                   fontSize: 18,
-                  fontFamily: NUM_FONT,
                   marginTop: 4,
                   color: v === null ? COLOR.textSecondary : pnlColor(v),
                 }}

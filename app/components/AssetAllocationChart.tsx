@@ -1,6 +1,7 @@
 import type { PieConfig } from "@ant-design/charts";
 import { lazy, Suspense } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
+import { FP_CHART_THEME } from "~/components/ui/chart-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
 
 /**
@@ -40,6 +41,9 @@ export function AssetAllocationChart({
     data,
     angleField: "value",
     colorField: "type",
+    // 全站图表统一主题（chart-theme.ts 单一出处）：
+    // 环形三段自动吃色环前三：股票=靛蓝、债券=紫罗兰、现金=翠绿
+    theme: FP_CHART_THEME,
     // 环形（支付宝基金页同款观感）：中心留白弱化面积对比、聚焦占比
     innerRadius: 0.6,
     // ⚠️ 刻意不传 height：与 Line 同理，高度交给 .fp-chart-box 的 CSS 管理

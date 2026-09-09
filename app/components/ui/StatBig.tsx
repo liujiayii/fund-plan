@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { COLOR, NUM_FONT } from "~/theme";
+import { COLOR } from "~/theme";
 
 export interface StatBigProps {
   /** 标签，如「总资产」 */
@@ -26,7 +26,7 @@ export interface StatBigProps {
 /**
  * 大数字展示。取代 antd 的 Statistic —— Statistic 的字号与字体栈不可控，
  * 且用比例字体导致一列金额纵向对不齐（"1" 比 "8" 窄）。
- * 这里强制用 NUM_FONT 等宽栈。
+ * 主数值挂 font-num 类：Space Grotesk + tabular-nums，对齐纪律单点钉死。
  */
 export function StatBig({
   label,
@@ -51,9 +51,9 @@ export function StatBig({
         }}
       >
         <span
+          className="font-num"
           style={{
             fontSize: size,
-            fontFamily: NUM_FONT,
             fontWeight: 500,
             lineHeight: 1.2,
             color: color ?? COLOR.textPrimary,

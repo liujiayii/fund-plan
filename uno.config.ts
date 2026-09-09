@@ -5,7 +5,7 @@ import {
   transformerDirectives,
   transformerVariantGroup,
 } from "unocss";
-import { BAR_SHADOW, CARD_SHADOW, COLOR, NUM_FONT } from "./app/theme";
+import { BAR_SHADOW, CARD_SHADOW, CARD_SHADOW_HOVER, COLOR, NUM_FONT, PRIMARY_GRADIENT } from "./app/theme";
 
 /**
  * UnoCSS 配置。
@@ -36,12 +36,22 @@ function kebab(s: string): string {
  * 消费方：app/styles/*.css——手写 CSS 进不了 JS 模块图，import 不到 theme.ts，
  * 只能靠这些变量共享 token（responsive.css 的 var(--fp-card) 等即来源于此）。
  * ⚠️ 本文件是 --fp-* 唯一的定义处；给 theme.ts 加新 token 时记得这里自动带上
- * （COLOR 上的键全自动，NUM_FONT/CARD_SHADOW 是手写的两行）。
+ * （COLOR 上的键全自动，其余——字体/阴影/渐变——是手写的几行）。
  */
 const FP_ROOT_VARS = [
   ...Object.entries(COLOR).map(([k, v]) => `  --fp-${kebab(k)}: ${v};`),
   `  --fp-num-font: ${NUM_FONT};`,
   `  --fp-card-shadow: ${CARD_SHADOW};`,
+  // 注意 --fp-primary-to 不在这里手写：COLOR.primaryTo 键已被上面的
+  // 全量映射自动输出（曾手写+自动各出一份导致变量重复定义，Task 12 收尾删除）
+  `  --fp-primary-gradient: ${PRIMARY_GRADIENT};`,
+  `  --fp-card-shadow-hover: ${CARD_SHADOW_HOVER};`,
+  // 动效 token（visual-refresh spec §5：动效也是 token，不散写）。
+  // 消费方：手写 CSS 与任意值类（如 duration-[240ms]）想换基准时长时引变量
+  `  --fp-duration-fast: 150ms;`,
+  `  --fp-duration-base: 240ms;`,
+  `  --fp-duration-slow: 360ms;`,
+  `  --fp-ease: cubic-bezier(0.22, 1, 0.36, 1);`,
 ].join("\n");
 
 export default defineConfig({
@@ -66,6 +76,15 @@ export default defineConfig({
     // 支持 hover:(bg-red-500 text-white) 这种分组写法
     transformerVariantGroup(),
   ],
+  rules: [
+    // font-num：数字字体类（font-family + 表格数字双纪律合一）。
+    // 自定义 rule 优先于 preset 的 fontFamily 主题类，把 tabular-nums
+    // 钉进类本身——等宽不再依赖每个消费方记得补（spec 验收 #2）
+    [/^font-num$/, () => ({
+      "font-family": NUM_FONT,
+      "font-variant-numeric": "tabular-nums",
+    })],
+  ],
   // 项目里常用的组合，抽成快捷方式
   shortcuts: {
     // 常用布局。（text-rise / text-fall 快捷方式已退役：theme.colors 直出同名类）
@@ -86,16 +105,51 @@ export default defineConfig({
       "line": COLOR.border, // 分割线：border-line
       "ink": COLOR.textPrimary, // 主文字：text-ink
       "muted": COLOR.textSecondary, // 次文字：text-muted
+      "tertiary": COLOR.textTertiary, // 三级文字：text-tertiary（标签/说明）
+      "placeholder": COLOR.textPlaceholder, // 占位/禁用：text-placeholder
+      "rise-soft": COLOR.upBg, // 涨浅底：bg-rise-soft（徽章/图表柱底）
+      "fall-soft": COLOR.downBg, // 跌浅底：bg-fall-soft
     },
-    fontFamily: {
-      // 数字等宽字体（金额纵向对齐）：font-num，替代内联 fontFamily: NUM_FONT
-      num: NUM_FONT,
-    },
-    boxShadow: {
+    /**
+     * 阴影与动效（visual-refresh spec §3.3/§5）。
+     *
+     * ⚠️ Wind4 的阴影主题键是单数 `shadow`（对齐 Tailwind v4 的 --shadow-* 变量），
+     * 写 `boxShadow` 会静默无效——shadow-card 只会被 colors.card 兜成「阴影颜色」
+     * 类（--un-shadow-color），永远出不了真的 box-shadow（Task 5 实测踩坑，
+     * preset-wind4 的 handleShadow 读的是 theme.shadow）。
+     */
+    shadow: {
       // 卡片阴影：shadow-card，替代内联 boxShadow: CARD_SHADOW
-      card: CARD_SHADOW,
+      "card": CARD_SHADOW,
       // 页底固定操作条阴影（朝上、重一档）：shadow-bar
-      bar: BAR_SHADOW,
+      "bar": BAR_SHADOW,
+      // 卡片 hover 抬升影：shadow-card-hover（Task 5 消费）
+      "card-hover": CARD_SHADOW_HOVER,
+    },
+    /**
+     * 动效：animate-fade-up（区块淡入）/ animate-float（空态呼吸，Task 10 消费）。
+     * animate-<name> 由 keyframes/durations/timingFns/counts 四表拼装
+     * （fade-up 不给 counts → 默认 1 次；float 给 infinite）。
+     *
+     * ⚠️ 交错延迟用 `animate-delay-[60ms]` 而非 `[animation-delay:60ms]`：
+     * animate-fade-up 的 animation 简写会重置 animation-delay 为 0，而
+     * 任意属性类（[prop:value]）在产物里排在 animations 规则**之前**——
+     * 简写后到反而压掉延迟，交错失效。animate-delay-* 与 animate-* 同属
+     * animations 规则组且排在它后面，靠源序稳定取胜。另注意 important
+     * 后缀必须写在方括号外（`[animation-delay:60ms]!`），写进值里
+     * （`60ms!`）是非法 CSS 会被浏览器整条丢弃。
+     */
+    animation: {
+      keyframes: {
+        // 区块淡入：透明度 + 上移 8px（visual-refresh spec §5）
+        "fade-up": "{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}",
+        // 空态呼吸：缓慢上下浮动（Task 10 消费）
+        "float": "{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}",
+      },
+      durations: { "fade-up": "360ms", "float": "4s" },
+      timingFns: { "fade-up": "cubic-bezier(0.22, 1, 0.36, 1)", "float": "ease-in-out" },
+      // counts 里只有不需要引号的键，eslint quote-props 要求此表裸写
+      counts: { float: "infinite" },
     },
     /**
      * 断点显式对齐 antd 栅格（responsiveObserver：xs 480 / sm 576 / md 768 /

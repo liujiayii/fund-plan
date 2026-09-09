@@ -4,7 +4,7 @@ import { fmtYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { PnlText } from "~/components/ui/PnlText";
 import { navToDisplay, sharesToDisplay } from "~/domain/money";
-import { COLOR, NUM_FONT } from "~/theme";
+import { COLOR } from "~/theme";
 
 export interface HoldingListProps {
   holdings: HoldingView[];
@@ -79,8 +79,8 @@ export function HoldingList({
           last={i === holdings.length - 1}
           primary={(
             <span
+              className="font-num"
               style={{
-                fontFamily: NUM_FONT,
                 fontSize: 16,
                 color: COLOR.textPrimary,
               }}

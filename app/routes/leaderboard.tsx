@@ -66,7 +66,10 @@ function LeaderRow({
     //   应用到四边，没给宽度的三边走初始值 medium（=3px），整行被 3px 浅灰
     //   框住（PR #76 上线后实测踩坑，Playwright 计算样式取证）
     <div
-      className={`flex items-center gap-3 border-b border-line py-3 [border-bottom-style:solid] ${isMe ? "bg-primary/6" : ""}`}
+      // hover 底色只给非本人的行：本人的 bg-primary/6 高亮若再叠 hover:bg-page
+      // 会被盖掉（产物同优先级、后者居后），悬停自己的行不该丢自己的高亮
+      // （CodeRabbit PR #79 修正）；transition-colors 全行保留，bg 固定时无副作用
+      className={`flex items-center gap-3 border-b border-line py-3 [border-bottom-style:solid] transition-colors ${isMe ? "bg-primary/6" : "hover:bg-page"}`}
     >
       <RankBadge rank={entry.rank} />
       <div className="min-w-0 flex-1 overflow-hidden">
@@ -112,7 +115,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
-      <SectionCard>
+      {/* animate-fade-up：区块进场淡入（首卡无延迟） */}
+      <SectionCard className="animate-fade-up">
         {lb.byRate.length === 0
           ? (
               <EmptyState description="还没有人开过单">
@@ -146,9 +150,10 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
 
       {/* 已登录且不在榜单前排（前三名）时：底部钉一行「我的排名」。
           前三名本身已在榜单前排高亮，再渲染卡片会重复出现两次；
-          未上榜（没成交过）时保留引导空态，形成引导闭环 */}
+          未上榜（没成交过）时保留引导空态，形成引导闭环。
+          交错进场：第 2 卡延迟 60ms（animate-delay 写法的坑见 uno.config.ts） */}
       {meId !== null && (mine === null || mine.rank > 3) && (
-        <SectionCard title="我的排名">
+        <SectionCard title="我的排名" className="animate-fade-up animate-delay-[60ms]">
           {mine
             ? (
                 <LeaderRow entry={mine} meId={meId} />

@@ -66,7 +66,8 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <SectionCard>
+      {/* animate-fade-up：区块进场淡入（首卡无延迟） */}
+      <SectionCard className="animate-fade-up">
         <Title level={3}>发现基金</Title>
         <Paragraph type="secondary">
           搜代码或名称，或看排行榜挑热门。数据来自东方财富公开接口。
@@ -90,9 +91,11 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
         </RouterForm>
       </SectionCard>
 
+      {/* 交错进场：第 N 卡延迟 (N-1)×60ms（animate-delay 写法的坑见 uno.config.ts）。
+          搜索结果卡仅在 q 非空时渲染，缺失时后面排行卡的延迟出现空档，观感无碍 */}
       {q
         ? (
-            <SectionCard title={`「${q}」的搜索结果（${results.length} 条）`}>
+            <SectionCard title={`「${q}」的搜索结果（${results.length} 条）`} className="animate-fade-up animate-delay-[60ms]">
               {results.length === 0
                 ? <EmptyState description="没搜到，换个关键词试试" />
                 : (
@@ -117,6 +120,7 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
 
       <SectionCard
         title="基金排行榜"
+        className="animate-fade-up animate-delay-[120ms]"
         extra={(
           /* 桌面那份筛选器：767px 以下由 .fp-desktop 整体隐藏（与卡内 .fp-mobile 份成对） */
           <div className="fp-desktop">

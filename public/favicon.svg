@@ -1,9 +1,14 @@
+<!-- 品牌视觉锤（与 app/components/ui/Logo.tsx 同款图形）。
+     色值对应 theme.ts：#3B6BFF=COLOR.primary、#6E5BFF=COLOR.primaryTo。
+     静态资源吃不到 --fp-* 变量，改色时两处同步。 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- 品牌蓝圆角底 + 白色上升柱，与 app/theme.ts 的 COLOR.primary 保持一致 -->
-  <rect width="32" height="32" rx="7" fill="#1677FF"/>
-  <g fill="#FFFFFF">
-    <rect x="7" y="17" width="5" height="9" rx="1"/>
-    <rect x="14" y="11" width="5" height="15" rx="1"/>
-    <rect x="21" y="5" width="5" height="21" rx="1"/>
-  </g>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B6BFF"/>
+      <stop offset="1" stop-color="#6E5BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="9" fill="url(#g)"/>
+  <path d="M8 21.5 L13 15.5 L17.5 19 L24 10.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="24" cy="10.5" r="2" fill="#fff"/>
 </svg>

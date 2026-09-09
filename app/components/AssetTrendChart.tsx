@@ -1,10 +1,12 @@
-import type { LineConfig } from "@ant-design/charts";
+import type { AreaConfig } from "@ant-design/charts";
 import type { DailyAsset } from "~/domain/asset-timeline";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
+import { FP_AREA_FILL, FP_CHART_THEME } from "~/components/ui/chart-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { centsToYuan } from "~/domain/money";
+import { COLOR } from "~/theme";
 
 /**
  * @ant-design/charts 是纯客户端库（底层 G2 依赖 canvas / DOM）。
@@ -17,9 +19,11 @@ import { centsToYuan } from "~/domain/money";
  * 所以这里用 lazy() 把它切成独立 chunk，再靠 mounted 标志确保
  * 只有在浏览器里（首次 effect 之后）才真正渲染图表。
  */
-const Line = lazy(async () => {
+// Area（面积图）：支付宝资产走势同款观感——曲线下靛蓝渐变填充，
+// 比裸线多一档「体量感」（visual-refresh spec §4.2）
+const Area = lazy(async () => {
   const mod = await import("@ant-design/charts");
-  return { default: mod.Line };
+  return { default: mod.Area };
 });
 
 /**
@@ -81,20 +85,21 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
 
   if (data.length === 0) {
     // 走 EmptyState 而不是裸 Empty：全站空态的留白由它统一
-    return <EmptyState description="暂无资产走势数据" />;
+    return <EmptyState description="暂无资产走势数据" hint="买入第一只基金后，这里会长出曲线" />;
   }
 
   // 累计收益要看盈亏分界，Y 轴必须含 0 基准线；
   // 总资产波动幅度小，Y 轴不从 0 起，否则曲线压成一条直线
   const isPnl = mode === "pnl";
-  const config: LineConfig = {
+  const config: AreaConfig = {
     data: chartData,
     xField: "date",
     yField: "asset",
+    // 全站图表统一主题（chart-theme.ts 单一出处）
+    theme: FP_CHART_THEME,
     // ⚠️ 刻意不传 height：G2 的 sizeOf 让显式 height 压过容器尺寸——
     // 传了它，CSS 压容器（窄屏 220）canvas 也不跟随，会竖向溢出容器。
     // 不传时 autoFit 读容器 clientHeight，高度由 responsive.css §6 全权管理
-    smooth: true,
     autoFit: true,
     scale: { y: { nice: true, zero: isPnl } },
     axis: {
@@ -110,7 +115,28 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
         },
       ],
     },
-    style: { lineWidth: 2 },
+    // 渐变面积 + 2px 平滑主线：填充给体量、线给走向。
+    // ⚠️ 必须拆成 area + line 双 mark（2026-09-09 用户走查实测修复）：
+    // 单 Area mark 传 lineWidth 会沿**闭合路径**整圈描边（stroke 回落到
+    // color 通道的品牌色），累计收益口径 zero:true 时底边正好压在 y=0，
+    // 渲染出一条「0 元处的品牌色横线」。拆开后 area 显式杀描边只管填充，
+    // line mark 无闭合路径、只画上边缘曲线。
+    // 平滑走 G2v5 的形状通道 style.shape（Area mark 的 shape 表注册了 smooth
+    // 形状，运行时只认 style.shape 分发，见 g2 runtime/plot.js）；
+    // 不能沿用 plots v1 时代的 smooth: true——plots 2.x / G2 v5 无任何读取方，
+    // 且 AreaConfig 类型（Omit 折叠后丢了宽松索引签名）会直接报 TS2353。
+    // 顶层 data/xField/yField/scale/axis 由 plots 的 transformOptions 自动
+    // 分发给每个 child（core/utils/transform.js），children 只需各自给 style。
+    children: [
+      {
+        type: "area",
+        style: { shape: "smooth", fill: FP_AREA_FILL, lineWidth: 0, stroke: "transparent" },
+      },
+      {
+        type: "line",
+        style: { shape: "smooth", stroke: COLOR.primary, lineWidth: 2 },
+      },
+    ],
   };
 
   return (
@@ -141,7 +167,7 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
       {mounted
         ? (
             <Suspense fallback={<ChartSkeleton />}>
-              <Line {...config} />
+              <Area {...config} />
             </Suspense>
           )
         : (

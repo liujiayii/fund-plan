@@ -93,8 +93,8 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
-      {/* 顶部与 /me 同款总览卡（一行四格版） */}
-      <SectionCard>
+      {/* 顶部与 /me 同款总览卡（一行四格版）。animate-fade-up：首卡无延迟 */}
+      <SectionCard className="animate-fade-up">
         <AssetOverviewCard
           summary={portfolio.summary}
           daily={profit.daily}
@@ -105,13 +105,14 @@ export default function Master({ loaderData }: Route.ComponentProps) {
 
       {/* 资产走势与收益日历：主理人没交易过（daily 为空）时不渲染，空盘不摆空图。
           走势卡不再叠 AssetPnlSummary 两格（2026-09-09 删）：与顶部总览
-          四小格的昨日/累计收益重复，曲线末点 + tooltip 全覆盖 */}
+          四小格的昨日/累计收益重复，曲线末点 + tooltip 全覆盖。
+          交错进场：第 N 卡延迟 (N-1)×60ms（animate-delay 写法的坑见 uno.config.ts） */}
       {profit.daily.length > 0 && (
         <>
-          <SectionCard title="资产走势">
+          <SectionCard title="资产走势" className="animate-fade-up animate-delay-[60ms]">
             <AssetTrendChart data={profit.daily} />
           </SectionCard>
-          <SectionCard title="收益日历">
+          <SectionCard title="收益日历" className="animate-fade-up animate-delay-[120ms]">
             <ProfitCalendarCard detail={profit} />
           </SectionCard>
         </>
@@ -120,7 +121,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
       {/* 持仓/定投/交易/流水四块合一 tab：平铺版页面太长（ux-polish #9 的决策
           被主人 2026-09-09 推翻），条数进 tab 标签、一眼可扫；数据 loader
           全量带回（查询数零变化），纯展示层重组 */}
-      <SectionCard>
+      <SectionCard className="animate-fade-up animate-delay-[180ms]">
         <Tabs
           defaultActiveKey="holdings"
           items={[

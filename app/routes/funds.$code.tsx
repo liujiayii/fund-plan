@@ -217,7 +217,9 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <SectionCard>
+      {/* animate-fade-up：区块进场淡入（首卡无延迟）。本页卡多，交错延迟按
+          源码出现序 (N-1)×60ms；条件卡缺失时后面卡的延迟出现空档，观感无碍 */}
+      <SectionCard className="animate-fade-up">
         <Space direction="vertical" size="small" style={{ width: "100%" }}>
           <Space align="baseline" wrap>
             <Title level={3} style={{ margin: 0 }}>
@@ -287,24 +289,25 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         </Space>
       </SectionCard>
 
-      <SectionCard title="净值走势">
+      <SectionCard title="净值走势" className="animate-fade-up animate-delay-[60ms]">
         <NavChart
           data={series}
           benchmark={loaderData.indexNav.length > 0 ? loaderData.indexNav : undefined}
         />
       </SectionCard>
 
-      <SectionCard title="阶段涨幅">
+      <SectionCard title="阶段涨幅" className="animate-fade-up animate-delay-[120ms]">
         <PeriodReturnGrid returns={loaderData.periodReturns} />
         <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
           基于本地历史净值计算，前向填充非交易日。数据不足的区间显示「—」。
         </Paragraph>
       </SectionCard>
 
-      {/* 基金经理：经理详情接口拉到就富展示，拉不到退化为只有名字的简卡 */}
+      {/* 基金经理：经理详情接口拉到就富展示，拉不到退化为只有名字的简卡。
+          两个分支是同一视觉槽位（第 4 卡），共用 180ms 延迟 */}
       {(loaderData.manager?.length ?? 0) > 0
         ? (
-            <SectionCard title="基金经理">
+            <SectionCard title="基金经理" className="animate-fade-up animate-delay-[180ms]">
               {loaderData.manager!.map((m, i) => (
                 <div
                   key={`${m.name}-${m.workTime}`}
@@ -328,13 +331,13 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             </SectionCard>
           )
         : loaderData.detail?.manager && (
-          <SectionCard title="基金经理">
+          <SectionCard title="基金经理" className="animate-fade-up animate-delay-[180ms]">
             <DataRow label="姓名" value={loaderData.detail.manager} last />
           </SectionCard>
         )}
 
       {loaderData.detail && (
-        <SectionCard title="基金概况">
+        <SectionCard title="基金概况" className="animate-fade-up animate-delay-[240ms]">
           {/* 基金评级：星级比数字快读；0/缺省显示 — */}
           <DataRow
             label="基金评级"
@@ -366,7 +369,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
       {/* 资产配置：股票/债券/现金占净值比环形图 */}
       {loaderData.allocation && (
-        <SectionCard title="资产配置">
+        <SectionCard title="资产配置" className="animate-fade-up animate-delay-[300ms]">
           <AssetAllocationChart
             stocks={loaderData.allocation.stocks}
             bonds={loaderData.allocation.bonds}
@@ -380,7 +383,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
       {/* 投资组合：股票/债券/行业三视图，数据哪个空藏哪个；三块全空整卡不渲染 */}
       {posOptions.length > 0 && (
-        <SectionCard title="投资组合">
+        <SectionCard title="投资组合" className="animate-fade-up animate-delay-[360ms]">
           {posOptions.length > 1 && (
             <div className="fp-h-scroll" style={{ marginBottom: 16 }}>
               <Segmented
@@ -425,7 +428,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
       {/* 历史分红：无记录整卡不渲染 */}
       {(loaderData.bonus?.length ?? 0) > 0 && (
-        <SectionCard title="历史分红">
+        <SectionCard title="历史分红" className="animate-fade-up animate-delay-[420ms]">
           {bonusRows.map((b, i) => (
             <DataRow
               key={b.label}
@@ -438,7 +441,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         </SectionCard>
       )}
 
-      <SectionCard title="赎回费率阶梯">
+      <SectionCard title="赎回费率阶梯" className="animate-fade-up animate-delay-[480ms]">
         <Paragraph type="secondary">
           赎回按
           <Text strong>份额批次先进先出</Text>

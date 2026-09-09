@@ -1,9 +1,11 @@
 import type { LineConfig } from "@ant-design/charts";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
+import { FP_CHART_THEME } from "~/components/ui/chart-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { NAV_SCALE } from "~/domain/money";
+import { COLOR } from "~/theme";
 
 /**
  * @ant-design/charts 是纯客户端库（底层 G2 依赖 canvas / DOM）。
@@ -92,7 +94,7 @@ export function NavChart({
 
   if (data.length === 0) {
     // 走 EmptyState 而不是裸 Empty：全站空态的留白由它统一
-    return <EmptyState description="暂无净值数据" />;
+    return <EmptyState description="暂无净值数据" hint="基金净值通常在交易日 20:30 后同步" />;
   }
 
   const config: LineConfig = {
@@ -101,10 +103,16 @@ export function NavChart({
     yField: "value",
     // colorField 按 type 分组画多条线；单线时只有一类「本基金」也正常
     colorField: "type",
+    // 全站图表统一主题（chart-theme.ts 单一出处）
+    theme: FP_CHART_THEME,
+    // 基准线（沪深300）退到雾灰辅助位（2026-09-09 用户走查裁定）：此前吃
+    // category10 第二位的紫罗兰，与本基金主线同属蓝紫区，两条线缠在一起
+    // 分不清主次。显式 color 数组覆盖主题色环：主序列品牌靛蓝、基准雾灰。
+    // 消费方仅此一处双序列折线，不动 chart-theme 的 category10（饼图在用）
+    color: [COLOR.primary, COLOR.neutral],
     // ⚠️ 刻意不传 height：G2 的 sizeOf 让显式 height 压过容器尺寸——
     // 传了它，CSS 压容器（窄屏 220）canvas 也不跟随，会竖向溢出容器。
     // 不传时 autoFit 读容器 clientHeight，高度由 responsive.css §6 全权管理
-    smooth: true,
     autoFit: true,
     // 净值波动幅度小，Y 轴不从 0 起，否则曲线压成一条直线
     scale: { y: { nice: true, zero: false } },
@@ -113,7 +121,9 @@ export function NavChart({
       x: { labelAutoHide: true, labelAutoRotate: true },
       y: { labelFormatter: (v: number) => v.toFixed(4) },
     },
-    style: { lineWidth: 2 },
+    // 平滑走 G2v5 形状通道 style.shape（smooth: true 是 plots v1 死配置，
+    // G2v5 无读取方——2026-09-09 走查修复时顺手转正，恢复曲线平滑意图）
+    style: { shape: "smooth", lineWidth: 2 },
   };
 
   return (
