@@ -25,9 +25,9 @@ const RANGES = [
 ] as const;
 
 /**
- * 单基金累计盈亏曲线。cumulative 是「自首笔确认日」的前缀和——
- * 窗口只裁剪显示范围，不重置基准：曲线末点恒等于全期累计盈亏，
- * 与卡头的「累计盈亏」数字同口径（AssetTrendChart 累计收益同款手法）。
+ * Displays a fund's cumulative profit and loss over a selectable time range.
+ *
+ * @param cumulative - Cumulative profit-and-loss points, measured in cents from the first confirmed holding date.
  */
 export function FundPnlChart({ cumulative }: { cumulative: FundCumPnlPoint[] }) {
   const [range, setRange] = useState<string>("1m");

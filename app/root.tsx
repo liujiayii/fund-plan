@@ -80,6 +80,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Renders the application shell with navigation, authentication controls, routed content, mobile navigation, and the footer.
+ */
 export default function App() {
   const data = useLoaderData<typeof loader>();
   const location = useLocation();

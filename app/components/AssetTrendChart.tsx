@@ -45,8 +45,9 @@ const RANGES = [
 ] as const;
 
 /**
- * 资产走势曲线图。
- * 数据传入时金额是「分」整数，这里用 centsToYuan（Decimal）转成元再画。
+ * Displays asset or cumulative profit/loss trends across selectable time ranges.
+ *
+ * @param data - Daily asset records with monetary values represented in cents.
  */
 export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
   const [range, setRange] = useState<string>("3m");

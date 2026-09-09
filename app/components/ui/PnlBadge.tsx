@@ -8,11 +8,11 @@ export interface PnlBadgeProps {
 }
 
 /**
- * 涨跌浅底胶囊（visual-refresh spec §6.5）：涨 #FEECEB 底柔红字、
- * 跌浅绿底翠绿字、平雾灰底——与收益日历、图表 tooltip 同一「浅底深字」语言。
+ * Displays a pill-shaped badge for a profit or loss amount, rate, or both.
  *
- * ⚠️ 只用于「强调位」（如日历明细的当日金额）；列表与总览的大数字
- * 仍走 PnlText——徽章管强调、文字管信息，两个层级不混用（计划已裁定偏差 1）。
+ * @param cents - Optional profit or loss amount in cents, formatted as yuan.
+ * @param rate - Optional profit or loss rate represented as a decimal.
+ * @returns A styled badge displaying the provided amount and rate.
  */
 export function PnlBadge({ cents, rate }: PnlBadgeProps) {
   // 判色依据与 PnlText 同款：有金额看金额，只有率看率

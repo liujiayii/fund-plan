@@ -149,6 +149,12 @@ function fmtDateLabel(date: string): string {
   return `${String(Number(date.slice(5, 7)))} 月 ${String(Number(date.slice(8, 10)))} 日`;
 }
 
+/**
+ * Displays a fund's holding overview, performance details, share lots, and trading actions.
+ *
+ * @param loaderData - Data loaded for the holding detail page.
+ * @param params - Route parameters identifying the fund.
+ */
 export default function MeHoldingDetail({ loaderData, params }: Route.ComponentProps) {
   const { detail: d, cash, plans, profit, confirmDate, today } = loaderData;
   const actionUrl = `/me/holdings/${params.code}`;

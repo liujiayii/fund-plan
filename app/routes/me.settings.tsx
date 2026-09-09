@@ -115,6 +115,12 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
 }
 
+/**
+ * Renders the settings page with account details, password management, and simulation reset controls.
+ *
+ * @param loaderData - User and account data loaded for the page
+ * @returns The settings page content
+ */
 export default function MeSettings({ loaderData }: Route.ComponentProps) {
   const { user, account: acc, registeredAt } = loaderData;
   const fetcher = useFetcher<typeof action>();

@@ -34,8 +34,13 @@ function fmtDateLabel(date: string): string {
 }
 
 /**
- * 某一天的收益明细（固定展示区，取代旧弹窗）：合计 + 各基金贡献。
- * 内容与交互原样来自 me.profit 旧 Modal——搬家不是重设计（ux-polish spec §4④）。
+ * Displays the selected day's aggregate performance and per-fund contributions.
+ *
+ * @param date - The selected date to display.
+ * @param day - Optional aggregate P&L data for the selected day.
+ * @param entries - Per-fund P&L entries for the selected day.
+ * @param fundNames - Mapping of fund codes to display names.
+ * @returns The rendered daily P&L detail view.
  */
 export function DailyPnlDetail({ date, day, entries, fundNames }: DailyPnlDetailProps) {
   // 按当日收益降序：赚得最多的排最前，一眼看到「今天谁在出力」

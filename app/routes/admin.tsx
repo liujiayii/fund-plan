@@ -30,6 +30,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { stats, users };
 }
 
+/**
+ * Renders the read-only administration dashboard with global statistics and a user overview.
+ *
+ * @param loaderData - Data loaded for the administration dashboard.
+ * @returns The administration dashboard element.
+ */
 export default function AdminIndex({ loaderData }: Route.ComponentProps) {
   const { stats, users } = loaderData;
 

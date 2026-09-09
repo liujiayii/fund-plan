@@ -183,6 +183,11 @@ const RISK_MAP: Record<number, { color: string; label: string }> = {
   5: { color: "volcano", label: "高风险" },
 };
 
+/**
+ * Renders the fund detail page with valuation data, performance, portfolio information, user status, and trading actions.
+ *
+ * @param loaderData - The fund data and user-specific state required to render the page
+ */
 export default function FundDetail({ loaderData }: Route.ComponentProps) {
   const { fund: f, series, latest, cash, isLoggedIn, watched, brief, dcaPlans } = loaderData;
   // 加自选表单提交器：post 到 /me/watchlist，靠 fetcher.data 回显成功/失败

@@ -19,17 +19,11 @@ export interface TxListProps {
 }
 
 /**
- * 资金流水列表。取代 master.tsx 里 5 列的 <Table<TransactionView>>。
+ * Renders a transaction-flow list with transaction details, amounts, and resulting balances.
  *
- * 每行：左侧类型 Tag + 备注 + 时间，右侧金额与变动后余额，金额一律正文色。
+ * Unknown transaction types are displayed using their raw type with a default tag color.
  *
- * ⚠️ 金额刻意**不用红绿**，这是相对旧表格（`v >= 0 ? 红 : 绿`）的有意偏离：
- * 红绿在本项目专属涨跌，而 /master 把「资金流水」与「持仓」「交易记录」做成同一张卡
- * 的相邻 tab —— 同一片红绿两种含义，一次点击就能看见冲突。而且申购（现金换份额）
- * 会被判成绿、读作「亏」，签到奖励会被判成红、读作「赚」，两者都不是涨跌。
- * 方向已经由 `+`/`-` 号和类型 Tag（申购 / 赎回到账 / 签到奖励）说清，颜色是冗余的。
- *
- * 同类的有意偏离还有：身份 Tag 红→蓝、状态绿→蓝、手续费 danger→常规色、预计到账 红→蓝。
+ * @returns The rendered transaction list.
  */
 export function TxList({ txs }: TxListProps) {
   return (

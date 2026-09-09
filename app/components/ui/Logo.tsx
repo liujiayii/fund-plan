@@ -1,7 +1,8 @@
 /**
- * 品牌视觉锤：圆角渐变方块 + 白色上扬净值曲线（visual-refresh spec §6.1）。
- * 颜色吃 --fp-primary / --fp-primary-to CSS 变量——token 单一出处不破。
- * gradient id 固定字符串：同参数渐变重复定义无害，不必 useId。
+ * Renders the brand logo as a scalable gradient icon with an upward-trending line.
+ *
+ * @param size - The rendered width and height in pixels.
+ * @returns A decorative SVG logo element.
  */
 export function Logo({ size = 24 }: { size?: number }) {
   return (

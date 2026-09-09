@@ -45,9 +45,9 @@ export interface SellPanelProps {
 }
 
 /**
- * 赎回面板。亮点是**按 FIFO 逐批试算赎回费**并展示明细——
- * 让用户看清「哪批持有多久、按几档费率、扣多少钱」，
- * 这是模拟盘能教会人东西的地方。
+ * Renders a fund redemption panel with share validation and FIFO-based fee estimates.
+ *
+ * Displays redemption details, estimated proceeds, realized profit or loss, and a submission control.
  */
 export function SellPanel(props: SellPanelProps) {
   const {

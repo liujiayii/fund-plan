@@ -53,11 +53,13 @@ export function sharesAndNavNote(h: HoldingView): ReactNode {
 }
 
 /**
- * 持仓列表。收敛此前 4 处各写一遍 columns 的 <Table<HoldingView>>。
+ * Renders holdings with fund details, market value, and profit or loss information.
  *
- * 支付宝式信息层级：右侧主值是**市值**（用户最关心「我这只值多少钱」），
- * 副值是盈亏金额 + 盈亏率。份额/净值/成本属于二级信息，
- * 放在名称下方的 note 里，由调用方通过 renderNote 决定给到多细（但必须给）。
+ * @param holdings - The holdings to display
+ * @param renderNote - Generates the secondary information shown beneath each fund name
+ * @param renderActions - Optionally generates actions for each holding
+ * @param getHref - Optionally generates a custom link for each holding
+ * @returns The rendered holding list
  */
 export function HoldingList({
   holdings,

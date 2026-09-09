@@ -3,10 +3,11 @@ import { Logo } from "~/components/ui/Logo";
 import { CARD_SHADOW, PRIMARY_GRADIENT } from "~/theme";
 
 /**
- * 登录/注册分屏壳（visual-refresh spec §6.3）：左品牌渐变面板、右表单区。
- * 整体是一张圆角大卡（而非满屏负 margin hack），贴现有卡片语言。
- * 窄屏左屏整块隐藏（hidden md:flex 管显隐，responsive.css §9 .fp-auth-panel 兜底）——
- * spec §6.3 原文的「顶部渐变横幅」从简为隐藏，品牌在场感由顶栏 Logo 承担。
+ * Renders a responsive split-screen container for authentication forms.
+ *
+ * The container includes a branded panel on medium and larger screens and centers
+ * the supplied form content in a constrained card area. The branded panel is
+ * hidden on narrow screens.
  */
 export function AuthShell({ children }: { children: ReactNode }) {
   return (

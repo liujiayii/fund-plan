@@ -11,24 +11,12 @@ export interface PnlTextProps {
 }
 
 /**
- * 涨跌数字。自动带 +/− 号与红绿配色 ——
- * 收敛列表与总览里反复手写的
- * `{v > 0 ? "+" : ""}{centsToYuan(v)}` + `style={{ color: pnlColor(v) }}`。
+ * Displays profit or loss amounts and rates with signed formatting and color coding.
  *
- * ⚠️ 尚未收敛干净，别把本组件当成唯一出处：
- *  - `SellDrawer` 的「已实现盈亏」**刻意**仍手写这个模式 —— 只换它一处会让它
- *    用上 font-num 的数字字形，而同一块里的赎回总额/赎回费合计/预计到账仍是
- *    正文比例字体，块内反而更不一致。
- *  - `PortfolioView` 的「浮动盈亏」、`AssetOverviewCard` 的「昨日收益/累计收益」
- *    与 `funds.$code` 的「日涨跌」手写 +/− 号后把 `pnlColor(v)` 传给 `StatBig` ——
- *    那里要的是大字号主位数字，本组件给不了。
- * 也就是说本组件收敛的是**列表行与总览副值**这一类，不是全部。
- * （`TxList` 的流水金额形状相似但**不判色**，理由见该文件的注释，不属于待收敛项。）
- *
- * cents 与 rate 都传时渲染成「+1,203.55 元  +2.31%」两段。
- * 金额必须带「元」：本组件用在卡片里，周围没有列头把数字归成金额，
- * 光秃秃的 "+1,203.55" 紧挨着 "+2.31%"，读不出哪个是钱哪个是率。
- * 负数的 "-" 号由 fmtYuan 自带，所以只在正数时补 "+"。
+ * @param cents - Monetary value in cents.
+ * @param rate - Profit or loss rate as a decimal fraction.
+ * @param size - Font size in pixels.
+ * @returns The formatted profit or loss text.
  */
 export function PnlText({ cents, rate, size = 14 }: PnlTextProps) {
   // 判色依据：有金额看金额，只有率就看率。两者都没传当 0（中性灰）
