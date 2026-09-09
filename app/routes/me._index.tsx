@@ -90,12 +90,6 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
 }
 
-/**
- * Renders the authenticated user's dashboard with asset data, check-in actions, and holdings management.
- *
- * @param loaderData - Data loaded for the current user and dashboard, including portfolio, check-in, timeline, and pending purchase information.
- * @returns The user's dashboard page.
- */
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
   const { user, portfolio, checkinStatus, timeline, pendingBuyCents } = loaderData;
   // summary 的合计市值供持仓卡标题用；其余总览数字全部交给 AssetOverviewCard

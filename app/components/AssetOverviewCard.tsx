@@ -32,13 +32,16 @@ function signedYuan(cents: number): string {
 }
 
 /**
- * Displays a portfolio overview with total assets, returns, holdings, and available cash.
+ * 资产总览卡（支付宝式）：总资产主位 + 昨日收益/累计收益/持仓金额/可用余额一行四格。
+ * /me 与 /master 共用——主理人的盘就是公开盘，一份口径两种身份。
  *
- * @param summary - Portfolio asset and cash values.
- * @param daily - Daily profit and loss records used to calculate cumulative earnings.
- * @param latest - Latest asset snapshot used for yesterday's return and reporting date.
- * @param totalDepositedCents - Total deposited principal in cents.
- * @param pendingBuyCents - Optional funds reserved for pending purchases, in cents.
+ * 口径（spec §2/§8）：
+ *  - 昨日收益 = 最新有净值交易日的 dayPnlCents（净值延迟同步、周末顺延），
+ *    extra 标注「截至 M 月 D 日」，不写死字面上的昨天
+ *  - 累计收益 = Σ dayPnl（含已实现盈亏与全部费用、剔除净入金），
+ *    与资产走势曲线、收益日历逐日同口径
+ *  - 累计收益率 = 累计收益 ÷ 累计投入本金（分母 0 显示 —，防御性兜底）
+ *  - 持仓金额 = 市值 + 申购中在途（仅 /me 传 pendingBuyCents 时；标注「含申购中」）
  */
 export function AssetOverviewCard({
   summary,

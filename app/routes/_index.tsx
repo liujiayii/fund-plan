@@ -98,12 +98,6 @@ const FEATURES = [
   },
 ];
 
-/**
- * Renders the simulated fund system homepage with navigation, platform statistics, and portfolio highlights.
- *
- * @param loaderData - Data loaded for the current user, platform statistics, and public portfolio display.
- * @returns The homepage interface.
- */
 export default function Index({ loaderData }: Route.ComponentProps) {
   const { me, stats } = loaderData;
 

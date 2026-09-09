@@ -44,10 +44,11 @@ const RANGES = [
 ] as const;
 
 /**
- * Renders a fund NAV line chart with optional normalized benchmark data and selectable time ranges.
+ * 净值曲线图。数据传入时净值是 ×10000 的整数，这里转成真实净值再画。
  *
- * @param data - Fund NAV points, with unit NAV values scaled by `NAV_SCALE`.
- * @param benchmark - Optional benchmark closing values aligned to the selected period and normalized to the fund's starting NAV.
+ * 可选叠加一条基准线（沪深300）：基准与基金窗口对齐后，按基金窗口首日净值
+ * 归一化——两条线从同一个 Y 点出发，直观对比相对涨跌而非绝对值。
+ * 拉不到基准（空数组）则不画，自动降级为单线图。
  */
 export function NavChart({
   data,

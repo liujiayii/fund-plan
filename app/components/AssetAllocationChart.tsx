@@ -13,13 +13,7 @@ const Pie = lazy(async () => {
   return { default: mod.Pie };
 });
 
-/**
- * Renders a donut chart showing the proportions of stocks, bonds, and cash in net assets.
- *
- * @param stocks - Stock allocation percentage, such as `85.2` for 85.2%.
- * @param bonds - Bond allocation percentage, such as `10` for 10%.
- * @param cash - Cash allocation percentage, such as `4.8` for 4.8%.
- */
+/** 资产配置环形图：股票 / 债券 / 现金占净值比 */
 export function AssetAllocationChart({
   stocks,
   bonds,

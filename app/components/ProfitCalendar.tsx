@@ -49,12 +49,9 @@ const NEUTRAL_ALPHA = "1A"; // ~10%，极浅灰底
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Selects a background color based on the daily profit direction and rate magnitude.
- *
- * @param dayPnlCents - The daily profit or loss in cents.
- * @param dayPnlRate - The daily profit or loss rate.
- * @param tiers - Opacity tiers ordered from strongest to weakest.
- * @returns An 8-digit hexadecimal color with the matching opacity applied.
+ * 按 |dayPnlRate| 绝对值选出透明度后缀。
+ * dayPnlCents > 0 时 base 取 COLOR.up，< 0 取 COLOR.down；
+ * 返回拼好的 hex8 色串（如 `#F0443880`，即 COLOR.up #F04438 拼透明度）。
  */
 function cellBgColor(dayPnlCents: number, dayPnlRate: number, tiers: readonly RateTier[]): string {
   const base = pnlColor(dayPnlCents); // up / down / neutral
@@ -140,13 +137,8 @@ export function ProfitCalendar({
 }
 
 /**
- * Renders the interactive monthly profit calendar for populated data.
- *
- * @param data - Daily asset data used to populate calendar cells
- * @param lastDataMonth - Latest month available for forward navigation
- * @param rateTiers - Absolute profit-rate thresholds used to determine cell opacity
- * @param onPickDate - Callback invoked when a populated date is selected
- * @param selectedDate - Currently selected date
+ * 内层组件：data 非空时才挂，让 useState 的初始值可以安全取 lastDataMonth。
+ * 拆出来避免条件 hook（ProfitCalendar 提前 return 时 useState 不执行）。
  */
 function ProfitCalendarInner({
   data,

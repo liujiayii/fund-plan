@@ -1,27 +1,16 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
-/**
- * Calculates a cubic ease-out interpolation that starts quickly and slows toward completion.
- *
- * @param t - Linear progress from 0 to 1
- * @returns Eased progress from 0 to 1
- */
+/** easeOutCubic：先快后慢（visual-refresh spec §5） */
 function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3;
 }
 
 /**
- * Animates a displayed value toward the target value.
- *
- * The initial rendered value matches the target for SSR and hydration safety. After
- * mounting, the value animates from zero; subsequent target changes continue from
- * the current displayed value. Reduced-motion preferences apply the target
- * immediately.
- *
- * @param value - The target numeric value
- * @param durationMs - The animation duration in milliseconds
- * @returns The current animated value
+ * 数字滚动 hook：目标值变化时从上一个值平滑滚到新值。
+ * - SSR/hydration 安全：初始 state 就是目标值（首帧渲染终值不闪 0），
+ *   首次挂载后在 effect 里从 0 滚上去（支付宝式进场）
+ * - prefers-reduced-motion: reduce 时跳过动画直接落值
  */
 export function useCountUp(value: number, durationMs = 600): number {
   const [display, setDisplay] = useState(value);
@@ -59,11 +48,8 @@ export function useCountUp(value: number, durationMs = 600): number {
 }
 
 /**
- * Formats an animated numeric value for display.
- *
- * @param value - The target numeric value.
- * @param format - Converts the animated value into display text.
- * @returns The formatted display text.
+ * 滚动数字文本：把 useCountUp 的浮点中间值取整回「分」再交给 format。
+ * 取整保证滚动过程中位数不抖（spec 验收 #2 的等宽纪律延伸）。
  */
 export function CountUpText({
   value,

@@ -17,10 +17,10 @@ export interface PeriodReturnGridProps {
 }
 
 /**
- * Renders a responsive grid of period-return cards.
- *
- * @param returns - Period return values for each displayed interval
- * @returns The rendered period-return card grid
+ * 阶段涨幅卡片网格（取代旧 PeriodReturnTable 表格，ux-polish spec §4⑤）。
+ * 值走手写格式而非 rateToPercent —— rateToPercent 不补「+」号，但涨幅需要。
+ * null 渲染灰「—」；非空走 pnlColor 染色（涨红跌绿）。
+ * 7 张卡：窄屏三列（3+3+1）、桌面四列（4+3）。
  */
 export function PeriodReturnGrid({ returns }: PeriodReturnGridProps) {
   return (

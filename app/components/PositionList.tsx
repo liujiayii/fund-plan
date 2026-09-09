@@ -12,9 +12,9 @@ export interface PositionItem {
 }
 
 /**
- * Displays investment positions with names, percentages, and responsive progress bars.
- *
- * @param items - The positions to display, with ratios expressed in ten-thousandths.
+ * 持仓占比条列表（重仓股/债券/行业三视图统一，ux-polish spec §4⑥）。
+ * 取代旧双渲染（fp-desktop Table + fp-mobile DataRow）——占比条天然响应式，
+ * 是这轮「去表格化」里唯一同时消灭两套渲染的改法。
  */
 export function PositionList({ items }: { items: PositionItem[] }) {
   return (

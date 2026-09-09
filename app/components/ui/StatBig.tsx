@@ -24,13 +24,9 @@ export interface StatBigProps {
 }
 
 /**
- * Displays a large formatted statistic with an optional suffix and supporting text.
- *
- * @param value - The formatted primary statistic value
- * @param size - The primary value font size in pixels
- * @param suffix - An optional unit or label displayed after the value
- * @param extra - Optional supporting text displayed below the value
- * @returns The rendered statistic component
+ * 大数字展示。取代 antd 的 Statistic —— Statistic 的字号与字体栈不可控，
+ * 且用比例字体导致一列金额纵向对不齐（"1" 比 "8" 窄）。
+ * 主数值挂 font-num 类：Space Grotesk + tabular-nums，对齐纪律单点钉死。
  */
 export function StatBig({
   label,

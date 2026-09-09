@@ -63,11 +63,6 @@ export async function loader({ context }: Route.LoaderArgs) {
   return { admin, portfolio, orders, plans, txs, profit } as const;
 }
 
-/**
- * Renders the administrator’s public portfolio, including its overview, performance data, and portfolio activity.
- *
- * @param loaderData - Data loaded for the page, including the administrator and portfolio records.
- */
 export default function Master({ loaderData }: Route.ComponentProps) {
   // 「主理人未注册」的提前 return 前没有 hook 了——分页状态全部收进各 tab 面板
   // 组件里（面板被 rc-tabs 惰性挂载且切走不卸载，翻页状态天然各自独立）

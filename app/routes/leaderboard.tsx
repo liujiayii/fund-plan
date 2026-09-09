@@ -50,12 +50,7 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-/**
- * Renders a single leaderboard entry with ranking and performance details.
- *
- * @param entry - The leaderboard entry to display
- * @param meId - The current user's ID, or `null` when no user is signed in
- */
+/** 单行榜单条目 */
 function LeaderRow({
   entry,
   meId,
@@ -100,12 +95,6 @@ function LeaderRow({
   );
 }
 
-/**
- * Renders the profit leaderboard and the logged-in user's ranking when applicable.
- *
- * @param loaderData - Current user information and leaderboard entries grouped by ranking metric
- * @returns The leaderboard page content
- */
 export default function Leaderboard({ loaderData }: Route.ComponentProps) {
   const { me, lb } = loaderData;
   const meId = me?.id ?? null;

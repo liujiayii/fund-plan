@@ -47,12 +47,6 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   return { detail, profit };
 }
 
-/**
- * Displays a read-only administrator view of a user's account details, portfolio, performance, and recent orders.
- *
- * @param loaderData - Data containing the user's account details, portfolio, performance, and orders
- * @returns The rendered user detail page
- */
 export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
   const { detail } = loaderData;
   const { user, portfolio, orders } = detail;

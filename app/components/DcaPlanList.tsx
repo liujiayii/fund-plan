@@ -34,11 +34,11 @@ export interface DcaPlanListProps {
 }
 
 /**
- * Renders a list of dollar-cost averaging plans with their status, frequency, investment details, and optional actions.
+ * 定投计划列表。收敛 2 处 <Table<DcaPlanView>>（me.dca、master）。
  *
- * @param plans - The plans to display.
- * @param renderActions - Optional function that renders actions for each plan.
- * @returns The rendered dollar-cost averaging plan list.
+ * 信息层级：右侧主值是**每期金额**（定投最核心的参数），
+ * 副值是「已投 N 期 · 累计 X 元」；频率与下次执行日放在名称下方的 note，
+ * 因为「下次什么时候扣钱」是用户第二关心的事，不该藏在第 4 列。
  */
 export function DcaPlanList({ plans, renderActions }: DcaPlanListProps) {
   return (

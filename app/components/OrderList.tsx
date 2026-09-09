@@ -34,12 +34,12 @@ export interface OrderListProps {
 }
 
 /**
- * Renders a list of orders with direction, status, dates, optional actions, and transaction details.
+ * 订单列表。收敛 3 处 <Table<OrderView>>（me.orders 11 列、me._index、master）。
  *
- * @param orders - The orders to display
- * @param detailed - Whether to display execution amounts, net asset value, shares, and fees
- * @param renderActions - Optional function that renders actions for an order
- * @returns The rendered order list
+ * 降噪三条（见设计文档 3.4）：
+ *  - 「手动」不贴 Tag，只有定投才贴
+ *  - 「已确认」不贴 Tag，只有待确认/失败才贴
+ *  - 方向用蓝色/默认色，不占用红绿（红绿是涨跌的）
  */
 export function OrderList({ orders, detailed, renderActions }: OrderListProps) {
   return (

@@ -49,11 +49,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { q, results, rank, type, period };
 }
 
-/**
- * Renders the fund discovery page with search, ranking filters, and fund rankings.
- *
- * @param loaderData - Data loaded for the current search query and ranking filters
- */
 export default function FundsIndex({ loaderData }: Route.ComponentProps) {
   const { q, results, rank, type, period } = loaderData;
   const nav = useNavigation();

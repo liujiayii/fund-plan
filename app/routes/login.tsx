@@ -47,9 +47,6 @@ export async function action({ request, context }: Route.ActionArgs) {
   });
 }
 
-/**
- * Renders the login form and provides navigation to account registration.
- */
 export default function Login() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();

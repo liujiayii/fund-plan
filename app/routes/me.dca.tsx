@@ -145,9 +145,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 /**
- * Renders the user's recurring investment plans, statistics, and creation controls.
+ * 我的定投页（深链 /me/dca、/me/dca?fund=）。
  *
- * @param loaderData - Loaded plans and an optional fund filter for the page.
+ * 页面本体只剩骨架：统计、列表、新建入口——表单弹窗与行内操作全部走
+ * 共享组件（DcaPlanFormModal / DcaPlanRowActions），与 /me 的定投 tab
+ * （MeTabsPanels.DcaPanel 懒加载本路由 loader）、基金/持仓页的定投抽屉
+ * （DcaFundPanel）一份真相。
  */
 export default function MeDca({ loaderData }: Route.ComponentProps) {
   const { plans, fundFilter } = loaderData;
