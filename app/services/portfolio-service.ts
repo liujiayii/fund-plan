@@ -146,6 +146,30 @@ export async function getPortfolio(
   };
 }
 
+/**
+ * 用户 pending 买单的在途资金合计（分）。
+ *
+ * 买单下单即冻结现金（trade.ts 直接扣 account.cash），份额要等 T+1 撮合才生成——
+ * pending 窗口内这笔钱既不在持仓市值也不在可用余额里，总资产凭空少一笔
+ * （与 leaderboard-service 的 inFlightCashCents 是同一笔账，那边为榜单口径补过）。
+ * /me 总览卡用它把在途并回「持仓金额 / 总资产」并标注「含申购中」；
+ * /master 与首页刻意不调（公开盘保持纯市值口径，别多背一条查询）。
+ */
+export async function getPendingBuyCents(db: Db, userId: number): Promise<number> {
+  const rows = await db
+    .select({ amount: orders.amount })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.userId, userId),
+        eq(orders.status, "pending"),
+        eq(orders.side, "buy"),
+      ),
+    );
+  // 整数分直接累加（远低于 2^53，零误差）；amount 理论非 null（买单必填），兜 0 防御
+  return rows.reduce((s, r) => s + (r.amount ?? 0), 0);
+}
+
 /** 订单视图（带基金名） */
 export interface OrderView {
   id: number;

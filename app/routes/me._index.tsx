@@ -27,7 +27,7 @@ import { getAssetTimeline } from "~/services/asset-service";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
-import { getPortfolio } from "~/services/portfolio-service";
+import { getPendingBuyCents, getPortfolio } from "~/services/portfolio-service";
 import { COLOR } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
@@ -40,13 +40,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);
   const user = await requireUser(request, db);
 
-  const [portfolio, checkinStatus, timeline] = await Promise.all([
+  // 在途资金（pending 买单）单独一查：/me 总览卡把「申购中」并回持仓金额与总资产；
+  // /master 与首页刻意不查（公开镜像保持纯市值口径，别多背查询）
+  const [portfolio, checkinStatus, timeline, pendingBuyCents] = await Promise.all([
     getPortfolio(db, user.id),
     getCheckinStatus(db, user.id),
     getAssetTimeline(db, user.id),
+    getPendingBuyCents(db, user.id),
   ]);
 
-  return { user, portfolio, checkinStatus, timeline };
+  return { user, portfolio, checkinStatus, timeline, pendingBuyCents };
 }
 
 /** 签到 action */
@@ -67,7 +70,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
-  const { user, portfolio, checkinStatus, timeline } = loaderData;
+  const { user, portfolio, checkinStatus, timeline, pendingBuyCents } = loaderData;
   // summary 的合计市值供持仓卡标题用；其余总览数字全部交给 AssetOverviewCard
   const { summary, holdings } = portfolio;
   const fetcher = useFetcher<typeof action>();
@@ -113,13 +116,15 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         )}
       </div>
 
-      {/* 资产总览：总资产主位 + 昨日/累计/余额（口径注释见 AssetOverviewCard） */}
+      {/* 资产总览：总资产主位 + 一行四格（口径注释见 AssetOverviewCard）。
+          pendingBuyCents 把申购中在途并回持仓金额与总资产（仅 /me） */}
       <SectionCard>
         <AssetOverviewCard
           summary={portfolio.summary}
           daily={timeline.daily}
           latest={timeline.latest}
           totalDepositedCents={timeline.totalDepositedCents}
+          pendingBuyCents={pendingBuyCents}
         />
       </SectionCard>
 
