@@ -15,7 +15,7 @@ import { useFetcher } from "react-router";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
-import { ME_QUICK_ENTRIES, QuickEntries } from "~/components/QuickEntries";
+import { MeTabs } from "~/components/MeTabsPanels";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
@@ -190,9 +190,10 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         </Row>
       </SectionCard>
 
-      {/* 腰部功能入口：收益明细 / 交易记录 / 定投计划 */}
+      {/* 功能入口 tabs：收益明细/交易记录/定投计划页内切换 + 后台懒加载
+          （旧 QuickEntries 跳页退役；三个深链路由保留，外链照常可用） */}
       <SectionCard>
-        <QuickEntries entries={ME_QUICK_ENTRIES} />
+        <MeTabs />
       </SectionCard>
 
       {/* 我的持仓：原 /me/holdings 列表页的职能全部并入——

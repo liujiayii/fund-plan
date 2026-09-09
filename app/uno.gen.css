@@ -5,7 +5,7 @@
 @property --un-bg-opacity{syntax:"<percentage>";inherits:false;initial-value:100%;}
 @property --un-ease{syntax:"*";inherits:false;}
 /* layer: theme */
-:root, :host { --spacing: 0.25rem; --radius-xl: 0.75rem; --fontWeight-semibold: 600; --colors-primary: #1677FF; --fontWeight-medium: 500; --colors-white: #fff; --colors-muted: #8A9099; --colors-line: #EEF0F4; --colors-ink: #1F2329; --text-xs-fontSize: 0.75rem; --text-xs-lineHeight: 1rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); }
+:root, :host { --spacing: 0.25rem; --text-xs-fontSize: 0.75rem; --text-xs-lineHeight: 1rem; --radius-xl: 0.75rem; --fontWeight-semibold: 600; --colors-primary: #1677FF; --fontWeight-medium: 500; --colors-white: #fff; --colors-muted: #8A9099; --colors-line: #EEF0F4; --colors-ink: #1F2329; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); }
 /* layer: preflights */
 :root {
   --fp-primary: #1677FF;
@@ -36,10 +36,15 @@
 .\!me{margin-inline-end:calc(var(--spacing) * 4) !important;}
 .mb-0{margin-bottom:calc(var(--spacing) * 0);}
 .mb-1{margin-bottom:calc(var(--spacing) * 1);}
+.mb-4{margin-bottom:calc(var(--spacing) * 4);}
 .me{margin-inline-end:calc(var(--spacing) * 4);}
 .ml-2{margin-left:calc(var(--spacing) * 2);}
+.ms{margin-inline-start:calc(var(--spacing) * 4);}
 .mt-0{margin-top:calc(var(--spacing) * 0);}
 .mt-0\.5{margin-top:calc(var(--spacing) * 0.5);}
+.mt-3{margin-top:calc(var(--spacing) * 3);}
+.mt-4{margin-top:calc(var(--spacing) * 4);}
+.mt-6{margin-top:calc(var(--spacing) * 6);}
 .py-3{padding-block:calc(var(--spacing) * 3);}
 .text-center{text-align:center;}
 .text-right{text-align:right;}
@@ -55,7 +60,10 @@
 .flex{display:flex;}
 .inline-flex{display:inline-flex;}
 .flex-1{flex:1 1 0%;}
+.flex-wrap{flex-wrap:wrap;}
 .gap-3{gap:calc(var(--spacing) * 3);}
+.gap-x-6{column-gap:calc(var(--spacing) * 6);}
+.gap-y-4{row-gap:calc(var(--spacing) * 4);}
 .grid{display:grid;}
 .h-6{height:calc(var(--spacing) * 6);}
 .h-full{height:100%;}
@@ -70,6 +78,7 @@
 .\[border-bottom-style\:solid\]{border-bottom-style:solid;}
 .items-center{align-items:center;}
 .justify-center{justify-content:center;}
+.justify-between{justify-content:space-between;}
 .fixed{position:fixed;}
 .relative{position:relative;}
 .sticky{position:sticky;}
