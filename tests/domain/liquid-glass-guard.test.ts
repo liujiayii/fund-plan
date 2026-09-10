@@ -63,4 +63,9 @@ describe("液态玻璃宪法守卫", () => {
     // 只禁 filter: blur；backdrop-filter: blur 是玻璃本体，允许
     expect(css).not.toMatch(/(^|[^-])filter:\s*blur/m);
   });
+
+  it("旧阴影常量已退役：theme.ts 不再导出 CARD_SHADOW / BAR_SHADOW（阴影是 .fp-glass 的材料）", () => {
+    const theme = readFileSync(path.join(APP_DIR, "theme.ts"), "utf8");
+    expect(theme).not.toMatch(/export const (?:CARD_SHADOW|BAR_SHADOW)/);
+  });
 });

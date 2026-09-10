@@ -25,8 +25,9 @@ export function ChartSkeleton() {
         // 窄屏由 responsive.css §6 的 .fp-chart-box > div 压到 220（骨架同样是直接子 div）
         height: CHART_HEIGHT,
         borderRadius: 8,
+        // 白色透明度闪光：黑色那套在暗底上隐形（宪法 §4「必须是扁的」）
         background:
-          "linear-gradient(90deg, rgba(0,0,0,.06) 25%, rgba(0,0,0,.15) 37%, rgba(0,0,0,.06) 63%)",
+          "linear-gradient(90deg, rgba(255,255,255,.06) 25%, rgba(255,255,255,.14) 37%, rgba(255,255,255,.06) 63%)",
         backgroundSize: "400% 100%",
         animation: "ant-skeleton-loading 1.4s ease infinite",
       }}

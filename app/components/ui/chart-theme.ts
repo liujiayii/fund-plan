@@ -1,8 +1,8 @@
-import { CARD_SHADOW, COLOR } from "~/theme";
+import { COLOR } from "~/theme";
 
 /**
  * G2 图表主题（visual-refresh spec §4.2）——五个图表组件的视觉单一出处。
- * 色值全部引用 COLOR，不写字面量；tooltip 与卡片同质感（白底 12 圆角双层影）。
+ * 色值全部引用 COLOR，不写字面量；tooltip 是 elevated 实色浮面（宪法 §2.6）。
  *
  * ⚠️ 键名以所装 @antv/g2@5.4.8 的真实主题 schema 为准（theme 对象与配置一样
  * 是宽松索引类型，typecheck 拦不住写错的键，以下均为运行时考证过的有效结构）：
@@ -21,18 +21,17 @@ import { CARD_SHADOW, COLOR } from "~/theme";
  * 不必改这里。
  */
 export const FP_CHART_THEME = {
-  // 主序列默认色（无 colorField 的单线/面积）：品牌靛蓝
+  // 主序列默认色（无 colorField 的单线/面积）：品牌紫
   color: COLOR.primary,
-  // 多序列色环（spec §4.2；2026-09-09 走查调整）：品牌靛蓝 → 雾灰 → 翠绿
-  // → 琥珀 → 压暗紫罗兰。第二位刻意给雾灰而非紫罗兰——基准线/债券等
-  // 第二序列是辅助角色，与主线同属蓝紫区会缠成一片（用户走查实测）；
-  // 紫罗兰压到第五位做五序列兜底。NavChart 的基准线另有显式 color 覆盖。
-  // （琥珀 #F59E0B 是图表专用延伸色，不进 theme.ts——后者只放跨页复用的语义色）
+  // 多序列色环：品牌紫 → 中性灰 → 跌青 → 待办金 → 品牌粉。第二位刻意给灰——
+  // 基准线/债券等第二序列是辅助角色，与主线同属紫粉区会缠成一片（用户走查实测）；
+  // 第四位吃 pending 第三语义（宪法 §2.4），不再有图表专用字面量；
+  // 粉压到第五位做五序列兜底。NavChart 的基准线另有显式 color 覆盖
   category10: [
     COLOR.primary,
     COLOR.neutral,
     COLOR.down,
-    "#F59E0B",
+    COLOR.pending,
     COLOR.primaryTo,
   ],
   // 坐标轴：文字雾灰 11px；轴线/刻度线/网格线同用分割线浅色，网格 4-4 虚线
@@ -52,13 +51,15 @@ export const FP_CHART_THEME = {
   legendCategory: {
     itemLabelFill: COLOR.textTertiary,
   },
-  // tooltip 走交互选项的 css（选择器键），白底 12 圆角双层影、与卡片同质感
+  // tooltip 走交互选项的 css（选择器键）。它压在 canvas 上，用 elevated 实色
+  // 不透明面（宪法 §2.6）：模糊在这里没意义，可读性第一
   tooltip: {
     css: {
       ".g2-tooltip": {
-        "background-color": COLOR.card,
+        "background-color": COLOR.elevated,
+        "border": `1px solid ${COLOR.border}`,
         "border-radius": "12px",
-        "box-shadow": CARD_SHADOW,
+        "box-shadow": "0 18px 40px rgba(0, 0, 0, 0.35)",
         "color": COLOR.textPrimary,
       },
     },
@@ -66,9 +67,9 @@ export const FP_CHART_THEME = {
 };
 
 /**
- * 面积渐变填充（AssetTrendChart 用）：靛蓝 16% → 透明，自上而下淡出
+ * 面积渐变填充（AssetTrendChart 用）：紫 32% → 粉 0%，自上而下淡出
  * （曲线侧实、基线侧透明）。180deg 即 CSS 语义的顶部起点（0% 色在顶部）；
  * ⚠️ 不要写成 270deg——那是水平渐变（右实左透明），与「自顶向基淡出」意图不符。
- * hex8 后缀拼透明度（29 ≈ 16%），保持与 COLOR 同源。
+ * hex8 后缀拼透明度（52 ≈ 32%），保持与 COLOR 同源。
  */
-export const FP_AREA_FILL = `linear-gradient(180deg, ${COLOR.primary}29 0%, ${COLOR.primary}00 100%)`;
+export const FP_AREA_FILL = `linear-gradient(180deg, ${COLOR.primary}52 0%, ${COLOR.primaryTo}00 100%)`;

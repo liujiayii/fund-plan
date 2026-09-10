@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Logo } from "~/components/ui/Logo";
-import { CARD_SHADOW, PRIMARY_GRADIENT } from "~/theme";
+import { PRIMARY_GRADIENT } from "~/theme";
 
 /**
  * 登录/注册分屏壳（visual-refresh spec §6.3）：左品牌渐变面板、右表单区。
@@ -11,8 +11,8 @@ import { CARD_SHADOW, PRIMARY_GRADIENT } from "~/theme";
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div
-      className="animate-fade-up mt-12 flex overflow-hidden rounded-2xl"
-      style={{ boxShadow: CARD_SHADOW, maxWidth: 880, margin: "48px auto" }}
+      className="fp-glass animate-fade-up relative mt-12 flex overflow-hidden rounded-2xl"
+      style={{ maxWidth: 880, margin: "48px auto" }}
     >
       {/* 左屏：品牌面板。窄屏整块隐藏（hidden 工具类，responsive.css §9 兜底） */}
       <aside

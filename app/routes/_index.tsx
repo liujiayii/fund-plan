@@ -286,13 +286,9 @@ export default function Index({ loaderData }: Route.ComponentProps) {
       <Row gutter={[16, 16]}>
         {FEATURES.map(f => (
           <Col xs={24} sm={12} lg={6} key={f.title}>
-            {/* 裸 Card 是为了拿 className（等高栅格），但外观必须跟 SectionCard 一致：
-                同一页上一张有边框、一张有阴影，看起来像两套设计。
-                静止影改走 shadow-card 类而非内联 style——内联 box-shadow 的
-                优先级压过任何类，hover:shadow-card-hover 会永远不生效（Task 5）。
-                transition-[box-shadow] + duration-[240ms]：hover 抬升有过渡不生硬 */}
+            {/* 裸 Card 是为了拿 className（等高栅格），外观与 SectionCard 一致：同挂 fp-glass */}
             <Card
-              className="h-full shadow-card transition-[box-shadow] duration-[240ms] hover:shadow-card-hover"
+              className="fp-glass h-full"
               variant="borderless"
             >
               <Title level={5} className="mt-0">
@@ -306,11 +302,10 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         ))}
       </Row>
 
-      {/* 同上：裸 Card 只为拿 className（居中），外观仍对齐 SectionCard；
-          阴影与 hover 同 FEATURES 卡（内联 style 会让 hover 失效，见上） */}
+      {/* 同上：裸 Card 只为拿 className（居中），外观对齐 SectionCard：同挂 fp-glass */}
       {!me && (
         <Card
-          className="text-center shadow-card transition-[box-shadow] duration-[240ms] hover:shadow-card-hover"
+          className="fp-glass text-center"
           variant="borderless"
         >
           <Title level={4}>准备好开自己的盘了吗？</Title>

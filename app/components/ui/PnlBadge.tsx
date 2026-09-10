@@ -22,7 +22,8 @@ export function PnlBadge({ cents, rate }: PnlBadgeProps) {
     ? "bg-rise-soft text-rise"
     : basis < 0
       ? "bg-fall-soft text-fall"
-      : "bg-page text-tertiary";
+      // 平态用井底：页面底比玻璃还深，胶囊会成黑洞
+      : "bg-well text-tertiary";
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-num ${tone}`}>
       {cents !== undefined && (

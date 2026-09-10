@@ -5,7 +5,7 @@ import {
   transformerDirectives,
   transformerVariantGroup,
 } from "unocss";
-import { BAR_SHADOW, CARD_SHADOW, CARD_SHADOW_HOVER, COLOR, NUM_FONT, PRIMARY_GRADIENT } from "./app/theme";
+import { COLOR, NUM_FONT, PRIMARY_GRADIENT } from "./app/theme";
 
 /**
  * UnoCSS 配置。
@@ -41,11 +41,10 @@ function kebab(s: string): string {
 const FP_ROOT_VARS = [
   ...Object.entries(COLOR).map(([k, v]) => `  --fp-${kebab(k)}: ${v};`),
   `  --fp-num-font: ${NUM_FONT};`,
-  `  --fp-card-shadow: ${CARD_SHADOW};`,
   // 注意 --fp-primary-to 不在这里手写：COLOR.primaryTo 键已被上面的
   // 全量映射自动输出（曾手写+自动各出一份导致变量重复定义，Task 12 收尾删除）
+  // 卡片/操作条阴影变量已退役（2026-09-10）：阴影是 .fp-glass 的材料，见 liquid-glass.css
   `  --fp-primary-gradient: ${PRIMARY_GRADIENT};`,
-  `  --fp-card-shadow-hover: ${CARD_SHADOW_HOVER};`,
   // 动效 token（visual-refresh spec §5：动效也是 token，不散写）。
   // 消费方：手写 CSS 与任意值类（如 duration-[240ms]）想换基准时长时引变量
   `  --fp-duration-fast: 150ms;`,
@@ -115,22 +114,9 @@ export default defineConfig({
       "fall-soft": COLOR.downBg, // 跌浅底：bg-fall-soft
     },
     /**
-     * 阴影与动效（visual-refresh spec §3.3/§5）。
+     * （阴影主题表已退役：全站阴影是 .fp-glass 的材料，liquid-glass.css 唯一出处。
+     * 若将来再加：Wind4 的阴影主题键是单数 `shadow`，写 `boxShadow` 会静默无效。）
      *
-     * ⚠️ Wind4 的阴影主题键是单数 `shadow`（对齐 Tailwind v4 的 --shadow-* 变量），
-     * 写 `boxShadow` 会静默无效——shadow-card 只会被 colors.card 兜成「阴影颜色」
-     * 类（--un-shadow-color），永远出不了真的 box-shadow（Task 5 实测踩坑，
-     * preset-wind4 的 handleShadow 读的是 theme.shadow）。
-     */
-    shadow: {
-      // 卡片阴影：shadow-card，替代内联 boxShadow: CARD_SHADOW
-      "card": CARD_SHADOW,
-      // 页底固定操作条阴影（朝上、重一档）：shadow-bar
-      "bar": BAR_SHADOW,
-      // 卡片 hover 抬升影：shadow-card-hover（Task 5 消费）
-      "card-hover": CARD_SHADOW_HOVER,
-    },
-    /**
      * 动效：animate-fade-up（区块淡入）/ animate-float（空态呼吸，Task 10 消费）。
      * animate-<name> 由 keyframes/durations/timingFns/counts 四表拼装
      * （fade-up 不给 counts → 默认 1 次；float 给 infinite）。

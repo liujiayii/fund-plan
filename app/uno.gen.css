@@ -1,21 +1,12 @@
 /* layer: properties */
-@supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))){*, ::before, ::after, ::backdrop{--un-bg-opacity:100%;--un-border-opacity:100%;--un-ease:initial;--un-leading:initial;--un-text-opacity:100%;}}
+@supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))){*, ::before, ::after, ::backdrop{--un-bg-opacity:100%;--un-border-opacity:100%;--un-ease:initial;--un-leading:initial;--un-text-opacity:100%;--un-translate-x:initial;--un-translate-y:initial;--un-translate-z:initial;}}
 @property --un-text-opacity{syntax:"<percentage>";inherits:false;initial-value:100%;}
 @property --un-leading{syntax:"*";inherits:false;}
 @property --un-border-opacity{syntax:"<percentage>";inherits:false;initial-value:100%;}
 @property --un-bg-opacity{syntax:"<percentage>";inherits:false;initial-value:100%;}
-@property --un-inset-ring-color{syntax:"*";inherits:false;}
-@property --un-inset-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000;}
-@property --un-inset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000;}
-@property --un-inset-shadow-color{syntax:"*";inherits:false;}
-@property --un-ring-color{syntax:"*";inherits:false;}
-@property --un-ring-inset{syntax:"*";inherits:false;}
-@property --un-ring-offset-color{syntax:"*";inherits:false;}
-@property --un-ring-offset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000;}
-@property --un-ring-offset-width{syntax:"<length>";inherits:false;initial-value:0px;}
-@property --un-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000;}
-@property --un-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000;}
-@property --un-shadow-color{syntax:"*";inherits:false;}
+@property --un-translate-x{syntax:"*";inherits:false;initial-value:0;}
+@property --un-translate-y{syntax:"*";inherits:false;initial-value:0;}
+@property --un-translate-z{syntax:"*";inherits:false;initial-value:0;}
 @property --un-ease{syntax:"*";inherits:false;}
 @property --un-numeric-figure{syntax:"*";inherits:false;}
 @property --un-numeric-fraction{syntax:"*";inherits:false;}
@@ -50,9 +41,7 @@
   --fp-text-tertiary: #8A82B0;
   --fp-text-placeholder: #6E6688;
   --fp-num-font: "Space Grotesk", "DIN Alternate", "SF Mono", ui-monospace, "Menlo", monospace;
-  --fp-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
   --fp-primary-gradient: linear-gradient(90deg, #7C5CFF 0%, #FF3D6E 100%);
-  --fp-card-shadow-hover: 0 24px 56px rgba(0, 0, 0, 0.45);
   --fp-duration-fast: 150ms;
   --fp-duration-base: 240ms;
   --fp-duration-slow: 360ms;
@@ -121,7 +110,6 @@
 .bg-\[\#f5a623\]{background-color:color-mix(in oklab, #f5a623 var(--un-bg-opacity), transparent);}
 .bg-card{background-color:color-mix(in srgb, var(--colors-card) var(--un-bg-opacity), transparent);}
 .bg-fall-soft{background-color:color-mix(in srgb, var(--colors-fall-soft) var(--un-bg-opacity), transparent);}
-.bg-page{background-color:color-mix(in srgb, var(--colors-page) var(--un-bg-opacity), transparent);}
 .bg-primary\/6{background-color:color-mix(in srgb, var(--colors-primary) 6%, transparent);}
 .bg-rise-soft{background-color:color-mix(in srgb, var(--colors-rise-soft) var(--un-bg-opacity), transparent);}
 .bg-well{background-color:color-mix(in srgb, var(--colors-well) var(--un-bg-opacity), transparent);}
@@ -158,10 +146,8 @@
 .hidden{display:none;}
 .pointer-events-none{pointer-events:none;}
 .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.shadow-card{--un-shadow:0 18px 40px var(--un-shadow-color, rgba(0, 0, 0, 0.35));box-shadow:var(--un-inset-shadow), var(--un-inset-ring-shadow), var(--un-ring-offset-shadow), var(--un-ring-shadow), var(--un-shadow);}
-.hover\:shadow-card-hover:hover{--un-shadow:0 24px 56px var(--un-shadow-color, rgba(0, 0, 0, 0.45));box-shadow:var(--un-inset-shadow), var(--un-inset-ring-shadow), var(--un-ring-offset-shadow), var(--un-ring-shadow), var(--un-shadow);}
-.transition-\[box-shadow\]{transition-property:box-shadow;transition-timing-function:var(--un-ease, var(--default-transition-timingFunction));transition-duration:var(--un-duration, var(--default-transition-duration));}
 .transition-colors{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,--un-gradient-from,--un-gradient-via,--un-gradient-to;transition-timing-function:var(--un-ease, var(--default-transition-timingFunction));transition-duration:var(--un-duration, var(--default-transition-duration));}
+.transition-transform{transition-property:transform,translate,scale,rotate;transition-timing-function:var(--un-ease, var(--default-transition-timingFunction));transition-duration:var(--un-duration, var(--default-transition-duration));}
 .duration-\[240ms\]{--un-duration:240ms;transition-duration:240ms;}
 .ease{--un-ease:var(--ease-DEFAULT);transition-timing-function:var(--ease-DEFAULT);}
 .\[border-bottom-style\:solid\]{border-bottom-style:solid;}
@@ -207,7 +193,6 @@
 .\!bg-white\/10{background-color:color-mix(in oklab, var(--colors-white) 10%, transparent) !important;}
 .bg-card{background-color:color-mix(in oklab, var(--colors-card) var(--un-bg-opacity), transparent);}
 .bg-fall-soft{background-color:color-mix(in oklab, var(--colors-fall-soft) var(--un-bg-opacity), transparent);}
-.bg-page{background-color:color-mix(in oklab, var(--colors-page) var(--un-bg-opacity), transparent);}
 .bg-primary\/6{background-color:color-mix(in oklab, var(--colors-primary) 6%, transparent);}
 .bg-rise-soft{background-color:color-mix(in oklab, var(--colors-rise-soft) var(--un-bg-opacity), transparent);}
 .bg-well{background-color:color-mix(in oklab, var(--colors-well) var(--un-bg-opacity), transparent);}
@@ -216,6 +201,7 @@
 }
 @media (min-width: 768px){
 .md\:flex{display:flex;}
+.md\:hover\:-translate-y-\[2px\]:hover{--un-translate-y:-2px;translate:var(--un-translate-x) var(--un-translate-y);}
 }
 @media (min-width: 992px){
 .lg\:flex{display:flex;}

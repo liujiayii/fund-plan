@@ -67,14 +67,6 @@ export const COLOR = {
 export const PRIMARY_GRADIENT = "linear-gradient(90deg, #7C5CFF 0%, #FF3D6E 100%)";
 
 /**
- * ⚠️ 过渡期保留（Task 3 连消费方一起删）：玻璃材料的阴影在 .fp-glass 里，
- * 这三个常量不再是「全站阴影出处」。别再新增消费方。
- */
-export const CARD_SHADOW = "0 18px 40px rgba(0, 0, 0, 0.35)";
-export const CARD_SHADOW_HOVER = "0 24px 56px rgba(0, 0, 0, 0.45)";
-export const BAR_SHADOW = "0 -8px 32px rgba(0, 0, 0, 0.45)";
-
-/**
  * 数字用等宽字体栈。Space Grotesk 头部优先（自托管），
  * 等宽纪律由 font-num 工具类自带的 tabular-nums 保证。
  */
