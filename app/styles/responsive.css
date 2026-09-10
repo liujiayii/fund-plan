@@ -18,6 +18,26 @@
  * 排最后才能覆盖工具类与 antd 组件类。
  */
 
+/* ══════════ 0. 跳转主内容链接（键盘可达性）══════════ */
+
+/* 平时 sr-only（absolute 裁剪隐藏），聚焦时恢复 fixed 玻璃药丸。
+   不能用 focus:not-sr-only：not-sr-only 把 position 打回 static，
+   链接挤进 .fp-shell 的 flex 流引发布局位移，::before 描边的
+   定位容器也跟着换人（CodeRabbit PR #80 指正）。这里只恢复
+   「可见尺寸 + fixed」，clip 路径由 :not(.sr-only) 场景直接重设 */
+.fp-skip-link:focus {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  width: auto;
+  height: auto;
+  padding: 8px 16px;
+  overflow: visible;
+  clip: auto;
+  white-space: nowrap;
+}
+
 /* ══════════ 1. 全局基线（spec §5）══════════ */
 
 @media (max-width: 767px) {
@@ -219,6 +239,32 @@
   .fp-sidebar a,
   .fp-sidebar button {
     justify-content: center;
+  }
+
+  /* 折叠侧栏内的游客登录/注册按钮纵向排列（CodeRabbit PR #80 指正）：
+     UserMenu 游客分支的横向 Space 会超出 72px 图标轨戳进主内容。
+     只作用于侧栏（.fp-sidebar 作用域），不影响移动端品牌胶囊的
+     同款 UserMenu——compact 属性管移动端，这里不碰 */
+  .fp-sidebar .fp-guest-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+}
+
+/* 页底操作条在桌面两档让出侧栏（CodeRabbit PR #80 指正）：
+   .fp-bottom-bar 是 fixed left:0 贴底全宽，z-index 15 盖过
+   无 z-index 的侧栏底部 UserMenu。left = 侧栏宽 + 侧栏左右缝
+   (72+2×12=96 / 220+2×12=244)，right:0 基线不动 */
+@media (min-width: 768px) {
+  .fp-bottom-bar {
+    left: 244px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1079px) {
+  .fp-bottom-bar {
+    left: 96px;
   }
 }
 

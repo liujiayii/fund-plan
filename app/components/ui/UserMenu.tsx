@@ -29,7 +29,10 @@ export function UserMenu({ user, compact }: UserMenuProps) {
 
   if (!user) {
     return (
-      <Space size={8}>
+      /* fp-guest-actions：折叠侧栏（768–1079 图标轨）里纵向排列的锚点，
+         排列方向由 responsive.css §10 作用域规则控制（CodeRabbit PR #80 指正）；
+         移动端品牌胶囊等其它场景不受影响 */
+      <Space size={8} className="fp-guest-actions">
         <NavButton size="small" to="/login">登录</NavButton>
         <NavButton size="small" type="primary" to="/register">注册</NavButton>
       </Space>
@@ -43,8 +46,12 @@ export function UserMenu({ user, compact }: UserMenuProps) {
 
   return (
     <>
+      {/* trigger 显式 click（CodeRabbit PR #80 指正）：默认 hover 桌面悬停
+          触发不可靠，触屏设备 hover 语义不存在；click 同时是键盘 + 触屏
+          的可靠路径，也避免误触悬停弹出 */}
       <Dropdown
         placement={compact ? "bottomRight" : "topLeft"}
+        trigger={["click"]}
         menu={{
           items: [
             {

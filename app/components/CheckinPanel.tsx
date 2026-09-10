@@ -36,7 +36,10 @@ export interface CheckinPanelProps {
  * 签到金额用主色而非涨色：这是「领取本金」的操作引导，不是投资收益。
  */
 export function CheckinPanel({ status, fetcher, compact }: CheckinPanelProps) {
-  const signing = fetcher.state === "submitting";
+  // !idle 而非 ===submitting：action 返回后的 revalidation 阶段（loading）按钮
+  // 也不该可点——只锁 submitting 的话，回包落地的间隙还能再提交一次
+  // （CodeRabbit PR #80 指正）。loading 态并入 disabled，与 loading 旗标同视觉
+  const signing = fetcher.state !== "idle";
   const percent = Math.round((status.nextReward / CHECKIN_MAX_CENTS) * 100);
   const button = (
     <fetcher.Form method="post">
@@ -46,7 +49,7 @@ export function CheckinPanel({ status, fetcher, compact }: CheckinPanelProps) {
         htmlType="submit"
         block={!compact}
         loading={signing}
-        disabled={status.checkedToday}
+        disabled={signing || status.checkedToday}
       >
         {status.checkedToday ? "今日已签到" : "立即签到"}
       </Button>

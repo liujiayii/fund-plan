@@ -244,7 +244,7 @@ antd 浮层挂在 portal 里，tsx 拿不到它的根节点，`.fp-glass` 材料
 | `--fp-duration-slow` | 360ms |
 | `--fp-ease` | `cubic-bezier(0.22, 1, 0.36, 1)` |
 | 色雾循环 | 14s ease-in-out infinite |
-| 镜面高光 | 4.8s ease-in-out infinite |
+| 镜面高光 | 8s cubic-bezier(0.4, 0, 0.2, 1) infinite（与 §2.3 / liquid-glass.css 同值） |
 
 允许：色雾漂移、门面高光扫过、卡片 hover 抬 2px（仅 `md:` 以上，触屏不加位移）、进场 `fade-up`、总资产 count-up（已有）。
 

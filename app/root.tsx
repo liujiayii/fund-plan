@@ -118,10 +118,13 @@ export default function App() {
           antd Layout / 顶栏 Menu 退役：横向 Menu 是要杀掉的「后台管理系统」脸（spec §4.1）。
           登录态 / 登出表单收进 UserMenu（侧栏底 + 移动端品牌胶囊右侧两处共用） */}
       <div className="fp-shell relative z-1 flex min-h-screen">
-        {/* 跳转主内容：键盘用户不必逐项 Tab 过整条侧栏。平时视觉隐藏，聚焦时以玻璃药丸浮出 */}
+        {/* 跳转主内容：键盘用户不必逐项 Tab 过整条侧栏。平时视觉隐藏，
+            聚焦时以玻璃药丸浮出（focus 样式在 responsive.css §0——
+            不能用 not-sr-only：它把 position 打回 static，链接挤进
+            fp-shell 的 flex 流引发布局位移，CodeRabbit PR #80 指正） */}
         <a
           href="#fp-main-content"
-          className="fp-glass sr-only fixed top-3 left-3 z-50 rounded-full px-4 py-2 text-sm text-ink no-underline focus:not-sr-only"
+          className="fp-skip-link fp-glass sr-only rounded-full text-sm text-ink no-underline"
         >
           跳到主内容
         </a>

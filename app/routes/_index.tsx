@@ -123,7 +123,7 @@ const RULES = [
   {
     key: "data",
     label: "数据是真的吗？",
-    children: "基金档案、费率、历史净值全部来自东方财富公开接口，净值每晚同步；排行榜按全站用户的模拟盘实时计算。",
+    children: "基金档案、费率、历史净值全部来自东方财富公开接口，净值每晚同步；排行榜按全站用户的模拟盘每日计算。",
   },
 ];
 
@@ -163,7 +163,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           {/* 主标：文案结构（真实感 + 零风险）沿用 visual-refresh */}
           <h2 className="m-0 text-3xl leading-tight font-bold text-ink">用真数据，练真盘感</h2>
           <p className="mt-3 mb-0 max-w-xl text-sm leading-6 text-muted">
-            东方财富实时净值 · 真实 T+1 撮合 · 零风险练手。注册即送
+            东方财富净值每晚同步 · 真实 T+1 撮合 · 零风险练手。注册即送
             {" "}
             {fmtYuan(INITIAL_CASH_CENTS)}
             {" "}
@@ -273,7 +273,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         extra={<Link to="/leaderboard">看完整榜单 →</Link>}
       >
         <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-          全站用户的模拟盘同台竞技：收益率、总收益两个维度实时排名。
+          全站用户的模拟盘同台竞技：收益率、总收益两个维度排名，每日更新。
           注册开第一单，看看你能不能排到主理人前面。
         </Paragraph>
         <NavButton type="primary" shape="round" to="/leaderboard">

@@ -219,7 +219,6 @@
 .items-center{align-items:center;}
 .inset-x-0{inset-inline:calc(var(--spacing) * 0);}
 .bottom-0{bottom:calc(var(--spacing) * 0);}
-.left-3{left:calc(var(--spacing) * 3);}
 .right-8{right:calc(var(--spacing) * 8);}
 .top-2{top:calc(var(--spacing) * 2);}
 .top-3{top:calc(var(--spacing) * 3);}
@@ -233,7 +232,6 @@
 .z-1{z-index:1;}
 .z-10{z-index:10;}
 .z-20{z-index:20;}
-.z-50{z-index:50;}
 .overflow-hidden{overflow:hidden;}
 @keyframes fade-up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
@@ -248,7 +246,6 @@
 .animate-delay-\[480ms\]{animation-delay:480ms;}
 .animate-delay-\[60ms\]{animation-delay:60ms;}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0;}
-.focus\:not-sr-only:focus{position:static;width:auto;height:auto;padding:0;margin:0;overflow:visible;clip:auto;white-space:normal;}
 .isolate{isolation:isolate;}
 .tabular-nums{--un-numeric-spacing:tabular-nums;font-variant-numeric:var(--un-ordinal,) var(--un-slashed-zero,) var(--un-numeric-figure,) var(--un-numeric-spacing,) var(--un-numeric-fraction,);}
 .font-num{font-family:"Space Grotesk", "DIN Alternate", "SF Mono", ui-monospace, "Menlo", monospace;font-variant-numeric:tabular-nums;}

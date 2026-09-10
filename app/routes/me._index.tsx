@@ -9,8 +9,8 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { useMemo, useState } from "react";
-import { useFetcher } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useFetcher, useRevalidator } from "react-router";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { BuyDrawer } from "~/components/BuyDrawer";
 import { CheckinPanel } from "~/components/CheckinPanel";
@@ -107,6 +107,28 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
   const { summary, holdings } = portfolio;
   // 签到 fetcher：桌面签到卡与窄屏签到井共用（CheckinPanel 双渲染），提交态由面板自己读
   const fetcher = useFetcher<typeof action>();
+  // 交易时钟跨边界刷新（CodeRabbit PR #80 指正）：clock 是 loader 服务端算的，
+  // 页面开着跨过 15:00 / 午夜不会自己更新——「现在下单按哪天净值」会 stale，
+  // 且 POST /me/trade 服务端按当下重算，展示与实际撮合口径分叉。
+  // 到下一个边界（15:00 或 0 点，先到者）revalidate 一次，让 loader 重算 clock。
+  // revalidate 有全页数据成本，但只在真实跨界的长驻页面发生，频率可忽略
+  const revalidator = useRevalidator();
+  useEffect(() => {
+    // 边界只有整点（15:00 / 00:00），分钟精度足够，秒数抹掉
+    const now = new Date();
+    const nextCutoff = new Date(now);
+    nextCutoff.setHours(TRADE_CUTOFF_HOUR, 0, 0, 0);
+    if (nextCutoff <= now)
+      nextCutoff.setDate(nextCutoff.getDate() + 1);
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const target = new Date(Math.min(nextCutoff.getTime(), nextMidnight.getTime()));
+    const ms = target.getTime() - now.getTime();
+    const timer = setTimeout(() => revalidator.revalidate(), ms);
+    return () => clearTimeout(timer);
+    // 依赖含 beforeCutoff：15:00 边界刷新后 today 不变（同一天），只有截单态翻转，
+    // 不挂它的话午夜的下一次刷新没人排（CodeRabbit PR #80 指正的续作）
+  }, [revalidator, clock.today, clock.beforeCutoff]);
 
   // 持仓排序：持有金额（市值）/ 持有收益两键切换，降序；默认持有金额。
   // 客户端排——持仓数据 loader 已全量带回，几十只以内零成本
