@@ -113,10 +113,10 @@ export default function App() {
     : "";
 
   return (
-    // antd 全局配置：中文语言包 + 视觉 token（见 app/theme.ts）
+    // antd 全局配置：中文语言包 + 暗色算法 + 视觉 token（见 app/theme.ts；为什么切暗色算法见 ANTD_TOKEN 注释）
     <ConfigProvider
       locale={zhCN}
-      theme={{ algorithm: theme.defaultAlgorithm, ...ANTD_TOKEN }}
+      theme={{ algorithm: theme.darkAlgorithm, ...ANTD_TOKEN }}
     >
       <AntLayout style={{ minHeight: "100vh" }}>
         {/* 全局导航进度条：SPA 导航 pending 时视口顶部反馈（大陆慢链路下防重复点击） */}

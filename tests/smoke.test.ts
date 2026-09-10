@@ -59,4 +59,32 @@ describe("视觉 token 不变式", () => {
     const token = ANTD_TOKEN.token as Record<string, unknown>;
     expect(token.colorPrimary).toBe(COLOR.primary);
   });
+
+  it("暗底夜盘：页面底是近黑紫，主文字是近白（liquid-glass 宪法 §2.1/§2.4）", () => {
+    expect(COLOR.bg).toBe("#07060C");
+    expect(COLOR.textPrimary).toBe("#F7F4FF");
+  });
+
+  it("色雾只有三团（宪法 §2.1：别再加第四团）", () => {
+    const fogKeys = Object.keys(COLOR).filter(k => k.startsWith("fog"));
+    expect(fogKeys.sort()).toEqual(["fogA", "fogB", "fogC"]);
+  });
+
+  it("待办第三语义不与涨跌、主色撞色", () => {
+    expect(COLOR.pending).not.toBe(COLOR.up);
+    expect(COLOR.pending).not.toBe(COLOR.down);
+    expect(COLOR.pending).not.toBe(COLOR.primary);
+  });
+
+  it("antd Card 底透明——玻璃渐变要透出来（宪法 §7）", () => {
+    const card = (ANTD_TOKEN.components as Record<string, Record<string, unknown>>).Card;
+    expect(card.colorBgContainer).toBe("transparent");
+  });
+
+  it("antd 中性面吃材料 token：容器 = well、浮面 = elevated、遮罩 = mask", () => {
+    const token = ANTD_TOKEN.token as Record<string, unknown>;
+    expect(token.colorBgContainer).toBe(COLOR.well);
+    expect(token.colorBgElevated).toBe(COLOR.elevated);
+    expect(token.colorBgMask).toBe(COLOR.mask);
+  });
 });
