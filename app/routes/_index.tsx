@@ -1,10 +1,9 @@
 import type { Route } from "./+types/_index";
-import { Button, Card, Col, Row, Space, Tag, Typography } from "antd";
+import { Button, Col, Row, Space, Tag, Typography } from "antd";
 import { Link } from "react-router";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { AssetTrendChart } from "~/components/AssetTrendChart";
 import { AdminNotReady } from "~/components/PortfolioView";
-import { ProfitCalendar } from "~/components/ProfitCalendar";
 import { fmtInt, fmtYuan } from "~/components/ui/format";
 import { Logo } from "~/components/ui/Logo";
 import { NavButton } from "~/components/ui/NavButton";
@@ -17,7 +16,6 @@ import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
 import { getPortfolio } from "~/services/portfolio-service";
 import { getSiteStats } from "~/services/stats-service";
-import { PRIMARY_GRADIENT } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -71,7 +69,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     getCurrentUser(request, db),
     getSiteStats(db),
     getPortfolio(db, admin.id),
-    // 示范盘三件套（总览+走势+日历）的序列数据；「最近操作」模块已撤，orders 不再查
+    // 示范盘两件套（总览+走势）的序列数据；日历撤下（liquid-glass spec §5.2），「最近操作」早已撤，orders 不再查
     getAssetTimeline(db, admin.id),
   ]);
 
@@ -103,60 +101,37 @@ export default function Index({ loaderData }: Route.ComponentProps) {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      {/* 品牌渐变 hero（visual-refresh spec §6.2）：白字标语 + 双 CTA + 装饰曲线 */}
-      <div
-        className="fp-hero animate-fade-up relative overflow-hidden rounded-2xl text-white"
-        style={{ background: PRIMARY_GRADIENT, padding: "48px 40px" }}
-      >
-        {/* 装饰：低透明度白色净值曲线，沿 hero 底部流动（纯静态，SSR 安全） */}
-        <svg
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 w-full"
-          viewBox="0 0 1200 320"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M0,260 C200,240 350,180 520,190 C690,200 820,120 1000,110 C1090,105 1150,90 1200,80 L1200,320 L0,320 Z"
-            fill="#fff"
-            opacity="0.08"
-          />
-          <path
-            d="M0,260 C200,240 350,180 520,190 C690,200 820,120 1000,110 C1090,105 1150,90 1200,80"
-            stroke="#fff"
-            strokeWidth="2"
-            fill="none"
-            opacity="0.18"
-          />
-        </svg>
-        {/* 右侧浮动迷你持仓卡：用产品语言预演「这是理财工具」。
-            fp-hero-cards：窄屏隐藏（responsive.css），桌面绝对定位。
-            数值是装饰性示例（CodeRabbit PR #79 修正：模拟盘语境下
-            不标注会被当成主理人真实收益），标题弱化标注「（示例）」 */}
-        <div className="fp-hero-cards absolute top-8 right-8 hidden gap-3 lg:flex lg:flex-col">
-          <div className="rounded-xl border border-line bg-well px-4 py-3">
-            <div className="text-xs opacity-80">
+      {/* hero（liquid-glass spec §5.2）：色雾即背景，玻璃卡装标语 + CTA；门面高光白名单。
+          裸 section 挂 fp-glass（不是 SectionCard：hero 没有标题栏语义）。
+          fp-hero：窄屏内距收窄在 responsive.css */}
+      <section className="fp-hero fp-glass fp-glass-specular animate-fade-up relative overflow-hidden rounded-[22px] px-10 py-12">
+        {/* 右侧迷你示例卡：井格（不再各自模糊，宪法 §3 玻璃不叠玻璃）。
+            数值是装饰性示例（模拟盘语境下不标注会被当成主理人真实收益） */}
+        <div className="absolute top-8 right-8 hidden gap-3 lg:flex lg:flex-col">
+          <div className="rounded-[12px] bg-well px-4 py-3">
+            <div className="text-xs text-muted">
               昨日收益
-              <span className="opacity-60">（示例）</span>
+              <span className="text-placeholder">（示例）</span>
             </div>
-            <div className="font-num text-lg font-medium">+82.33 元</div>
+            <div className="font-num text-lg font-medium text-rise">+82.33 元</div>
           </div>
-          <div className="rounded-xl border border-line bg-well px-4 py-3">
-            <div className="text-xs opacity-80">
+          <div className="rounded-[12px] bg-well px-4 py-3">
+            <div className="text-xs text-muted">
               累计收益
-              <span className="opacity-60">（示例）</span>
+              <span className="text-placeholder">（示例）</span>
             </div>
-            <div className="font-num text-lg font-medium">+2,310.66 元</div>
+            <div className="font-num text-lg font-medium text-rise">+2,310.66 元</div>
           </div>
         </div>
 
         <div className="relative z-10">
-          <div className="mb-3 flex items-center gap-2 text-sm tracking-wide opacity-90">
+          <div className="mb-3 flex items-center gap-2 text-sm tracking-wide text-muted">
             <Logo size={22} />
             模拟基金
           </div>
-          {/* 主标：spec §6.2 钉死的文案结构（真实感 + 零风险） */}
-          <h2 className="m-0 text-3xl leading-tight font-bold">用真数据，练真盘感</h2>
-          <p className="mt-3 mb-0 max-w-xl text-sm leading-6 opacity-90">
+          {/* 主标：文案结构（真实感 + 零风险）沿用 visual-refresh */}
+          <h2 className="m-0 text-3xl leading-tight font-bold text-ink">用真数据，练真盘感</h2>
+          <p className="mt-3 mb-0 max-w-xl text-sm leading-6 text-muted">
             东方财富实时净值 · 真实 T+1 撮合 · 零风险练手。注册即送
             {" "}
             {fmtYuan(INITIAL_CASH_CENTS)}
@@ -169,51 +144,45 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             {" "}
             元。
           </p>
-          {/* CTA 容器：flex + wrap + gap——两个 large 按钮在窄屏（390px）下
-              依宽度自然换行且保持间距，不再挤成一团（CodeRabbit PR #79 修正） */}
+          {/* CTA：主 = 紫药丸（antd primary 已吃品牌紫），次 = 玻璃胶囊（default 已是井底+描边）。
+              flex-wrap：390px 下两个 large 按钮自然换行 */}
           <div className="mt-6 flex flex-wrap gap-3">
-            {/* hero 内 CTA 逻辑与原头图区一致：登录态去我的盘，游客引导注册 */}
+            {/* 登录态去我的盘，游客引导注册 */}
             {me
               ? (
                   <>
-                    <NavButton type="primary" size="large" to="/me">去我的盘</NavButton>
-                    {/* 次按钮是「渐变上的幽灵样式」：antd default 自带白底，
-                        只染白字会白底白字看不清（2026-09-09 走查修复）——
-                        显式压成半透明白 10% + 毛玻璃，与右侧迷你卡同语言 */}
-                    <NavButton size="large" className="!border-white/40 !bg-white/10 !text-white hover:bg-white/20!" to="/funds">挑只基金</NavButton>
+                    <NavButton type="primary" size="large" shape="round" to="/me">去我的盘</NavButton>
+                    <NavButton size="large" shape="round" to="/funds">挑只基金</NavButton>
                   </>
                 )
               : (
                   <>
-                    <NavButton type="primary" size="large" to="/register">免费注册，领 10 万本金</NavButton>
-                    {/* 保持原生 <a>：游客态走边缘缓存，SPA 跳转反而绕开缓存（原注释纪律）。
-                        幽灵样式同上：半透明白底+毛玻璃，防白底白字 */}
-                    <Button size="large" className="!border-white/40 !bg-white/10 !text-white hover:bg-white/20!" href="/master">先围观主理人的盘</Button>
+                    <NavButton type="primary" size="large" shape="round" to="/register">免费注册，领 10 万本金</NavButton>
+                    {/* 保持原生 <a>：游客态走边缘缓存，SPA 跳转反而绕开缓存 */}
+                    <Button size="large" shape="round" href="/master">先围观主理人的盘</Button>
                   </>
                 )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* 主理人的盘 */}
+      {/* 示范盘减重（spec §5.2）：总览四格 + 走势；日历从引流页拿走（操盘工具不该在引流页）。
+          /master 完整三件套不动 */}
       {loaderData.admin === null
         ? (
             <AdminNotReady adminName={loaderData.adminName} />
           )
         : (
             <SectionCard
+              className="animate-fade-up animate-delay-[60ms]"
               title={(
                 <span>
                   主理人的示范盘
-                  <Tag style={{ marginLeft: 8 }}>
-                    公开
-                  </Tag>
+                  <Tag style={{ marginLeft: 8 }}>公开</Tag>
                 </span>
               )}
               extra={<a href="/master">查看完整组合 →</a>}
             >
-              {/* 三件套与 /master 首屏同构：总览（四小格）+ 走势 + 日历；
-                  持仓列表与最近操作已按主人要求撤下，引流页保持轻量（ux-polish #10） */}
               <AssetOverviewCard
                 summary={loaderData.portfolio.summary}
                 daily={loaderData.timeline.daily}
@@ -224,17 +193,15 @@ export default function Index({ loaderData }: Route.ComponentProps) {
                 <>
                   <div style={{ marginTop: 24 }} />
                   <AssetTrendChart data={loaderData.timeline.daily} />
-                  <div style={{ marginTop: 24 }} />
-                  {/* 首页日历纯展示：游客没有「点日期看明细」的诉求（spec §4④），不带 ProfitCalendarCard */}
-                  <ProfitCalendar data={loaderData.timeline.daily} />
                 </>
               )}
             </SectionCard>
           )}
 
-      {/* 平台数据：社交证明。计数为纯整数指标，不含金额，不涉及精度铁律。
-          访问（次）与访客（人）分开摆：PV 是热度、UV 是reach，口径混了会被内行看出业余 */}
+      {/* 平台数据：社交证明，一卡六格（不动）。计数为纯整数指标，不涉及精度铁律。
+          访问（次）与访客（人）分开摆：PV 是热度、UV 是 reach，口径混了会被内行看出业余 */}
       <SectionCard
+        className="animate-fade-up animate-delay-[120ms]"
         title="平台数据"
         extra={stats.statsSince && (
           <Text type="secondary" style={{ fontSize: 12 }}>
@@ -268,8 +235,9 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         </Row>
       </SectionCard>
 
-      {/* 排行榜引流：游客与已登录都给入口（移动端底栏进不去排行榜，这是移动端唯一入口） */}
+      {/* 排行榜引流：游客与已登录都给入口（移动端底部胶囊进不去排行榜，这是移动端唯一入口） */}
       <SectionCard
+        className="animate-fade-up animate-delay-[180ms]"
         title="收益排行榜"
         extra={<Link to="/leaderboard">看完整榜单 →</Link>}
       >
@@ -277,45 +245,35 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           全站用户的模拟盘同台竞技：收益率、总收益两个维度实时排名。
           注册开第一单，看看你能不能排到主理人前面。
         </Paragraph>
-        <NavButton type="primary" to="/leaderboard">
+        <NavButton type="primary" shape="round" to="/leaderboard">
           去看排行榜
         </NavButton>
       </SectionCard>
 
-      {/* 卖点。这里用 UnoCSS 工具类替代内联 style，验证工具链接入生效 */}
-      <Row gutter={[16, 16]}>
-        {FEATURES.map(f => (
-          <Col xs={24} sm={12} lg={6} key={f.title}>
-            {/* 裸 Card 是为了拿 className（等高栅格），外观与 SectionCard 一致：同挂 fp-glass */}
-            <Card
-              className="fp-glass h-full"
-              variant="borderless"
-            >
-              <Title level={5} className="mt-0">
-                {f.title}
-              </Title>
-              <Paragraph type="secondary" className="mb-0">
-                {f.desc}
-              </Paragraph>
-            </Card>
-          </Col>
-        ))}
-      </Row>
+      {/* 卖点：一张玻璃卡 + 四个井格（宪法 §4 预算：4 张各自玻璃会把首页推到 10+ 模糊节点）。
+          桌面 4 列 / 窄屏 2×2 用 grid 工具类 */}
+      <SectionCard title="这不是玩具" className="animate-fade-up animate-delay-[240ms]">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {FEATURES.map(f => (
+            <div key={f.title} className="rounded-[12px] bg-well p-4">
+              <div className="mb-1 font-medium text-ink">{f.title}</div>
+              <div className="text-xs leading-5 text-muted">{f.desc}</div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
 
-      {/* 同上：裸 Card 只为拿 className（居中），外观对齐 SectionCard：同挂 fp-glass */}
+      {/* 底 CTA（游客） */}
       {!me && (
-        <Card
-          className="fp-glass text-center"
-          variant="borderless"
-        >
+        <SectionCard className="animate-fade-up animate-delay-[300ms] text-center">
           <Title level={4}>准备好开自己的盘了吗？</Title>
           <Paragraph type="secondary">
             用户名 + 密码即可注册，不用邮箱、不用手机号。
           </Paragraph>
-          <NavButton type="primary" size="large" to="/register">
+          <NavButton type="primary" size="large" shape="round" to="/register">
             立即注册
           </NavButton>
-        </Card>
+        </SectionCard>
       )}
     </Space>
   );

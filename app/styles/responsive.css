@@ -103,6 +103,11 @@
   .fp-cal-pnl {
     font-size: 10px !important;
   }
+
+  /* 首页 hero 玻璃卡窄屏收窄内距（工具类 px-10 py-12 是桌面值，需 !important 盖） */
+  .fp-hero {
+    padding: 28px 20px !important;
+  }
 }
 
 /* ══════════ 4. 底部悬浮胶囊 Tab（liquid-glass spec §4.3）══════════ */
@@ -267,20 +272,6 @@
      位移是装饰，阴影两端都留（宪法 §5）。色雾/高光的冻结在 liquid-glass.css §7 */
   .fp-glass {
     transform: none !important;
-  }
-}
-
-/* ══════════ 8. 首页 hero 移动端（visual-refresh spec §6.2）══════════ */
-
-/* padding 收窄（48/40 → 32/20）。⚠️ !important：hero 的桌面 padding 是
-   inline style（PRIMARY_GRADIENT 渐变同为 inline，连续值进不了工具类），
-   不加盖不过（与 .fp-content / .fp-cal-cell 同手法）。
-   断点用 767px 与全文件惯例一致（antd md=768 以下是移动端），
-   768px 整点已是桌面 md 档。
-   右侧迷你持仓卡无需此处处理：已用 hidden lg:flex 工具类按断点显隐 */
-@media (max-width: 767px) {
-  .fp-hero {
-    padding: 32px 20px !important;
   }
 }
 
