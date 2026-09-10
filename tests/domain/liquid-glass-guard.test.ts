@@ -68,4 +68,9 @@ describe("液态玻璃宪法守卫", () => {
     const theme = readFileSync(path.join(APP_DIR, "theme.ts"), "utf8");
     expect(theme).not.toMatch(/export const (?:CARD_SHADOW|BAR_SHADOW)/);
   });
+
+  it("身份 / 方向 Tag 不再用 antd 预设蓝（宪法 §2.5：主色让给紫，蓝是旧身份）", () => {
+    const offenders = tsxFiles.filter(f => /color="blue"/.test(readFileSync(f, "utf8")));
+    expect(offenders.map(f => path.relative(APP_DIR, f))).toEqual([]);
+  });
 });

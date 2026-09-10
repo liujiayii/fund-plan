@@ -3,14 +3,15 @@ import type { OrderView } from "~/services/portfolio-service";
 import { Tag, Timeline, Tooltip } from "antd";
 import { Link } from "react-router";
 import { fmtYuan } from "~/components/ui/format";
+import { StatusBadge } from "~/components/ui/StatusBadge";
 import { navToDisplay, sharesToDisplay } from "~/domain/money";
 import { COLOR } from "~/theme";
 
-/** 与 OrderList 同款降噪：只有 pending/failed/cancelled 贴 Tag，confirmed 是常态不贴 */
-const STATUS_TAG: Partial<Record<OrderView["status"], { color: string; text: string }>> = {
-  pending: { color: "orange", text: "待确认" },
-  failed: { color: "red", text: "失败" },
-  cancelled: { color: "default", text: "已撤单" },
+/** 与 OrderList 同款降噪：只有 pending/failed/cancelled 贴状态胶囊，confirmed 是常态不贴 */
+const STATUS_TAG: Partial<Record<OrderView["status"], { tone: "pending" | "danger" | "default"; text: string }>> = {
+  pending: { tone: "pending", text: "待确认" },
+  failed: { tone: "danger", text: "失败" },
+  cancelled: { tone: "default", text: "已撤单" },
 };
 
 export interface OrderTimelineProps {
@@ -21,7 +22,7 @@ export interface OrderTimelineProps {
 
 /**
  * 订单确认进度时间线。每笔订单是一个节点：
- * pending 蓝（进行中）+「T+1 确认中」突出、confirmed 灰（常态）、failed 红。
+ * pending 节点走 pending 金（进行中）+「T+1 确认中」突出、confirmed 灰（常态）、failed 红。
  * 把 T+1 目标日（confirmDate）与成交明细按时间线呈现，比平铺列表更接近支付宝的「订单状态流」。
  */
 export function OrderTimeline({ orders, renderActions }: OrderTimelineProps) {
@@ -31,7 +32,8 @@ export function OrderTimeline({ orders, renderActions }: OrderTimelineProps) {
     <Timeline
       items={orders.map((o) => {
         const tag = STATUS_TAG[o.status];
-        const color = o.status === "pending" ? "blue" : o.status === "failed" ? "red" : "gray";
+        // 节点色：pending 吃第三语义金（不用 antd 预设蓝——那是旧身份色）
+        const color = o.status === "pending" ? COLOR.pending : o.status === "failed" ? "red" : "gray";
         return {
           color,
           children: (
@@ -41,11 +43,11 @@ export function OrderTimeline({ orders, renderActions }: OrderTimelineProps) {
                   {o.fundName}
                 </Link>
                 <span style={{ fontSize: 12, color: COLOR.textSecondary }}>{o.fundCode}</span>
-                {o.side === "buy" ? <Tag color="blue">申购</Tag> : <Tag>赎回</Tag>}
+                {o.side === "buy" ? <Tag>申购</Tag> : <Tag>赎回</Tag>}
                 {o.source === "dca" && <Tag color="purple">定投</Tag>}
                 {tag && (o.failReason
-                  ? <Tooltip title={o.failReason}><Tag color={tag.color}>{tag.text}</Tag></Tooltip>
-                  : <Tag color={tag.color}>{tag.text}</Tag>)}
+                  ? <Tooltip title={o.failReason}><span><StatusBadge tone={tag.tone}>{tag.text}</StatusBadge></span></Tooltip>
+                  : <StatusBadge tone={tag.tone}>{tag.text}</StatusBadge>)}
               </div>
               <div style={{ fontSize: 12, color: COLOR.textSecondary, marginTop: 4 }}>
                 {o.side === "buy" ? `委托 ${fmtYuan(o.amount ?? 0)} 元` : `委托 ${sharesToDisplay(o.shares ?? 0)} 份`}
@@ -54,7 +56,7 @@ export function OrderTimeline({ orders, renderActions }: OrderTimelineProps) {
                 {" · 确认日 "}
                 {o.confirmDate}
                 {o.status === "pending" && (
-                  <span style={{ color: COLOR.primary }}>（T+1 确认中）</span>
+                  <span className="text-pending">（T+1 确认中）</span>
                 )}
                 {/* 待确认行的行内操作（撤单/改单），与委托信息同一行 */}
                 {renderActions && <span style={{ marginLeft: 8 }}>{renderActions(o)}</span>}

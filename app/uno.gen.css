@@ -16,7 +16,7 @@
 @property --un-ordinal{syntax:"*";inherits:false;}
 @property --un-slashed-zero{syntax:"*";inherits:false;}
 /* layer: theme */
-:root, :host { --spacing: 0.25rem; --colors-card: rgba(255, 255, 255, 0.06); --fontWeight-bold: 700; --default-transition-timingFunction: cubic-bezier(0.4, 0, 0.2, 1); --default-transition-duration: 150ms; --leading-none: 1; --colors-ink: #F7F4FF; --colors-well: rgba(255, 255, 255, 0.06); --colors-primary: #7C5CFF; --colors-muted: #B9A8FF; --colors-line: rgba(255, 255, 255, 0.16); --text-sm-fontSize: 0.875rem; --text-sm-lineHeight: 1.25rem; --text-lg-fontSize: 1.125rem; --text-lg-lineHeight: 1.75rem; --text-xs-fontSize: 0.75rem; --text-xs-lineHeight: 1rem; --radius-xl: 0.75rem; --fontWeight-semibold: 600; --fontWeight-medium: 500; --colors-white: #fff; --colors-page: #07060C; --radius-2xl: 1rem; --tracking-wide: 0.025em; --leading-tight: 1.25; --container-xl: 36rem; --text-3xl-fontSize: 1.875rem; --text-3xl-lineHeight: 2.25rem; --text-2xl-fontSize: 1.5rem; --text-2xl-lineHeight: 2rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); --colors-tertiary: #8A82B0; --colors-rise-soft: rgba(255, 93, 143, 0.16); --colors-rise: #FF5D8F; --colors-fall-soft: rgba(57, 255, 206, 0.16); --colors-fall: #39FFCE; }
+:root, :host { --spacing: 0.25rem; --colors-card: rgba(255, 255, 255, 0.06); --fontWeight-bold: 700; --default-transition-timingFunction: cubic-bezier(0.4, 0, 0.2, 1); --default-transition-duration: 150ms; --leading-none: 1; --colors-ink: #F7F4FF; --colors-well: rgba(255, 255, 255, 0.06); --colors-primary: #7C5CFF; --colors-muted: #B9A8FF; --colors-line: rgba(255, 255, 255, 0.16); --text-sm-fontSize: 0.875rem; --text-sm-lineHeight: 1.25rem; --text-lg-fontSize: 1.125rem; --text-lg-lineHeight: 1.75rem; --text-xs-fontSize: 0.75rem; --text-xs-lineHeight: 1rem; --colors-pending: #F0D078; --radius-xl: 0.75rem; --fontWeight-semibold: 600; --fontWeight-medium: 500; --colors-white: #fff; --colors-page: #07060C; --radius-2xl: 1rem; --tracking-wide: 0.025em; --leading-tight: 1.25; --container-xl: 36rem; --text-3xl-fontSize: 1.875rem; --text-3xl-lineHeight: 2.25rem; --text-2xl-fontSize: 1.5rem; --text-2xl-lineHeight: 2rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); --colors-tertiary: #8A82B0; --colors-rise-soft: rgba(255, 93, 143, 0.16); --colors-rise: #FF5D8F; --colors-fall-soft: rgba(57, 255, 206, 0.16); --colors-fall: #39FFCE; --colors-pending-soft: rgba(240, 208, 120, 0.16); --colors-red-400: oklch(70.4% 0.191 22.216); }
 /* layer: preflights */
 :root {
   --fp-primary: #7C5CFF;
@@ -60,7 +60,9 @@
 .text-fall{color:color-mix(in srgb, var(--colors-fall) var(--un-text-opacity), transparent);}
 .text-ink{color:color-mix(in srgb, var(--colors-ink) var(--un-text-opacity), transparent);}
 .text-muted{color:color-mix(in srgb, var(--colors-muted) var(--un-text-opacity), transparent);}
+.text-pending{color:color-mix(in srgb, var(--colors-pending) var(--un-text-opacity), transparent);}
 .text-primary{color:color-mix(in srgb, var(--colors-primary) var(--un-text-opacity), transparent);}
+.text-red-400{color:color-mix(in srgb, var(--colors-red-400) var(--un-text-opacity), transparent);}
 .text-rise{color:color-mix(in srgb, var(--colors-rise) var(--un-text-opacity), transparent);}
 .text-tertiary{color:color-mix(in srgb, var(--colors-tertiary) var(--un-text-opacity), transparent);}
 .text-white{color:color-mix(in srgb, var(--colors-white) var(--un-text-opacity), transparent);}
@@ -136,6 +138,7 @@
 .bg-\[\#f5a623\]{background-color:color-mix(in oklab, #f5a623 var(--un-bg-opacity), transparent);}
 .bg-card{background-color:color-mix(in srgb, var(--colors-card) var(--un-bg-opacity), transparent);}
 .bg-fall-soft{background-color:color-mix(in srgb, var(--colors-fall-soft) var(--un-bg-opacity), transparent);}
+.bg-pending-soft{background-color:color-mix(in srgb, var(--colors-pending-soft) var(--un-bg-opacity), transparent);}
 .bg-primary{background-color:color-mix(in srgb, var(--colors-primary) var(--un-bg-opacity), transparent);}
 .bg-primary\/6{background-color:color-mix(in srgb, var(--colors-primary) 6%, transparent);}
 .bg-rise-soft{background-color:color-mix(in srgb, var(--colors-rise-soft) var(--un-bg-opacity), transparent);}
@@ -226,7 +229,9 @@
 .text-fall{color:color-mix(in oklab, var(--colors-fall) var(--un-text-opacity), transparent);}
 .text-ink{color:color-mix(in oklab, var(--colors-ink) var(--un-text-opacity), transparent);}
 .text-muted{color:color-mix(in oklab, var(--colors-muted) var(--un-text-opacity), transparent);}
+.text-pending{color:color-mix(in oklab, var(--colors-pending) var(--un-text-opacity), transparent);}
 .text-primary{color:color-mix(in oklab, var(--colors-primary) var(--un-text-opacity), transparent);}
+.text-red-400{color:color-mix(in oklab, var(--colors-red-400) var(--un-text-opacity), transparent);}
 .text-rise{color:color-mix(in oklab, var(--colors-rise) var(--un-text-opacity), transparent);}
 .text-tertiary{color:color-mix(in oklab, var(--colors-tertiary) var(--un-text-opacity), transparent);}
 .text-white{color:color-mix(in oklab, var(--colors-white) var(--un-text-opacity), transparent);}
@@ -237,6 +242,7 @@
 .\!bg-white\/10{background-color:color-mix(in oklab, var(--colors-white) 10%, transparent) !important;}
 .bg-card{background-color:color-mix(in oklab, var(--colors-card) var(--un-bg-opacity), transparent);}
 .bg-fall-soft{background-color:color-mix(in oklab, var(--colors-fall-soft) var(--un-bg-opacity), transparent);}
+.bg-pending-soft{background-color:color-mix(in oklab, var(--colors-pending-soft) var(--un-bg-opacity), transparent);}
 .bg-primary{background-color:color-mix(in oklab, var(--colors-primary) var(--un-bg-opacity), transparent);}
 .bg-primary\/6{background-color:color-mix(in oklab, var(--colors-primary) 6%, transparent);}
 .bg-rise-soft{background-color:color-mix(in oklab, var(--colors-rise-soft) var(--un-bg-opacity), transparent);}

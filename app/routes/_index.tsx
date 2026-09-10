@@ -205,7 +205,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               title={(
                 <span>
                   主理人的示范盘
-                  <Tag color="blue" style={{ marginLeft: 8 }}>
+                  <Tag style={{ marginLeft: 8 }}>
                     公开
                   </Tag>
                 </span>

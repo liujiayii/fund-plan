@@ -75,7 +75,7 @@ function LeaderRow({
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="font-medium text-ink">
           {entry.username}
-          {isMe && <Tag color="blue" className="ml-2">我</Tag>}
+          {isMe && <Tag className="ml-2">我</Tag>}
         </div>
         <div className="mt-0.5 text-xs text-muted">
           总资产

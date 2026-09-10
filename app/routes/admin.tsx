@@ -46,7 +46,7 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
       dataIndex: "role",
       width: 90,
       render: role =>
-        role === "admin" ? <Tag color="blue">主理人</Tag> : <Tag>用户</Tag>,
+        role === "admin" ? <Tag>主理人</Tag> : <Tag>用户</Tag>,
     },
     {
       title: "现金",

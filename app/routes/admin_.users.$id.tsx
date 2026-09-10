@@ -57,7 +57,7 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
         <Title level={3} style={{ marginBottom: 4 }}>
           {user.username}
           {" 的盘"}
-          {user.role === "admin" && <Tag color="blue" style={{ marginLeft: 8 }}>主理人</Tag>}
+          {user.role === "admin" && <Tag style={{ marginLeft: 8 }}>主理人</Tag>}
         </Title>
         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
           注册于

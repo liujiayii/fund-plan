@@ -228,7 +228,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             <Text type="secondary">{f.code}</Text>
             {f.type && <Tag>{f.type}</Tag>}
             <Tag color={risk.color}>{risk.label}</Tag>
-            <Tag color={f.status.includes("开放") ? "blue" : "default"}>{f.status}</Tag>
+            <Tag color={f.status.includes("开放") ? "purple" : "default"}>{f.status}</Tag>
             {/* 已持有标识：点 Tag 直达该基金的持仓详情页 */}
             {brief && (
               <Link to={`/me/holdings/${f.code}`}>

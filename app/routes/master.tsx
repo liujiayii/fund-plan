@@ -84,7 +84,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
           {admin.username}
           {" "}
           的示范盘
-          <Tag color="blue" style={{ marginLeft: 8 }}>
+          <Tag style={{ marginLeft: 8 }}>
             公开
           </Tag>
         </Title>
