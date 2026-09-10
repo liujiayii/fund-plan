@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
+import { MOBILE_TAB_KEYS, NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 
 /**
  * 导航高亮 —— 顶栏 Menu 与移动端底部 TabBar 共用（spec §6.4）。
@@ -46,5 +46,17 @@ describe("resolveSelectedKey", () => {
     expect(resolveSelectedKey("/login", NAV_ITEMS)).toBe("");
     expect(resolveSelectedKey("/register", NAV_ITEMS)).toBe("");
     expect(resolveSelectedKey("/logout", NAV_ITEMS)).toBe("");
+  });
+});
+
+describe("MOBILE_TAB_KEYS", () => {
+  it("底部胶囊只放四项：首页 / 基金 / 自选 / 我的（主理人的盘不进底栏）", () => {
+    expect(MOBILE_TAB_KEYS).toEqual(["/", "/funds", "/me/watchlist", "/me"]);
+  });
+
+  it("四项全部是 NAV_ITEMS 的成员——胶囊只是挑选，不是第二份导航源", () => {
+    const keys = new Set(NAV_ITEMS.map(i => i.key));
+    for (const k of MOBILE_TAB_KEYS)
+      expect(keys.has(k)).toBe(true);
   });
 });
