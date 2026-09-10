@@ -1,25 +1,19 @@
 import type { ReactNode } from "react";
 import { Logo } from "~/components/ui/Logo";
-import { PRIMARY_GRADIENT } from "~/theme";
 
 /**
- * 登录/注册分屏壳（visual-refresh spec §6.3）：左品牌渐变面板、右表单区。
- * 整体是一张圆角大卡（而非满屏负 margin hack），贴现有卡片语言。
- * 窄屏左屏整块隐藏（hidden md:flex 管显隐，responsive.css §9 .fp-auth-panel 兜底）——
- * spec §6.3 原文的「顶部渐变横幅」从简为隐藏，品牌在场感由顶栏 Logo 承担。
+ * 登录/注册分屏壳（liquid-glass spec §5.5）：一张玻璃大卡，左品牌面板透雾 + 门面高光
+ * （宪法 §2.3 白名单：登录左屏），右表单区是井。
+ * 窄屏左屏整块隐藏（hidden md:flex + responsive.css §9 .fp-auth-panel 兜底），
+ * 品牌在场感由顶部品牌胶囊承担。
+ * 玻璃上不再铺实色渐变大块（那是晨雾门面，宪法 §1 已作废）——品牌紫粉只以
+ * 装饰曲线的描边与低透明填充出现。
  */
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
-    <div
-      className="fp-glass animate-fade-up relative mt-12 flex overflow-hidden rounded-2xl"
-      style={{ maxWidth: 880, margin: "48px auto" }}
-    >
-      {/* 左屏：品牌面板。窄屏整块隐藏（hidden 工具类，responsive.css §9 兜底） */}
-      <aside
-        className="fp-auth-panel relative hidden flex-col justify-between overflow-hidden md:flex"
-        style={{ background: PRIMARY_GRADIENT, color: "#fff", padding: 40, width: 340, minWidth: 340 }}
-      >
-        {/* 装饰曲线（与首页 hero 同语言，spec §6.1「处处重复」） */}
+    <div className="fp-glass fp-glass-specular animate-fade-up relative mx-auto my-12 flex max-w-[880px] overflow-hidden rounded-[22px]">
+      <aside className="fp-auth-panel relative hidden w-[340px] shrink-0 flex-col justify-between p-10 md:flex">
+        {/* 装饰曲线（与 Logo 同语言）：主色描边 + 低透明填充 */}
         <svg
           className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 w-full"
           viewBox="0 0 400 200"
@@ -27,25 +21,32 @@ export function AuthShell({ children }: { children: ReactNode }) {
           aria-hidden="true"
         >
           <path
+            d="M0,160 C80,140 140,90 220,95 C300,100 350,50 400,40"
+            stroke="var(--fp-primary)"
+            strokeWidth="2"
+            fill="none"
+            opacity="0.5"
+          />
+          <path
             d="M0,160 C80,140 140,90 220,95 C300,100 350,50 400,40 L400,200 L0,200 Z"
-            fill="#fff"
-            opacity="0.08"
+            fill="var(--fp-primary)"
+            opacity="0.10"
           />
         </svg>
-        <div className="relative z-10 flex items-center gap-2 font-bold">
+        <div className="relative z-10 flex items-center gap-2 font-bold text-ink">
           <Logo size={28} />
           模拟基金
         </div>
         <div className="relative z-10">
-          <h2 className="m-0 text-2xl font-bold">用真数据，练真盘感</h2>
-          <p className="mt-2 mb-0 text-sm leading-6 opacity-90">
+          <h2 className="m-0 text-2xl font-bold text-ink">用真数据，练真盘感</h2>
+          <p className="mt-2 mb-0 text-sm leading-6 text-muted">
             真实 T+1 撮合 · FIFO 阶梯赎回费 · 自动定投，不亏真钱把规则吃透。
           </p>
         </div>
       </aside>
-      {/* 右屏：表单区 */}
-      <div className="flex flex-1 items-center justify-center bg-card" style={{ padding: "40px 32px" }}>
-        <div style={{ width: "min(360px, 100%)" }}>{children}</div>
+      {/* 右屏：表单井（bg-well 不模糊，宪法 §3 玻璃里不叠玻璃） */}
+      <div className="flex flex-1 items-center justify-center bg-well px-8 py-10">
+        <div className="w-[min(360px,100%)]">{children}</div>
       </div>
     </div>
   );
