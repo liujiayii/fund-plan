@@ -235,6 +235,12 @@
   .animate-float {
     animation: none;
   }
+
+  /* 卡片 hover 抬升（SectionCard 的 md:hover:-translate-y-[2px]）一并关：
+     位移是装饰，阴影两端都留（宪法 §5）。色雾/高光的冻结在 liquid-glass.css §7 */
+  .fp-glass {
+    transform: none !important;
+  }
 }
 
 /* ══════════ 8. 首页 hero 移动端（visual-refresh spec §6.2）══════════ */

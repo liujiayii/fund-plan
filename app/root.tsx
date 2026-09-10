@@ -17,6 +17,7 @@ import {
   useMatches,
   useNavigate,
 } from "react-router";
+import { FogStage } from "~/components/FogStage";
 import { MobileTabBar } from "~/components/MobileTabBar";
 import { NavProgressBar } from "~/components/NavProgressBar";
 import { Logo } from "~/components/ui/Logo";
@@ -36,6 +37,9 @@ import "@fontsource/space-grotesk/700.css";
 import "antd/dist/reset.css";
 // UnoCSS 预生成的工具类样式（由 `pnpm uno:build` 产出）。
 import "./uno.gen.css";
+// 液态玻璃材料层（色雾 / .fp-glass / 高光 / 降级）：全站唯一的模糊材料出处（守卫测试钉死），
+// 排在 uno.gen.css 之后（材料压过工具类）、responsive.css 之前（壳的媒体查询最后说话）
+import "./styles/liquid-glass.css";
 // 期五移动端适配：唯一的媒体查询出处，必须排在 uno.gen.css 之后
 // 才能覆盖工具类与 antd 组件类（顺序理由见该文件头注释）
 import "./styles/responsive.css";
@@ -72,6 +76,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
+        {/* 色雾舞台放 body 首位：fixed 层，DOM 顺序与视觉层级（雾在最底）一致 */}
+        <FogStage />
         {children}
         <ScrollRestoration />
         <Scripts />

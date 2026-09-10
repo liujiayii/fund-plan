@@ -17,22 +17,13 @@
 @property --un-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000;}
 @property --un-shadow-color{syntax:"*";inherits:false;}
 @property --un-ease{syntax:"*";inherits:false;}
-@property --un-backdrop-blur{syntax:"*";inherits:false;}
-@property --un-backdrop-brightness{syntax:"*";inherits:false;}
-@property --un-backdrop-contrast{syntax:"*";inherits:false;}
-@property --un-backdrop-grayscale{syntax:"*";inherits:false;}
-@property --un-backdrop-hue-rotate{syntax:"*";inherits:false;}
-@property --un-backdrop-invert{syntax:"*";inherits:false;}
-@property --un-backdrop-opacity{syntax:"*";inherits:false;}
-@property --un-backdrop-saturate{syntax:"*";inherits:false;}
-@property --un-backdrop-sepia{syntax:"*";inherits:false;}
 @property --un-numeric-figure{syntax:"*";inherits:false;}
 @property --un-numeric-fraction{syntax:"*";inherits:false;}
 @property --un-numeric-spacing{syntax:"*";inherits:false;}
 @property --un-ordinal{syntax:"*";inherits:false;}
 @property --un-slashed-zero{syntax:"*";inherits:false;}
 /* layer: theme */
-:root, :host { --spacing: 0.25rem; --fontWeight-bold: 700; --colors-primary: #7C5CFF; --colors-ink: #F7F4FF; --colors-card: rgba(255, 255, 255, 0.06); --text-xs-fontSize: 0.75rem; --text-xs-lineHeight: 1rem; --radius-xl: 0.75rem; --fontWeight-semibold: 600; --default-transition-timingFunction: cubic-bezier(0.4, 0, 0.2, 1); --default-transition-duration: 150ms; --fontWeight-medium: 500; --colors-white: #fff; --colors-muted: #B9A8FF; --colors-line: rgba(255, 255, 255, 0.16); --colors-page: #07060C; --radius-2xl: 1rem; --tracking-wide: 0.025em; --leading-tight: 1.25; --container-xl: 36rem; --text-lg-fontSize: 1.125rem; --text-lg-lineHeight: 1.75rem; --text-sm-fontSize: 0.875rem; --text-sm-lineHeight: 1.25rem; --text-3xl-fontSize: 1.875rem; --text-3xl-lineHeight: 2.25rem; --text-2xl-fontSize: 1.5rem; --text-2xl-lineHeight: 2rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); --colors-tertiary: #8A82B0; --colors-rise-soft: rgba(255, 93, 143, 0.16); --colors-rise: #FF5D8F; --colors-fall-soft: rgba(57, 255, 206, 0.16); --colors-fall: #39FFCE; }
+:root, :host { --spacing: 0.25rem; --fontWeight-bold: 700; --colors-primary: #7C5CFF; --colors-ink: #F7F4FF; --colors-card: rgba(255, 255, 255, 0.06); --text-xs-fontSize: 0.75rem; --text-xs-lineHeight: 1rem; --radius-xl: 0.75rem; --fontWeight-semibold: 600; --default-transition-timingFunction: cubic-bezier(0.4, 0, 0.2, 1); --default-transition-duration: 150ms; --fontWeight-medium: 500; --colors-white: #fff; --colors-muted: #B9A8FF; --colors-line: rgba(255, 255, 255, 0.16); --colors-page: #07060C; --radius-2xl: 1rem; --tracking-wide: 0.025em; --leading-tight: 1.25; --container-xl: 36rem; --colors-well: rgba(255, 255, 255, 0.06); --text-lg-fontSize: 1.125rem; --text-lg-lineHeight: 1.75rem; --text-sm-fontSize: 0.875rem; --text-sm-lineHeight: 1.25rem; --text-3xl-fontSize: 1.875rem; --text-3xl-lineHeight: 2.25rem; --text-2xl-fontSize: 1.5rem; --text-2xl-lineHeight: 2rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); --colors-tertiary: #8A82B0; --colors-rise-soft: rgba(255, 93, 143, 0.16); --colors-rise: #FF5D8F; --colors-fall-soft: rgba(57, 255, 206, 0.16); --colors-fall: #39FFCE; }
 /* layer: preflights */
 :root {
   --fp-primary: #7C5CFF;
@@ -120,7 +111,6 @@
 .border-b{border-bottom-width:1px;}
 .\!border-white\/40{border-color:color-mix(in srgb, var(--colors-white) 40%, transparent) !important;}
 .border-line{border-color:color-mix(in srgb, var(--colors-line) var(--un-border-opacity), transparent);}
-.border-white\/20{border-color:color-mix(in srgb, var(--colors-white) 20%, transparent);}
 .rounded-2xl{border-radius:var(--radius-2xl);}
 .rounded-full{border-radius:calc(infinity * 1px);}
 .rounded-xl{border-radius:var(--radius-xl);}
@@ -134,7 +124,7 @@
 .bg-page{background-color:color-mix(in srgb, var(--colors-page) var(--un-bg-opacity), transparent);}
 .bg-primary\/6{background-color:color-mix(in srgb, var(--colors-primary) 6%, transparent);}
 .bg-rise-soft{background-color:color-mix(in srgb, var(--colors-rise-soft) var(--un-bg-opacity), transparent);}
-.bg-white\/10{background-color:color-mix(in srgb, var(--colors-white) 10%, transparent);}
+.bg-well{background-color:color-mix(in srgb, var(--colors-well) var(--un-bg-opacity), transparent);}
 .hover\:bg-page:hover{background-color:color-mix(in srgb, var(--colors-page) var(--un-bg-opacity), transparent);}
 .hover\:bg-white\/20\!:hover{background-color:color-mix(in srgb, var(--colors-white) 20%, transparent) !important;}
 .opacity-60{opacity:60%;}
@@ -201,7 +191,6 @@
 .animate-delay-\[480ms\]{animation-delay:480ms;}
 .animate-delay-\[60ms\]{animation-delay:60ms;}
 .isolate{isolation:isolate;}
-.backdrop-blur-sm{--un-backdrop-blur:blur(8px);-webkit-backdrop-filter:var(--un-backdrop-blur,) var(--un-backdrop-brightness,) var(--un-backdrop-contrast,) var(--un-backdrop-grayscale,) var(--un-backdrop-hue-rotate,) var(--un-backdrop-invert,) var(--un-backdrop-opacity,) var(--un-backdrop-saturate,) var(--un-backdrop-sepia,);backdrop-filter:var(--un-backdrop-blur,) var(--un-backdrop-brightness,) var(--un-backdrop-contrast,) var(--un-backdrop-grayscale,) var(--un-backdrop-hue-rotate,) var(--un-backdrop-invert,) var(--un-backdrop-opacity,) var(--un-backdrop-saturate,) var(--un-backdrop-sepia,);}
 .tabular-nums{--un-numeric-spacing:tabular-nums;font-variant-numeric:var(--un-ordinal,) var(--un-slashed-zero,) var(--un-numeric-figure,) var(--un-numeric-spacing,) var(--un-numeric-fraction,);}
 .font-num{font-family:"Space Grotesk", "DIN Alternate", "SF Mono", ui-monospace, "Menlo", monospace;font-variant-numeric:tabular-nums;}
 @supports (color: color-mix(in lab, red, red)){
@@ -215,14 +204,13 @@
 .text-white{color:color-mix(in oklab, var(--colors-white) var(--un-text-opacity), transparent);}
 .\!border-white\/40{border-color:color-mix(in oklab, var(--colors-white) 40%, transparent) !important;}
 .border-line{border-color:color-mix(in oklab, var(--colors-line) var(--un-border-opacity), transparent);}
-.border-white\/20{border-color:color-mix(in oklab, var(--colors-white) 20%, transparent);}
 .\!bg-white\/10{background-color:color-mix(in oklab, var(--colors-white) 10%, transparent) !important;}
 .bg-card{background-color:color-mix(in oklab, var(--colors-card) var(--un-bg-opacity), transparent);}
 .bg-fall-soft{background-color:color-mix(in oklab, var(--colors-fall-soft) var(--un-bg-opacity), transparent);}
 .bg-page{background-color:color-mix(in oklab, var(--colors-page) var(--un-bg-opacity), transparent);}
 .bg-primary\/6{background-color:color-mix(in oklab, var(--colors-primary) 6%, transparent);}
 .bg-rise-soft{background-color:color-mix(in oklab, var(--colors-rise-soft) var(--un-bg-opacity), transparent);}
-.bg-white\/10{background-color:color-mix(in oklab, var(--colors-white) 10%, transparent);}
+.bg-well{background-color:color-mix(in oklab, var(--colors-well) var(--un-bg-opacity), transparent);}
 .hover\:bg-page:hover{background-color:color-mix(in oklab, var(--colors-page) var(--un-bg-opacity), transparent);}
 .hover\:bg-white\/20\!:hover{background-color:color-mix(in oklab, var(--colors-white) 20%, transparent) !important;}
 }

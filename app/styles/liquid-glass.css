@@ -1,0 +1,262 @@
+/**
+ * 液态玻璃材料层——docs/liquid-glass.md §2 / §3 / §6 的 CSS 原文落地处。
+ *
+ * 本文件是全站 **唯一** 允许出现 backdrop-filter 的地方
+ * （tests/domain/liquid-glass-guard.test.ts 钉死）。组件只挂 .fp-glass 类，
+ * 禁止在 tsx 里再发明第二种透明、第二种描边、第二种模糊。
+ *
+ * import 顺序（root.tsx）：antd reset → uno.gen.css → 本文件 → responsive.css。
+ * 色值一律 var(--fp-*)（uno.config 的 preflight 从 theme.ts 全量输出）；
+ * 只有玻璃本体的白色透明度与描边彩虹是材料常量，允许写 rgba 字面量。
+ */
+
+/* ══════════ 0. 舞台：页面底 ══════════ */
+
+/* antd 的 Layout 已退役（Task 4），body 底色没人管了，这里钉死。
+   min-height 让色雾（fixed）在短页面上也有满屏可衬 */
+html,
+body {
+  background: var(--fp-bg);
+  color: var(--fp-text-primary);
+  min-height: 100%;
+}
+
+/* ══════════ 1. 色雾三团（宪法 §2.1）══════════ */
+
+/* 固定定位铺满视口，z-index 0；内容层 .fp-shell 是 relative z-index 1，
+   这样 backdrop-filter 透到的是雾，不是页面底色。
+   overflow hidden：三团各 60vmax，漂出去会撑出横向滚动条 */
+.fp-fog {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 每团一个 radial-gradient 大圆：软边靠渐变本身，不上 CSS 滤镜做高斯模糊
+   （三个全屏级元素每帧重算模糊，低端安卓直接掉到个位数帧）。
+   只动 transform（合成层属性），will-change 提前提层 */
+.fp-fog > span {
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  will-change: transform;
+  animation-duration: 14s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.fp-fog-a {
+  top: -20vmax;
+  left: -15vmax;
+  background: radial-gradient(closest-side, var(--fp-fog-a) 0%, transparent 70%);
+  animation-name: fp-fog-drift-a;
+}
+
+.fp-fog-b {
+  right: -20vmax;
+  top: 10vmax;
+  background: radial-gradient(closest-side, var(--fp-fog-b) 0%, transparent 70%);
+  animation-name: fp-fog-drift-b;
+  /* 负延迟错开相位：三团不同步呼吸 */
+  animation-delay: -5s;
+}
+
+.fp-fog-c {
+  left: 20vmax;
+  bottom: -30vmax;
+  background: radial-gradient(closest-side, var(--fp-fog-c) 0%, transparent 70%);
+  animation-name: fp-fog-drift-c;
+  animation-delay: -9s;
+}
+
+@keyframes fp-fog-drift-a {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(12vmax, 8vmax);
+  }
+}
+
+@keyframes fp-fog-drift-b {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-10vmax, 12vmax);
+  }
+}
+
+@keyframes fp-fog-drift-c {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(8vmax, -12vmax);
+  }
+}
+
+/* ══════════ 2. 玻璃（宪法 §2.2）══════════ */
+
+/* ⚠️ 三条材料属性带 !important：antd cssinjs 的样式标签在 SSR 时注入到
+   </head> 前、排在本文件的 <link> 之后（entry.server.tsx），同特异性下
+   .ant-card 的 background 简写会把渐变冲成实色。
+   不写 border-radius（由角色决定：antd Card 吃 borderRadiusLG=22，手写元素
+   挂 rounded-* 类）、不写 position（消费方自带：Card relative / 侧栏 sticky /
+   胶囊 fixed）——曾写过 border-radius: inherit，它让 antd Card 继承父级的
+   0 圆角，删掉 */
+.fp-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)) !important;
+  backdrop-filter: blur(22px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 18px 40px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 彩虹描边走伪元素，不走 border 色——border 会被模糊吃掉。
+   inset:0 + border-radius: inherit 天然贴合宿主圆角，不需要 overflow hidden */
+.fp-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.7),
+    rgba(180, 140, 255, 0.15) 40%,
+    rgba(255, 80, 160, 0.45) 70%,
+    rgba(255, 255, 255, 0.25)
+  );
+  /* 标准「只描边」mask；新代码复制这段，不要改角度或加第四色停 */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  /* 描边压在内容之上但不挡事件；z-index 让它盖过 antd Card 内部的 body 底 */
+  z-index: 1;
+}
+
+/* ══════════ 3. 镜面高光（宪法 §2.3：只给门面）══════════ */
+
+/* 宿主必须 overflow: hidden（扫光条从 -100% 扫到 100% 会跑出圆角）。
+   允许出现在：桌面侧栏、移动端胶囊 Tab、总资产卡、登录左屏、首页 hero */
+.fp-glass-specular {
+  overflow: hidden;
+}
+
+.fp-glass-specular::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.28) 50%, transparent 60%);
+  transform: translateX(-100%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: fp-specular 4.8s ease-in-out infinite;
+}
+
+@keyframes fp-specular {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ══════════ 4. 数字辉光（宪法 §2.4：只给总资产与当日涨跌）══════════ */
+
+/* color-mix 从 token 派生 55% 透明的同色辉光；不支持 color-mix 的老内核
+   整条声明无效 = 无辉光，退化无害 */
+.fp-glow-rise {
+  text-shadow: 0 0 8px color-mix(in srgb, var(--fp-up) 55%, transparent);
+}
+
+.fp-glow-fall {
+  text-shadow: 0 0 8px color-mix(in srgb, var(--fp-down) 55%, transparent);
+}
+
+.fp-glow-ink {
+  text-shadow: 0 0 12px color-mix(in srgb, var(--fp-text-primary) 35%, transparent);
+}
+
+/* ══════════ 5. antd 浮层材料（宪法 §3：唯一放行打内部类的地方）══════════ */
+
+/* Modal / Drawer / Dropdown / Select 面板挂在 portal，tsx 拿不到根节点，
+   材料只能在这里写。这些选择器就是 .fp-glass 的复制（不能用 @apply：
+   uno 的 transformerDirectives 只处理 uno 管的文件）。antd 的 contentBg /
+   colorBgElevated 在 theme.ts 已钉 transparent，这里的 !important 是双保险 */
+.ant-modal .ant-modal-content,
+.ant-drawer .ant-drawer-content,
+.ant-dropdown .ant-dropdown-menu,
+.ant-select-dropdown {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)) !important;
+  backdrop-filter: blur(22px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 18px 40px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 弹窗 22、下拉 12（宪法 §2.2 角色圆角表） */
+.ant-modal .ant-modal-content {
+  border-radius: 22px !important;
+}
+
+.ant-dropdown .ant-dropdown-menu,
+.ant-select-dropdown {
+  border-radius: 12px !important;
+}
+
+/* 移动端底抽屉顶角 22（antd Drawer 无圆角 token）；桌面右抽屉贴边不圆 */
+.ant-drawer-bottom .ant-drawer-content {
+  border-radius: 22px 22px 0 0 !important;
+}
+
+/* Tooltip / Popover 是小浮面：elevated 实色，不模糊（宪法 §2.6）。
+   antd 暗色算法派生的 colorBgElevated 已是 elevated，这里补描边与圆角 */
+.ant-tooltip .ant-tooltip-inner,
+.ant-popover .ant-popover-inner {
+  border: 1px solid var(--fp-border);
+  border-radius: 12px;
+}
+
+/* ══════════ 6. 降级（宪法 §6.2）══════════ */
+
+/* 老 WebView 没有 backdrop-filter：玻璃退成 elevated 实色，描边保留。
+   不用 JS 探测、不加第二个类名——同一批选择器换一套 background */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fp-glass,
+  .ant-modal .ant-modal-content,
+  .ant-drawer .ant-drawer-content,
+  .ant-dropdown .ant-dropdown-menu,
+  .ant-select-dropdown {
+    background: var(--fp-elevated) !important;
+  }
+}
+
+/* ══════════ 7. 减弱动态（宪法 §5：材料部分）══════════ */
+
+/* 色雾冻在初始位置（不删——删了玻璃就没衬底），高光停。
+   fade-up / float / hover 位移的关闭在 responsive.css §7（那是全站动效出处） */
+@media (prefers-reduced-motion: reduce) {
+  .fp-fog > span,
+  .fp-glass-specular::after {
+    animation: none;
+  }
+}

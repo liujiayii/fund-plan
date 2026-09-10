@@ -133,14 +133,14 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             数值是装饰性示例（CodeRabbit PR #79 修正：模拟盘语境下
             不标注会被当成主理人真实收益），标题弱化标注「（示例）」 */}
         <div className="fp-hero-cards absolute top-8 right-8 hidden gap-3 lg:flex lg:flex-col">
-          <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+          <div className="rounded-xl border border-line bg-well px-4 py-3">
             <div className="text-xs opacity-80">
               昨日收益
               <span className="opacity-60">（示例）</span>
             </div>
             <div className="font-num text-lg font-medium">+82.33 元</div>
           </div>
-          <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+          <div className="rounded-xl border border-line bg-well px-4 py-3">
             <div className="text-xs opacity-80">
               累计收益
               <span className="opacity-60">（示例）</span>
@@ -180,7 +180,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
                     {/* 次按钮是「渐变上的幽灵样式」：antd default 自带白底，
                         只染白字会白底白字看不清（2026-09-09 走查修复）——
                         显式压成半透明白 10% + 毛玻璃，与右侧迷你卡同语言 */}
-                    <NavButton size="large" className="!border-white/40 !bg-white/10 !text-white backdrop-blur-sm hover:bg-white/20!" to="/funds">挑只基金</NavButton>
+                    <NavButton size="large" className="!border-white/40 !bg-white/10 !text-white hover:bg-white/20!" to="/funds">挑只基金</NavButton>
                   </>
                 )
               : (
@@ -188,7 +188,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
                     <NavButton type="primary" size="large" to="/register">免费注册，领 10 万本金</NavButton>
                     {/* 保持原生 <a>：游客态走边缘缓存，SPA 跳转反而绕开缓存（原注释纪律）。
                         幽灵样式同上：半透明白底+毛玻璃，防白底白字 */}
-                    <Button size="large" className="!border-white/40 !bg-white/10 !text-white backdrop-blur-sm hover:bg-white/20!" href="/master">先围观主理人的盘</Button>
+                    <Button size="large" className="!border-white/40 !bg-white/10 !text-white hover:bg-white/20!" href="/master">先围观主理人的盘</Button>
                   </>
                 )}
           </div>
