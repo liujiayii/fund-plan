@@ -114,17 +114,23 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
   // revalidate 有全页数据成本，但只在真实跨界的长驻页面发生，频率可忽略
   const revalidator = useRevalidator();
   useEffect(() => {
-    // 边界只有整点（15:00 / 00:00），分钟精度足够，秒数抹掉
-    const now = new Date();
-    const nextCutoff = new Date(now);
-    nextCutoff.setHours(TRADE_CUTOFF_HOUR, 0, 0, 0);
-    if (nextCutoff <= now)
-      nextCutoff.setDate(nextCutoff.getDate() + 1);
-    const nextMidnight = new Date(now);
-    nextMidnight.setHours(24, 0, 0, 0);
-    const target = new Date(Math.min(nextCutoff.getTime(), nextMidnight.getTime()));
-    const ms = target.getTime() - now.getTime();
-    const timer = setTimeout(() => revalidator.revalidate(), ms);
+    // 边界是**北京时间**的 15:00 / 0 点：用 UTC 算，不碰浏览器本地时区
+    // （本地 setHours 在海外时区会把触发点算到别的钟点，CodeRabbit 复审指正）。
+    // 现在的北京时刻 → 取北京日期拼下一个边界钟点 → 换回 UTC 时间戳
+    const bjNow = toBeijing(new Date());
+    const bjMinutes = bjNow.hour() * 60 + bjNow.minute();
+    const cutoff = TRADE_CUTOFF_HOUR * 60; // 15:00
+    // 下一个 15:00：还没到今天的 15:00 是今天，过了就是明天
+    const bjCutoffDay = bjMinutes < cutoff ? bjNow : bjNow.add(1, "day");
+    const bjCutoff = bjCutoffDay.hour(TRADE_CUTOFF_HOUR).minute(0).second(0);
+    // 下一个午夜：dayjs 无「明天 0 点」直接算式，+1 天再清零钟点
+    const bjMidnight = bjNow.add(1, "day").hour(0).minute(0).second(0);
+    // 两个 UTC 时间戳取先到者；subtract(8h) 是 toBeijing 加偏移的逆运算
+    const targetMs = Math.min(
+      bjCutoff.valueOf() - 8 * 3600_000,
+      bjMidnight.valueOf() - 8 * 3600_000,
+    );
+    const timer = setTimeout(() => revalidator.revalidate(), targetMs - Date.now());
     return () => clearTimeout(timer);
     // 依赖含 beforeCutoff：15:00 边界刷新后 today 不变（同一天），只有截单态翻转，
     // 不挂它的话午夜的下一次刷新没人排（CodeRabbit PR #80 指正的续作）
