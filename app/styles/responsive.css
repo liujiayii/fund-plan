@@ -286,7 +286,7 @@
    （同特异性源序已胜）；md:flex 是 min-width:768，与本段 max-width:767
    宽度互斥、永不同时命中（与 §4.5 桌面基线/窄屏覆盖同款结构）。
    spec §6.3 原文「移动端左屏退化成顶部渐变横幅」实现从简为整块隐藏，
-   窄屏品牌在场感由顶栏 Logo 承担（root.tsx 的 fp-header 常驻） */
+   窄屏品牌在场感由顶部品牌胶囊承担（MobileBrandBar，.fp-mobile 常驻） */
 @media (max-width: 767px) {
   .fp-auth-panel {
     display: none;

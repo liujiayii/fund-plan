@@ -293,6 +293,9 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 - `text-xs` 这类字号类会连 line-height 一起设（Tailwind 惯例）；要保留原行高用 `text-[12px]`
 - 设计系统组件（`app/components/ui/`）存量内联不强制迁移；新写的尽量用类
 - 范本：`app/routes/leaderboard.tsx`（四类场景一页全有）
+- 浮起来的面一律挂 `fp-glass`（材料在 `app/styles/liquid-glass.css`，上位法 `docs/liquid-glass.md`）；
+  tsx 里禁止 `backdrop-blur-*` / `backdrop-filter`（守卫测试钉死）；每视口玻璃节点 ≤ 8，
+  一卡多格用 `bg-well` 井格；主题类新增 `text-pending` `bg-pending-soft` `bg-well` `bg-elevated`
 
 git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix` 并重新 stage；
 `pre-push` 跑 `typecheck` + `test`。紧急绕过用 `--no-verify`。
