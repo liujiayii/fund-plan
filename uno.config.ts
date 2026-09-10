@@ -94,8 +94,9 @@ export default defineConfig({
     colors: {
       // 全量映射 app/theme.ts 的 COLOR——色值唯一出处，别在本文件写字面量。
       // 类名刻意用语义词而非 TS 键名：text-ink 好过 text-text-primary。
-      "primary": COLOR.primary, // 品牌紫：text-primary / bg-primary / outline-primary
-      "primary-bg": COLOR.primaryBg, // 主色紫雾底：bg-primary-bg（选中态）
+      "primary": COLOR.primary, // 冰川青蓝：text-primary / bg-primary / outline-primary
+      "on-primary": COLOR.onPrimary, // 主色上的深字：text-on-primary（亮药丸配墨字）
+      "primary-bg": COLOR.primaryBg, // 主色冰雾底：bg-primary-bg（选中态）
       "rise": COLOR.up, // 涨：text-rise
       "fall": COLOR.down, // 跌：text-fall
       "flat": COLOR.neutral, // 平：text-flat

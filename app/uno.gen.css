@@ -19,34 +19,35 @@
 @property --un-ordinal{syntax:"*";inherits:false;}
 @property --un-slashed-zero{syntax:"*";inherits:false;}
 /* layer: theme */
-:root, :host { --spacing: 0.25rem; --fontWeight-bold: 700; --fontWeight-medium: 500; --colors-ink: #F7F4FF; --colors-muted: #CDC4FF; --colors-primary: #7C5CFF; --colors-white: #fff; --colors-line: rgba(255, 255, 255, 0.16); --colors-well: rgba(255, 255, 255, 0.06); --text-sm-fontSize: 0.875rem; --text-sm-lineHeight: 1.25rem; --text-2xl-fontSize: 1.5rem; --text-2xl-lineHeight: 2rem; --colors-card: rgba(255, 255, 255, 0.06); --default-transition-timingFunction: cubic-bezier(0.4, 0, 0.2, 1); --default-transition-duration: 150ms; --leading-none: 1; --text-lg-fontSize: 1.125rem; --text-lg-lineHeight: 1.75rem; --text-xs-fontSize: 0.75rem; --text-xs-lineHeight: 1rem; --colors-pending: #F0D078; --radius-xl: 0.75rem; --fontWeight-semibold: 600; --colors-primary-bg: rgba(124, 92, 255, 0.22); --colors-tertiary: #A39BCF; --tracking-wide: 0.025em; --leading-tight: 1.25; --container-xl: 36rem; --colors-placeholder: #7A7398; --colors-rise: #FF5D8F; --text-3xl-fontSize: 1.875rem; --text-3xl-lineHeight: 2.25rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); --colors-rise-soft: rgba(255, 93, 143, 0.16); --colors-fall-soft: rgba(57, 255, 206, 0.16); --colors-fall: #39FFCE; --colors-pending-soft: rgba(240, 208, 120, 0.16); --colors-red-400: oklch(70.4% 0.191 22.216); }
+:root, :host { --spacing: 0.25rem; --fontWeight-bold: 700; --fontWeight-medium: 500; --colors-ink: #EFF7FC; --colors-muted: #C7DAE6; --colors-primary: #58C4F5; --colors-on-primary: #07202E; --colors-line: rgba(255, 255, 255, 0.16); --colors-well: rgba(255, 255, 255, 0.06); --text-sm-fontSize: 0.875rem; --text-sm-lineHeight: 1.25rem; --text-2xl-fontSize: 1.5rem; --text-2xl-lineHeight: 2rem; --colors-card: rgba(255, 255, 255, 0.06); --default-transition-timingFunction: cubic-bezier(0.4, 0, 0.2, 1); --default-transition-duration: 150ms; --leading-none: 1; --text-lg-fontSize: 1.125rem; --text-lg-lineHeight: 1.75rem; --text-xs-fontSize: 0.75rem; --text-xs-lineHeight: 1rem; --colors-pending: #E8C36A; --radius-xl: 0.75rem; --fontWeight-semibold: 600; --colors-white: #fff; --colors-primary-bg: rgba(88, 196, 245, 0.2); --colors-tertiary: #93ACBB; --tracking-wide: 0.025em; --leading-tight: 1.25; --container-xl: 36rem; --colors-placeholder: #5F7684; --colors-rise: #FF5D55; --text-3xl-fontSize: 1.875rem; --text-3xl-lineHeight: 2.25rem; --ease-DEFAULT: cubic-bezier(0.4, 0, 0.2, 1); --colors-rise-soft: rgba(255, 93, 85, 0.16); --colors-fall-soft: rgba(55, 211, 153, 0.16); --colors-fall: #37D399; --colors-pending-soft: rgba(232, 195, 106, 0.16); --colors-red-400: oklch(70.4% 0.191 22.216); }
 /* layer: preflights */
 :root {
-  --fp-primary: #7C5CFF;
-  --fp-primary-to: #FF3D6E;
-  --fp-primary-bg: rgba(124, 92, 255, 0.22);
-  --fp-up: #FF5D8F;
-  --fp-down: #39FFCE;
-  --fp-up-bg: rgba(255, 93, 143, 0.16);
-  --fp-down-bg: rgba(57, 255, 206, 0.16);
-  --fp-pending: #F0D078;
-  --fp-pending-bg: rgba(240, 208, 120, 0.16);
-  --fp-neutral: #A39BCF;
-  --fp-bg: #100E1C;
+  --fp-primary: #58C4F5;
+  --fp-primary-to: #B5E6FF;
+  --fp-primary-bg: rgba(88, 196, 245, 0.2);
+  --fp-on-primary: #07202E;
+  --fp-up: #FF5D55;
+  --fp-down: #37D399;
+  --fp-up-bg: rgba(255, 93, 85, 0.16);
+  --fp-down-bg: rgba(55, 211, 153, 0.16);
+  --fp-pending: #E8C36A;
+  --fp-pending-bg: rgba(232, 195, 106, 0.16);
+  --fp-neutral: #93ACBB;
+  --fp-bg: #071018;
   --fp-card: rgba(255, 255, 255, 0.06);
   --fp-well: rgba(255, 255, 255, 0.06);
   --fp-border: rgba(255, 255, 255, 0.16);
-  --fp-elevated: rgba(18, 14, 32, 0.92);
-  --fp-mask: rgba(7, 6, 12, 0.55);
-  --fp-fog-a: #6D4DFF;
-  --fp-fog-b: #FF3D8A;
-  --fp-fog-c: #39D6FF;
-  --fp-text-primary: #F7F4FF;
-  --fp-text-secondary: #CDC4FF;
-  --fp-text-tertiary: #A39BCF;
-  --fp-text-placeholder: #7A7398;
+  --fp-elevated: rgba(10, 26, 40, 0.92);
+  --fp-mask: rgba(3, 10, 16, 0.55);
+  --fp-fog-a: #1E63D6;
+  --fp-fog-b: #36AEE8;
+  --fp-fog-c: #A8E4FF;
+  --fp-text-primary: #EFF7FC;
+  --fp-text-secondary: #C7DAE6;
+  --fp-text-tertiary: #93ACBB;
+  --fp-text-placeholder: #5F7684;
   --fp-num-font: "Space Grotesk", "DIN Alternate", "SF Mono", ui-monospace, "Menlo", monospace;
-  --fp-primary-gradient: linear-gradient(90deg, #7C5CFF 0%, #FF3D6E 100%);
+  --fp-primary-gradient: linear-gradient(90deg, #58C4F5 0%, #B5E6FF 100%);
   --fp-duration-fast: 150ms;
   --fp-duration-base: 240ms;
   --fp-duration-slow: 360ms;
@@ -62,6 +63,7 @@
 .text-fall{color:color-mix(in srgb, var(--colors-fall) var(--un-text-opacity), transparent);}
 .text-ink{color:color-mix(in srgb, var(--colors-ink) var(--un-text-opacity), transparent);}
 .text-muted{color:color-mix(in srgb, var(--colors-muted) var(--un-text-opacity), transparent);}
+.text-on-primary{color:color-mix(in srgb, var(--colors-on-primary) var(--un-text-opacity), transparent);}
 .text-pending{color:color-mix(in srgb, var(--colors-pending) var(--un-text-opacity), transparent);}
 .text-placeholder{color:color-mix(in srgb, var(--colors-placeholder) var(--un-text-opacity), transparent);}
 .text-primary{color:color-mix(in srgb, var(--colors-primary) var(--un-text-opacity), transparent);}
@@ -254,6 +256,7 @@
 .text-fall{color:color-mix(in oklab, var(--colors-fall) var(--un-text-opacity), transparent);}
 .text-ink{color:color-mix(in oklab, var(--colors-ink) var(--un-text-opacity), transparent);}
 .text-muted{color:color-mix(in oklab, var(--colors-muted) var(--un-text-opacity), transparent);}
+.text-on-primary{color:color-mix(in oklab, var(--colors-on-primary) var(--un-text-opacity), transparent);}
 .text-pending{color:color-mix(in oklab, var(--colors-pending) var(--un-text-opacity), transparent);}
 .text-placeholder{color:color-mix(in oklab, var(--colors-placeholder) var(--un-text-opacity), transparent);}
 .text-primary{color:color-mix(in oklab, var(--colors-primary) var(--un-text-opacity), transparent);}

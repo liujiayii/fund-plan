@@ -1,7 +1,8 @@
 # 液态玻璃设计宪法（全站 UI 硬约束）
 
 > 状态：2026-09-10 与主理人确认；同日施工前自审第二版（对照代码补了 §2.1 色雾实现、
-> §2.2 覆盖优先级、§2.6 内井 token、§3 操作条层级、§4 卖点卡预算、§6 节点预算表、§7 暗色算法）。
+> §2.2 覆盖优先级、§2.6 内井 token、§3 操作条层级、§4 卖点卡预算、§6 节点预算表、§7 暗色算法）；
+> 同日二次换血：紫夜 → **冰川 Glacier**（十七套 demo 比选定稿，AI 味紫粉全数退役）。
 > 本文件进 git，是后续所有视觉改动的上位法。
 > 页面施工 spec：`.superpowers/specs/2026-09-10-liquid-glass-redesign.md`（本地，不入库）。
 > 前作 visual-refresh / visual-depth 的晨雾靛蓝身份作废；token 基建（`theme.ts` → uno → `--fp-*`）保留。
@@ -12,11 +13,13 @@
 
 ## 1. 身份一句话
 
-**暗底夜盘 + 全站玻璃拟物。** 卡片、导航、按钮、抽屉、弹窗都是半透明冰块，压在缓慢漂移的色雾上。内容不「扁」——这是刻意选的左边那条路，不是 iOS 26/27 的铬玻璃。
+**深海蓝黑底 + 冰蓝亮雾 + 全站玻璃拟物。** 卡片、导航、按钮、抽屉、弹窗都是半透明冰块，浮在冰海的光雾上。内容不「扁」——这是刻意选的左边那条路，不是 iOS 26/27 的铬玻璃。
 
 iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，本期不做。切换成本见施工 spec §十二。
 
-国内涨跌习惯保留：涨红跌绿，主色让给品牌紫粉，两套语义不准打架。
+国内涨跌习惯保留：涨红跌绿，主色让给冰川青蓝，两套语义不准打架。
+冰川换血的物理依据：**玻璃质感 = 雾亮度与玻璃面暗度的差**。亮雾 blur 才有东西可嚼，
+暗雾会把玻璃闷成塑料（十七套 demo 实测，雾透明度因此从紫夜版 0.4 提到 0.55）。
 
 ---
 
@@ -28,12 +31,13 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 
 | token | 值 | 角色 |
 | --- | --- | --- |
-| `bg` | `#100E1C` | 深紫黑，页面底（2026-09-10 走查从 #07060C 提亮两档：纯黑底压出的玻璃像黑板，文字读不清） |
-| `fogA` | `#6D4DFF` | 漂移色雾 · 紫 |
-| `fogB` | `#FF3D8A` | 漂移色雾 · 粉 |
-| `fogC` | `#39D6FF` | 漂移色雾 · 青（第三团，别再加第四） |
+| `bg` | `#071018` | 深海蓝黑，页面底（蓝调夜里冰雾才有「冰海」衬底） |
+| `fogA` | `#1E63D6` | 漂移色雾 · 钴蓝（浓） |
+| `fogB` | `#36AEE8` | 漂移色雾 · 湖蓝（中） |
+| `fogC` | `#A8E4FF` | 漂移色雾 · 冰白（亮，第三团，别再加第四） |
 
-色雾是 **3 团、`mix-blend-mode: screen`、透明度 0.4、14s 缓动循环** 的固定定位层（`position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden`），挂在根布局，全站同一份，不按页复制。
+色雾是 **3 团、`mix-blend-mode: screen`、透明度 0.55、14s 缓动循环** 的固定定位层（`position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden`），挂在根布局，全站同一份，不按页复制。
+透明度 0.55 是冰川档：玻璃质感 = 雾亮度与玻璃面暗度的差，亮雾 blur 才有东西可嚼（紫夜版 0.4 是暗雾，实测玻璃闷成塑料）。冰雾色相离涨红跌绿都远，不会顶到数字底下打架（那是粉雾的旧病）。
 `prefers-reduced-motion: reduce` 时色雾静止在初始位置，不删——删了玻璃就没衬底，会变成一块脏灰塑料。
 
 实现纪律（性能，不是审美）：
@@ -49,15 +53,16 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 
 ```css
 .fp-glass {
-  /* 双层：上层白色高光渐变，下层半透明深紫底衬（2026-09-10 走查改）。
+  /* 双层：上层白色高光渐变，下层半透明深海底衬（冰川版）。
      只有白色渐变时卡片下半截压在黑底上是纯黑、压在雾上被雾染色，文字可读性随雾漂移；
-     深紫底衬把内容面稳在可读的中间灰紫，雾仍从底下透，玻璃感靠模糊 + 高光脊 + 描边。
+     深海底衬把内容面稳在可读的中间蓝灰，雾仍从底下透（透明度 0.42，比紫夜版 0.5
+     略收——冰雾更亮，衬留暗些光边对比才够），玻璃感靠模糊 + 高光脊 + 描边。
      ⚠️ 三条都带 !important：antd cssinjs 的样式标签在 SSR 时注入到 </head> 前、
      排在本文件的 <link> 之后（entry.server.tsx），同特异性下 .ant-card 的
      background 简写会把渐变冲成实色。responsive.css 盖 antd 内部类同此手法 */
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
-    rgba(34, 30, 56, 0.5) !important;
+    rgba(12, 30, 48, 0.42) !important;
   backdrop-filter: blur(22px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
   box-shadow:
@@ -67,7 +72,7 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
      自带（antd Card 是 relative，侧栏 sticky，胶囊 fixed）。曾写过
      border-radius: inherit——它会让 antd Card 继承父级的 0 圆角，删掉 */
 }
-/* 彩虹描边走伪元素，不走 border 色——border 会被模糊吃掉 */
+/* 冰色描边走伪元素，不走 border 色——border 会被模糊吃掉 */
 .fp-glass::before {
   content: "";
   position: absolute;
@@ -77,8 +82,8 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
   background: linear-gradient(
     135deg,
     rgba(255, 255, 255, 0.70),
-    rgba(180, 140, 255, 0.15) 40%,
-    rgba(255, 80, 160, 0.45) 70%,
+    rgba(88, 196, 245, 0.2) 40%,
+    rgba(30, 99, 214, 0.45) 70%,
     rgba(255, 255, 255, 0.25)
   );
   /* 标准「只描边」mask；新代码复制这段，不要改角度或加第四色停 */
@@ -111,19 +116,19 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 
 | 角色 | token | 色 | 字体 |
 | --- | --- | --- | --- |
-| 主文字 | `textPrimary` | `#F7F4FF` | 系统栈（中文） |
-| 次要文字 | `textSecondary` | `#CDC4FF` | 系统栈 |
-| 三级文字（标签 / 坐标轴） | `textTertiary` | `#A39BCF` | 系统栈 |
-| 占位 / 禁用 | `textPlaceholder` | `#7A7398` | 系统栈 |
-| 平（0 盈亏 / 无数据） | `neutral` | `#A39BCF`（与三级文字同值，语义不同） | — |
-| 数字 | — | `#F7F4FF` | `"Space Grotesk"` + `tabular-nums`（已有 `font-num`） |
-| 涨 | `up` | `#FF5D8F` | 可加极弱 `text-shadow: 0 0 8px rgba(255,61,110,.55)`，仅强调位 |
-| 跌 | `down` | `#39FFCE` | 同上，青辉光仅强调位 |
-| 待办 / 在途 | `pending` | `#F0D078` | 第三语义，不跟涨跌混 |
+| 主文字 | `textPrimary` | `#EFF7FC` | 系统栈（中文） |
+| 次要文字 | `textSecondary` | `#C7DAE6` | 系统栈 |
+| 三级文字（标签 / 坐标轴） | `textTertiary` | `#93ACBB` | 系统栈 |
+| 占位 / 禁用 | `textPlaceholder` | `#5F7684` | 系统栈 |
+| 平（0 盈亏 / 无数据） | `neutral` | `#93ACBB`（与三级文字同值，语义不同） | — |
+| 数字 | — | `#EFF7FC` | `"Space Grotesk"` + `tabular-nums`（已有 `font-num`） |
+| 涨 | `up` | `#FF5D55` | 可加极弱 `text-shadow: 0 0 8px rgba(255,93,85,.55)`，仅强调位 |
+| 跌 | `down` | `#37D399` | 同上，翡翠辉光仅强调位 |
+| 待办 / 在途 | `pending` | `#E8C36A` | 第三语义，不跟涨跌混 |
 
 antd 的 `colorTextDescription` / `colorTextLabel` 必须钉到 `textSecondary`：`Typography type="secondary"` 与 Card extra 走它，默认派生自三级色，暗底上整页副标题会糊成一片（2026-09-10 走查）。三级色只留给标签与坐标轴。
 
-对比度底线（对玻璃内容面 ≈ `#2E2A48` 实测）：主文字 ≈ 12:1、次要 ≈ 8:1、三级 ≈ 5:1、占位 ≈ 3.2:1（占位不承载信息，允许）。
+对比度底线（对玻璃内容面 ≈ `#1C2E40` 实测）：主文字 ≈ 12:1、次要 ≈ 8:1、三级 ≈ 5:1、占位 ≈ 3.2:1（占位不承载信息，允许）。
 
 数字 **禁止** 用渐变填字、禁止外发光铺满所有金额。辉光只给总资产和当日涨跌两处。
 
@@ -133,11 +138,14 @@ antd 的 `colorTextDescription` / `colorTextLabel` 必须钉到 `textSecondary`�
 
 | token | 值 | 用途 |
 | --- | --- | --- |
-| `primary` | `#7C5CFF` | 选中、链接、进度条、图表主序列 |
-| `primaryTo` | `#FF3D6E` | 渐变终点；主 CTA 渐变 `90deg, primary → primaryTo` |
-| `primaryBg` | `rgba(124, 92, 255, 0.22)` | 选中浅底（玻璃上的紫雾，不是实色块） |
+| `primary` | `#58C4F5` | 选中、链接、进度条、图表主序列（冰川青蓝） |
+| `primaryTo` | `#B5E6FF` | 渐变终点；主 CTA 渐变 `90deg, primary → primaryTo`（冰白） |
+| `primaryBg` | `rgba(88, 196, 245, 0.2)` | 选中浅底（玻璃上的冰雾，不是实色块） |
+| `onPrimary` | `#07202E` | 主色上的深字：亮冰蓝药丸配深海墨字（Logo 曲线 / CTA 文字 / Avatar） |
 
 主 CTA 可以是实色渐变药丸（BUY NOW 那种），次按钮必须是玻璃胶囊。
+**主色是亮色，药丸上的字一律 `onPrimary` 深海墨**（白字对比不足）——antd 侧经
+`colorTextLightSolid` 全局派生（Button / Avatar / Badge），uno 侧用 `text-on-primary`。
 **主色绝不映射涨跌。** `colorSuccess` / `colorError` 继续保持 antd 原生语义。
 
 ### 2.6 内井、分割线与浅底（玻璃之内的扁材料）
@@ -149,9 +157,9 @@ antd 的 `colorTextDescription` / `colorTextLabel` 必须钉到 `textSecondary`�
 | `well` | `rgba(255, 255, 255, 0.06)` | 内井：表头、输入框填充、列表行 hover、侧栏选中底、签到条 |
 | `card` | `rgba(255, 255, 255, 0.06)` | 与 `well` 同值。保留键名只为兼容既有 `bg-card` 消费方，新代码一律写 `well` |
 | `border` | `rgba(255, 255, 255, 0.16)` | 分割线、输入框描边、表格行线 |
-| `elevated` | `rgba(18, 14, 32, 0.92)` | **不透明浮面**：Tooltip / Popover / G2 tooltip / 降级玻璃。这些面积小、生命期短、常压在图表或文字上，模糊反而看不清 |
+| `elevated` | `rgba(10, 26, 40, 0.92)` | **不透明浮面**：Tooltip / Popover / G2 tooltip / 降级玻璃。这些面积小、生命期短、常压在图表或文字上，模糊反而看不清 |
 | `upBg` / `downBg` / `pendingBg` | 对应语义色 16% 透明 | 涨跌/待办胶囊浅底，日历格底 |
-| 遮罩 | `rgba(7, 6, 12, 0.55)` | Modal / Drawer mask（antd `colorBgMask`） |
+| 遮罩 | `rgba(3, 10, 16, 0.55)` | Modal / Drawer mask（antd `colorBgMask`） |
 
 `well` 与 `border` 是纯白透明度，压在任何雾色上都成立——这就是为什么内井不需要按雾色调色。
 
@@ -162,11 +170,11 @@ antd 的 `colorTextDescription` / `colorTextLabel` 必须钉到 `textSecondary`�
 从底到顶，不许跳级、不许玻璃叠玻璃超过两层。
 
 ```
-0  bg #100E1C
+0  bg #071018
 1  色雾三团（全站一份，pointer-events: none）
 2  内容玻璃卡（.fp-glass）
 3  导航铬：桌面侧栏 / 移动端胶囊 Tab / 顶栏 / 页底操作条（.fp-glass，一律不加 specular）
-4  浮层：Drawer / Modal / Dropdown / Select 下拉（.fp-glass，遮罩 rgba(7,6,12,.55)）
+4  浮层：Drawer / Modal / Dropdown / Select 下拉（.fp-glass，遮罩 rgba(3,10,16,.55)）
 4' 小浮面：Tooltip / Popover / G2 tooltip（elevated 实色，不模糊，见 §2.6）
 ```
 

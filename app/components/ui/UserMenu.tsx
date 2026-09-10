@@ -70,7 +70,8 @@ export function UserMenu({ user, compact }: UserMenuProps) {
           className="flex min-w-0 cursor-pointer items-center gap-2 rounded-full border-0 bg-transparent p-1 text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           aria-label="用户菜单"
         >
-          <Avatar size={28} className="shrink-0 bg-primary">{avatarText}</Avatar>
+          {/* 冰川头像：亮冰蓝底配深海墨字（colorTextLightSolid 已全局钉 onPrimary） */}
+          <Avatar size={28} className="shrink-0 bg-primary text-on-primary">{avatarText}</Avatar>
           {!compact && (
             <span className="fp-sidebar-label min-w-0 truncate text-sm" title={user.username}>
               {user.username}

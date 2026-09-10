@@ -69,7 +69,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             否则玻璃页面里蹦出一根白滚动条（2026-09-10 走查补） */}
         <meta name="color-scheme" content="dark" />
         {/* 移动端浏览器地址栏跟页面底同色，色值与 theme.ts 的 COLOR.bg 一致（静态资源吃不到变量，改色同步） */}
-        <meta name="theme-color" content="#100E1C" />
+        <meta name="theme-color" content="#071018" />
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Meta />
@@ -188,8 +188,9 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         <h1 className="m-0 text-2xl font-bold text-ink">{title}</h1>
         <p className="mt-2 mb-6 text-sm leading-6 text-muted">{detail}</p>
         <div className="flex flex-wrap justify-center gap-3">
-          {/* 原生 <a>：错误边界外没有 router 上下文，也顺手走边缘缓存 */}
-          <a href="/" className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-white no-underline">
+          {/* 原生 <a>：错误边界外没有 router 上下文，也顺手走边缘缓存。
+              亮冰蓝药丸配深海墨字（COLOR.onPrimary，白字对比不足） */}
+          <a href="/" className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-on-primary no-underline">
             返回首页
           </a>
           {isNotFound

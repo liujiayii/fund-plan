@@ -43,9 +43,10 @@ body {
   height: 60vmax;
   border-radius: 50%;
   mix-blend-mode: screen;
-  /* 0.4：雾是衬底不是聚光灯。0.55 时粉雾透过卡片直接顶到粉色涨幅数字底下，
-     文字与雾同色打架（2026-09-10 走查降档） */
-  opacity: 0.4;
+  /* 0.55：冰川档——玻璃质感 = 雾亮度与玻璃面暗度的差，亮雾 blur 才有东西可嚼
+     （紫夜版 0.4 是暗雾，2026-09-10 十七套 demo 实测暗雾会把玻璃闷成塑料）。
+     冰雾色相离涨红跌绿都远，0.55 不会顶到数字底下打架（那是粉雾的旧病） */
+  opacity: 0.55;
   will-change: transform;
   animation-duration: 14s;
   animation-timing-function: ease-in-out;
@@ -108,10 +109,11 @@ body {
 
 /* ══════════ 2. 玻璃（宪法 §2.2）══════════ */
 
-/* 双层背景（2026-09-10 走查改）：下层是半透明深紫底衬，上层是白色高光渐变。
+/* 双层背景（冰川版）：下层是半透明深海底衬，上层是白色高光渐变。
    只有白色渐变时，卡片下半截压在近黑页面底上几乎纯黑、压在雾上又被雾染色，
-   文字可读性随雾漂移；深色底衬把内容面稳定在一个可读的中间灰紫，雾仍从底下透
-   （透明度 0.5），玻璃感靠 backdrop 模糊 + 高光脊 + 描边，不靠「透得多」。
+   文字可读性随雾漂移；深色底衬把内容面稳定在一个可读的中间蓝灰，雾仍从底下透
+   （透明度 0.42，比紫夜版 0.5 略收——冰雾更亮，衬留暗些光边对比才够），
+   玻璃感靠 backdrop 模糊 + 高光脊 + 描边，不靠「透得多」。
    ⚠️ 三条材料属性带 !important：antd cssinjs 的样式标签在 SSR 时注入到
    </head> 前、排在本文件的 <link> 之后（entry.server.tsx），同特异性下
    .ant-card 的 background 简写会把渐变冲成实色。
@@ -121,7 +123,7 @@ body {
    0 圆角，删掉 */
 .fp-glass {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(34, 30, 56, 0.5) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(12, 30, 48, 0.42) !important;
   backdrop-filter: blur(22px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
   box-shadow:
@@ -129,8 +131,9 @@ body {
     0 18px 40px rgba(0, 0, 0, 0.35) !important;
 }
 
-/* 彩虹描边走伪元素，不走 border 色——border 会被模糊吃掉。
-   inset:0 + border-radius: inherit 天然贴合宿主圆角，不需要 overflow hidden */
+/* 冰色描边走伪元素，不走 border 色——border 会被模糊吃掉。
+   inset:0 + border-radius: inherit 天然贴合宿主圆角，不需要 overflow hidden。
+   停色：白起 → 冰雾淡 → 浓钴冰 → 白收（紫夜版粉停已随换血退役） */
 .fp-glass::before {
   content: "";
   position: absolute;
@@ -140,8 +143,8 @@ body {
   background: linear-gradient(
     135deg,
     rgba(255, 255, 255, 0.7),
-    rgba(180, 140, 255, 0.15) 40%,
-    rgba(255, 80, 160, 0.45) 70%,
+    rgba(88, 196, 245, 0.2) 40%,
+    rgba(30, 99, 214, 0.45) 70%,
     rgba(255, 255, 255, 0.25)
   );
   /* 标准「只描边」mask；新代码复制这段，不要改角度或加第四色停 */
@@ -222,7 +225,7 @@ body {
 .ant-select-dropdown {
   position: relative;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(34, 30, 56, 0.5) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(12, 30, 48, 0.42) !important;
   backdrop-filter: blur(22px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
   box-shadow:
