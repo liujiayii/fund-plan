@@ -3,6 +3,7 @@ import type { OrderView } from "~/services/portfolio-service";
 import { Tag, Tooltip } from "antd";
 import { fmtYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
+import { StatusBadge } from "~/components/ui/StatusBadge";
 import { navToDisplay, sharesToDisplay } from "~/domain/money";
 import { COLOR } from "~/theme";
 
@@ -13,10 +14,10 @@ import { COLOR } from "~/theme";
  * 给每一行都贴一个绿色「已确认」等于没有信息，只是噪音。
  * 无 Tag 即代表已成交。
  */
-const STATUS_TAG: Partial<Record<OrderView["status"], { color: string; text: string }>> = {
-  pending: { color: "orange", text: "待确认" },
-  failed: { color: "red", text: "失败" },
-  cancelled: { color: "default", text: "已撤单" },
+const STATUS_TAG: Partial<Record<OrderView["status"], { tone: "pending" | "danger" | "default"; text: string }>> = {
+  pending: { tone: "pending", text: "待确认" },
+  failed: { tone: "danger", text: "失败" },
+  cancelled: { tone: "default", text: "已撤单" },
 };
 
 export interface OrderListProps {
@@ -39,7 +40,8 @@ export interface OrderListProps {
  * 降噪三条（见设计文档 3.4）：
  *  - 「手动」不贴 Tag，只有定投才贴
  *  - 「已确认」不贴 Tag，只有待确认/失败才贴
- *  - 方向用蓝色/默认色，不占用红绿（红绿是涨跌的）
+ *  - 方向 Tag 无色（井底），定投用 purple 分类色；待确认走 StatusBadge 的 pending
+ *    第三语义——都不占用红绿（红绿是涨跌的）
  */
 export function OrderList({ orders, detailed, renderActions }: OrderListProps) {
   return (
@@ -66,18 +68,18 @@ export function OrderList({ orders, detailed, renderActions }: OrderListProps) {
             note={(
               <>
                 {o.side === "buy"
-                  ? <Tag color="blue">申购</Tag>
+                  ? <Tag>申购</Tag>
                   : <Tag>赎回</Tag>}
                 {o.source === "dca" && <Tag color="purple">定投</Tag>}
                 {statusTag && (
                   o.failReason
                     ? (
                         <Tooltip title={o.failReason}>
-                          <Tag color={statusTag.color}>{statusTag.text}</Tag>
+                          <span><StatusBadge tone={statusTag.tone}>{statusTag.text}</StatusBadge></span>
                         </Tooltip>
                       )
                     : (
-                        <Tag color={statusTag.color}>{statusTag.text}</Tag>
+                        <StatusBadge tone={statusTag.tone}>{statusTag.text}</StatusBadge>
                       )
                 )}
                 <span>

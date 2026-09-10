@@ -6,58 +6,55 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { Link, useLocation } from "react-router";
-import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
+import { MOBILE_TAB_KEYS, NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
+
+/** 四项图标；文案从 NAV_ITEMS 查（tests/domain/nav.test.ts 钉四项都是成员） */
+const TAB_ICON: Record<string, ReactNode> = {
+  "/": <HomeOutlined />,
+  "/funds": <FundOutlined />,
+  "/me/watchlist": <StarOutlined />,
+  "/me": <UserOutlined />,
+};
 
 /**
- * 移动端底部导航栏（spec §6）。
+ * 移动端底部悬浮胶囊 Tab（spec §4.3，宪法层级 3 的铬）。
  *
- * ⚠️ 只放 4 项：首页/基金/自选/我的。「主理人的盘」不进底栏 ——
- * 首页已有它的引流卡片入口，320px÷5=64px/格会挤到贴边（spec §6.1）。
- * NAV_ITEMS 里的 master 项由 TABS 显式挑选，顶栏仍消费完整 NAV_ITEMS。
+ * 从「贴底实色条」改成「左右 16px、底 12px + safe-area 的玻璃胶囊」：
+ * 定位 / 尺寸在 responsive.css §4（.fp-tabbar），材料是 .fp-glass（不扫光，宪法 §2.3 第二版）。
+ * 内容从胶囊底下透出来，.fp-content 的底 padding 按胶囊高度让位。
  *
- * 手写 <nav> 而非 antd 组件：TabBar 只需要 4 个链接 + active 态，
- * antd 没有对应组件（TabBar/BottomNavigation 都不在 antd 里），
- * 这正是「零新增依赖」约束下的自然解（spec §12）。
+ * 首页项保持原生 <a>：游客边缘缓存靠整页跳转命中（同 AppSidebar）。
+ * 手写 <nav> 而非 antd 组件：antd 没有 TabBar；零新增依赖。
  */
-const TABS: { key: string; label: string; icon: ReactNode }[] = [
-  { key: "/", label: "首页", icon: <HomeOutlined /> },
-  { key: "/funds", label: "基金", icon: <FundOutlined /> },
-  { key: "/me/watchlist", label: "自选", icon: <StarOutlined /> },
-  { key: "/me", label: "我的", icon: <UserOutlined /> },
-];
-
 export function MobileTabBar() {
   const location = useLocation();
   const selectedKey = resolveSelectedKey(location.pathname, NAV_ITEMS);
+  const labelOf = (key: string) => NAV_ITEMS.find(i => i.key === key)?.label ?? key;
 
   return (
-    <nav className="fp-tabbar fp-mobile" aria-label="主导航">
-      {TABS.map(t => (
-        t.key === "/"
-        // 首页保持原生 <a>：游客边缘缓存靠整页跳转命中（spec，同 root.tsx 顶栏）
+    <nav className="fp-tabbar fp-mobile fp-glass" aria-label="主导航">
+      {MOBILE_TAB_KEYS.map((key) => {
+        const active = selectedKey === key;
+        // 选中：小玻璃药丸底 + 主色（宪法 §4.4 的 on 态）；未选中次要色
+        const cls = `fp-tabbar-item${active ? " active" : ""}`;
+        const body = (
+          <>
+            {TAB_ICON[key]}
+            <span>{labelOf(key)}</span>
+          </>
+        );
+        return key === "/"
           ? (
-              <a
-                key={t.key}
-                href={t.key}
-                className={`fp-tabbar-item${selectedKey === t.key ? " active" : ""}`}
-                aria-current={selectedKey === t.key ? "page" : undefined}
-              >
-                {t.icon}
-                <span>{t.label}</span>
+              <a key={key} href={key} className={cls} aria-current={active ? "page" : undefined}>
+                {body}
               </a>
             )
           : (
-              <Link
-                key={t.key}
-                to={t.key}
-                className={`fp-tabbar-item${selectedKey === t.key ? " active" : ""}`}
-                aria-current={selectedKey === t.key ? "page" : undefined}
-              >
-                {t.icon}
-                <span>{t.label}</span>
+              <Link key={key} to={key} className={cls} aria-current={active ? "page" : undefined}>
+                {body}
               </Link>
-            )
-      ))}
+            );
+      })}
     </nav>
   );
 }

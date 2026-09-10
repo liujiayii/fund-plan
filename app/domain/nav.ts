@@ -1,5 +1,5 @@
 /**
- * 导航高亮 —— 顶栏 Menu 与移动端底部 TabBar 共用的纯函数（spec §6.4）。
+ * 导航高亮 —— 桌面侧栏与移动端底部胶囊 Tab 共用的纯函数（spec §6.4）。
  *
  * 为什么放 domain：两处消费同一份逻辑，逐字复制会重演
  * PortfolioView/me._index 那次「两份独立漂移」（期十三收掉的坑）。
@@ -26,6 +26,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "/me/watchlist", label: "自选" },
   { key: "/me", label: "我的" },
 ];
+
+/**
+ * 移动端底部胶囊 Tab 的四项（按显示顺序）。
+ * ⚠️ 只放 4 项：首页/基金/自选/我的。「主理人的盘」与「排行榜」不进底栏——
+ * 首页已有两者的引流入口，390px÷5=78px/格会挤到贴边。
+ * 只存 key：图标是 UI 事，放 MobileTabBar；文案从 NAV_ITEMS 查，不重复一份。
+ */
+export const MOBILE_TAB_KEYS: readonly string[] = ["/", "/funds", "/me/watchlist", "/me"];
 
 /**
  * 由 pathname 解析当前高亮的导航 key。

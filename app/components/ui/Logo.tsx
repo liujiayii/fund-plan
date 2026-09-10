@@ -2,6 +2,7 @@
  * 品牌视觉锤：圆角渐变方块 + 白色上扬净值曲线（visual-refresh spec §6.1）。
  * 颜色吃 --fp-primary / --fp-primary-to CSS 变量——token 单一出处不破。
  * gradient id 固定字符串：同参数渐变重复定义无害，不必 useId。
+ * 曲线笔画用 on-primary 深海墨（冰川药丸是亮冰蓝，白笔画对比不足）。
  */
 export function Logo({ size = 24 }: { size?: number }) {
   return (
@@ -14,15 +15,15 @@ export function Logo({ size = 24 }: { size?: number }) {
       </defs>
       {/* 渐变圆角方块：app icon 语言，9/32 圆角比例与卡片 16px 同档 */}
       <rect width="32" height="32" rx="9" fill="url(#fp-logo-grad)" />
-      {/* 白色净值曲线：两段折线上扬，末端圆点收「最新一笔」 */}
+      {/* 深海墨净值曲线：两段折线上扬，末端圆点收「最新一笔」 */}
       <path
         d="M8 21.5 L13 15.5 L17.5 19 L24 10.5"
-        stroke="#fff"
+        stroke="var(--fp-on-primary)"
         strokeWidth="2.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="24" cy="10.5" r="2" fill="#fff" />
+      <circle cx="24" cy="10.5" r="2" fill="var(--fp-on-primary)" />
     </svg>
   );
 }

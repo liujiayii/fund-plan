@@ -1,8 +1,9 @@
 /**
  * 期五 · 移动端适配的唯一媒体查询出处（spec §4.4）。
  *
- * ⚠️ 全部规则包在 max-width: 767px 里（antd md=768 以下为移动端），
- * 桌面零回归是本期硬门槛。**不要在组件里散写 @media** ——
+ * ⚠️ 窄屏规则包在 max-width: 767px 里（antd md=768 以下为移动端），
+ * 桌面零回归是本期硬门槛。壳的桌面 / 平板档（§10 侧栏三档）是 2026-09-10
+ * 液态玻璃壳新增的例外，仍只在本文件。**不要在组件里散写 @media** ——
  * 「窄屏长什么样」只认这一个文件。
  *
  * 为什么是手写 CSS 文件而不是 UnoCSS 断点变体类：
@@ -17,13 +18,34 @@
  * 排最后才能覆盖工具类与 antd 组件类。
  */
 
+/* ══════════ 0. 跳转主内容链接（键盘可达性）══════════ */
+
+/* 平时 sr-only（absolute 裁剪隐藏），聚焦时恢复 fixed 玻璃药丸。
+   不能用 focus:not-sr-only：not-sr-only 把 position 打回 static，
+   链接挤进 .fp-shell 的 flex 流引发布局位移，::before 描边的
+   定位容器也跟着换人（CodeRabbit PR #80 指正）。这里只恢复
+   「可见尺寸 + fixed」，clip 路径由 :not(.sr-only) 场景直接重设 */
+.fp-skip-link:focus {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  width: auto;
+  height: auto;
+  padding: 8px 16px;
+  overflow: visible;
+  clip: auto;
+  white-space: nowrap;
+}
+
 /* ══════════ 1. 全局基线（spec §5）══════════ */
 
 @media (max-width: 767px) {
   /* Content padding 24→12：所有溢出的放大器（spec §5.1）。
-     底部 56px 给 TabBar + 安全区 + 16px 呼吸（Task 4 落 TabBar 后生效） */
+     底部让位 = 胶囊 60 + 底距 12 + 呼吸 16 = 88 + 安全区（liquid-glass 偏差 6）。
+     工具类 px-6/pt-6/pb-12 是桌面值，需 !important 盖 */
   .fp-content {
-    padding: 12px 12px calc(56px + env(safe-area-inset-bottom) + 16px) !important;
+    padding: 12px 12px calc(88px + env(safe-area-inset-bottom)) !important;
   }
 
   /* Card body 24→16（spec §5.2）。全局覆盖 .ant-card-body 而非改
@@ -53,17 +75,17 @@
   }
 
   /* Footer 让位：Footer 在 Content 外，.fp-content 的让位盖不到它，
-     不补这条滚到底时 TabBar 会盖住 © 行（GlobalFooter 自身底距仅 24px） */
+     不补这条滚到底时底部胶囊会盖住 © 行（GlobalFooter 自身底距仅 24px） */
   .fp-footer {
-    margin-bottom: calc(56px + env(safe-area-inset-bottom));
+    margin-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
-  /* 有操作条页面的 Footer 窄屏让位：TabBar 56 + bar 64~86 + 安全区。
-     与 .fp-footer 同为 0,1,0，靠紧跟其后的 source-order 压过上面的 56px 让位
+  /* 有操作条页面的 Footer 窄屏让位：胶囊 72（含缝）+ 操作条 72 + 呼吸 + 安全区。
+     与 .fp-footer 同为 0,1,0，靠紧跟其后的 source-order 压过上面的让位
      （勿挪到 .fp-footer 之前）；桌面 88px 基线在下方 min-width:768px 块里，
      与本块宽度互斥、永不同时命中，故无需 !important */
   .fp-footer-bar-clear {
-    margin-bottom: calc(144px + env(safe-area-inset-bottom));
+    margin-bottom: calc(176px + env(safe-area-inset-bottom));
   }
 
   /* ══════════ 5. FundListItem 窄屏两段式（spec §8）══════════ */
@@ -102,59 +124,68 @@
     font-size: 10px !important;
   }
 
-  /* 顶栏窄屏：Menu（flex:1 撑开项）隐藏后 logo 与登录态聚拢左侧，
-     space-between 让登录态回到右侧（与底栏形态对齐） */
-  .fp-header {
-    justify-content: space-between;
+  /* 首页 hero 玻璃卡窄屏收窄内距（工具类 px-10 py-12 是桌面值，需 !important 盖） */
+  .fp-hero {
+    padding: 28px 20px !important;
   }
 }
 
-/* ══════════ 4. 底部 TabBar（spec §6）══════════ */
+/* ══════════ 4. 底部悬浮胶囊 Tab（liquid-glass spec §4.3）══════════ */
 
-/* 窄屏常驻、768px+ 由 .fp-mobile 隐藏（规则在本文件末尾） */
+/* 窄屏常驻、768px+ 由 .fp-mobile 隐藏（规则在本文件末尾）。
+   材料（玻璃 / 高光）由 liquid-glass.css 的 .fp-glass 给；这里只管形状与定位。
+   overflow hidden 是 .fp-glass-specular 的要求（扫光条不出圆角） */
 .fp-tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 16px;
+  right: 16px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 20;
   display: flex;
-  /* 色值走 --fp-* 变量：CSS 进不了 JS 模块图 import 不到 COLOR，
-     变量是唯一通道（由 uno.config 的 preflight 从 theme.ts 输出，改色零改动） */
-  background: var(--fp-card);
-  border-top: 1px solid var(--fp-border);
-  /* iPhone 底部安全区：没这行最后一格标签被系统横条压住 */
-  padding-bottom: env(safe-area-inset-bottom);
+  height: 60px;
+  padding: 6px;
+  border-radius: 999px;
+  overflow: hidden;
 }
 
 .fp-tabbar-item {
-  /* 4 项均分：320px ÷ 4 = 80px/格（spec §6.1 的数字依据） */
+  /* 4 项均分 */
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding: 6px 0 4px;
-  min-height: 48px; /* 触控区 ≥44px（WCAG）：图标 22 + gap 2 + 标签 14 + padding */
+  border-radius: 999px;
   color: var(--fp-text-secondary);
   text-decoration: none;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
+  transition:
+    background-color var(--fp-duration-fast) var(--fp-ease),
+    color var(--fp-duration-fast) var(--fp-ease);
 }
 
+/* 选中：小玻璃药丸底（紫雾）+ 主色 */
 .fp-tabbar-item.active {
+  background: var(--fp-primary-bg);
   color: var(--fp-primary);
   font-weight: 500;
 }
 
+/* 手写 <a> 没有默认焦点环可依赖（宪法 §2.4） */
+.fp-tabbar-item:focus-visible {
+  outline: 2px solid var(--fp-primary);
+  outline-offset: -2px;
+}
+
 .fp-tabbar-item .anticon {
-  font-size: 22px;
+  font-size: 20px;
 }
 
 /* ══════════ 4.5 页底固定操作条（ux-polish spec §4①）══════════ */
 
-/* 桌面基线：贴底全宽。z-index 15 < tabbar 20，两者分属不同区域互不重叠；
+/* 桌面基线：贴底全宽。z-index 15 < 底部胶囊 20，两者分属不同区域互不重叠；
    antd Drawer（1000）在其上，抽屉展开时正确盖住操作条。
    窄屏的 bottom 上移（让开 TabBar）在文件末尾的 767px 块里覆盖本基线——
    同 specificity 靠 source-order 取胜，务必保持「基线在前、覆盖在后」的次序 */
@@ -182,11 +213,58 @@
     white-space: nowrap;
   }
 
-  /* 有页底操作条的页面（持仓/基金详情）：Footer 额外让位 bar 高度（无 note 64 / 有 note ~86）。
+  /* 有页底操作条的页面（持仓/基金详情）：Footer 额外让位（操作条 72 + 呼吸 16）。
      刻意放 min-width 块而非顶层基线：与上方 767px 块里的窄屏让位宽度互斥，
      两条规则不会同时命中，从结构上免除 source-order 之争，也就不用 !important */
   .fp-footer-bar-clear {
     margin-bottom: 88px;
+  }
+}
+
+/* ══════════ 10. 侧栏三档（liquid-glass spec §8）══════════ */
+
+/* 768–1079：72px 图标轨。文字标签隐藏，title 属性充当 tooltip；
+   1080 不是 uno 断点，也不为此加断点——壳的媒体查询只认本文件。
+   ≥1080 的 220px 全宽与 <768 的隐藏由 AppSidebar 的工具类（w-[220px] / hidden md:flex）
+   与 .fp-desktop 负责 */
+@media (min-width: 768px) and (max-width: 1079px) {
+  .fp-sidebar {
+    width: 72px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  .fp-sidebar-label {
+    display: none;
+  }
+  .fp-sidebar a,
+  .fp-sidebar button {
+    justify-content: center;
+  }
+
+  /* 折叠侧栏内的游客登录/注册按钮纵向排列（CodeRabbit PR #80 指正）：
+     UserMenu 游客分支的横向 Space 会超出 72px 图标轨戳进主内容。
+     只作用于侧栏（.fp-sidebar 作用域），不影响移动端品牌胶囊的
+     同款 UserMenu——compact 属性管移动端，这里不碰 */
+  .fp-sidebar .fp-guest-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+}
+
+/* 页底操作条在桌面两档让出侧栏（CodeRabbit PR #80 指正）：
+   .fp-bottom-bar 是 fixed left:0 贴底全宽，z-index 15 盖过
+   无 z-index 的侧栏底部 UserMenu。left = 侧栏宽 + 侧栏左右缝
+   (72+2×12=96 / 220+2×12=244)，right:0 基线不动 */
+@media (min-width: 768px) {
+  .fp-bottom-bar {
+    left: 244px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1079px) {
+  .fp-bottom-bar {
+    left: 96px;
   }
 }
 
@@ -213,12 +291,12 @@
     height: 220px !important;
   }
 
-  /* 窄屏操作条叠在 TabBar 上方：TabBar 56px + 安全区，不盖底部导航。
+  /* 窄屏操作条叠在底部胶囊上方：胶囊 60 + 底距 12 + 安全区（liquid-glass 偏差 6）。
      必须放在桌面基线（本文件 4.5 节 .fp-bottom-bar）之后：同 specificity
      同属性下 source-order 后者胜，放文件头部的 767px 块里会被基线 bottom:0
      反杀成死代码（review 修正，勿挪回） */
   .fp-bottom-bar {
-    bottom: calc(56px + env(safe-area-inset-bottom));
+    bottom: calc(72px + env(safe-area-inset-bottom));
   }
 }
 
@@ -235,19 +313,11 @@
   .animate-float {
     animation: none;
   }
-}
 
-/* ══════════ 8. 首页 hero 移动端（visual-refresh spec §6.2）══════════ */
-
-/* padding 收窄（48/40 → 32/20）。⚠️ !important：hero 的桌面 padding 是
-   inline style（PRIMARY_GRADIENT 渐变同为 inline，连续值进不了工具类），
-   不加盖不过（与 .fp-content / .fp-cal-cell 同手法）。
-   断点用 767px 与全文件惯例一致（antd md=768 以下是移动端），
-   768px 整点已是桌面 md 档。
-   右侧迷你持仓卡无需此处处理：已用 hidden lg:flex 工具类按断点显隐 */
-@media (max-width: 767px) {
-  .fp-hero {
-    padding: 32px 20px !important;
+  /* 卡片 hover 抬升（SectionCard 的 md:hover:-translate-y-[2px]）一并关：
+     位移是装饰，阴影两端都留（宪法 §5）。色雾/高光的冻结在 liquid-glass.css §7 */
+  .fp-glass {
+    transform: none !important;
   }
 }
 
@@ -262,7 +332,7 @@
    （同特异性源序已胜）；md:flex 是 min-width:768，与本段 max-width:767
    宽度互斥、永不同时命中（与 §4.5 桌面基线/窄屏覆盖同款结构）。
    spec §6.3 原文「移动端左屏退化成顶部渐变横幅」实现从简为整块隐藏，
-   窄屏品牌在场感由顶栏 Logo 承担（root.tsx 的 fp-header 常驻） */
+   窄屏品牌在场感由顶部品牌胶囊承担（MobileBrandBar，.fp-mobile 常驻） */
 @media (max-width: 767px) {
   .fp-auth-panel {
     display: none;

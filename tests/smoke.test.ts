@@ -59,4 +59,44 @@ describe("视觉 token 不变式", () => {
     const token = ANTD_TOKEN.token as Record<string, unknown>;
     expect(token.colorPrimary).toBe(COLOR.primary);
   });
+
+  it("深海冰盘：页面底是深海蓝黑，主文字是月白（liquid-glass 宪法 §2.1/§2.4）", () => {
+    expect(COLOR.bg).toBe("#071018");
+    expect(COLOR.textPrimary).toBe("#EFF7FC");
+  });
+
+  it("主色是亮冰蓝时必须有 onPrimary 深字（白字在亮药丸上对比不足，宪法 §2.5）", () => {
+    // 相对亮度（W3C）：亮色主色 + 缺 onPrimary = 主按钮白字瞎眼；暗色主色时本条天然通过
+    const [r, g, b] = [0, 2, 4].map(i => Number.parseInt(COLOR.primary.slice(1 + i, 3 + i), 16));
+    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    if (lum > 0.5)
+      expect(COLOR.onPrimary).toBeDefined();
+    // onPrimary 自己必须是深色（亮度低于 0.25），否则「深字」名不副实
+    const [r2, g2, b2] = [0, 2, 4].map(i => Number.parseInt(COLOR.onPrimary.slice(1 + i, 3 + i), 16));
+    const lumOn = (0.2126 * r2 + 0.7152 * g2 + 0.0722 * b2) / 255;
+    expect(lumOn).toBeLessThan(0.25);
+  });
+
+  it("色雾只有三团（宪法 §2.1：别再加第四团）", () => {
+    const fogKeys = Object.keys(COLOR).filter(k => k.startsWith("fog"));
+    expect(fogKeys.sort()).toEqual(["fogA", "fogB", "fogC"]);
+  });
+
+  it("待办第三语义不与涨跌、主色撞色", () => {
+    expect(COLOR.pending).not.toBe(COLOR.up);
+    expect(COLOR.pending).not.toBe(COLOR.down);
+    expect(COLOR.pending).not.toBe(COLOR.primary);
+  });
+
+  it("antd Card 底透明——玻璃渐变要透出来（宪法 §7）", () => {
+    const card = (ANTD_TOKEN.components as Record<string, Record<string, unknown>>).Card;
+    expect(card.colorBgContainer).toBe("transparent");
+  });
+
+  it("antd 中性面吃材料 token：容器 = well、浮面 = elevated、遮罩 = mask", () => {
+    const token = ANTD_TOKEN.token as Record<string, unknown>;
+    expect(token.colorBgContainer).toBe(COLOR.well);
+    expect(token.colorBgElevated).toBe(COLOR.elevated);
+    expect(token.colorBgMask).toBe(COLOR.mask);
+  });
 });

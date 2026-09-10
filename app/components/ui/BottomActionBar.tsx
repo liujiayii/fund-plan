@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BAR_SHADOW, COLOR } from "~/theme";
+import { COLOR } from "~/theme";
 
 export interface BottomActionBarProps {
   /** 操作按钮组。按钮本体与禁用逻辑由调用方组装（卖出/买入/定投…各页语义不同） */
@@ -9,8 +9,9 @@ export interface BottomActionBarProps {
 }
 
 /**
- * 页底固定操作条（2026-09-09 美化版）。桌面上与 GitHub 合并请求页的 bottom bar
- * 同款：全宽贴底 + 朝上阴影抬升；移动端叠在 fp-tabbar 上方（不盖底部导航）。
+ * 页底固定操作条（2026-09-09 美化版；2026-09-10 改吃液态玻璃）。桌面全宽贴底，
+ * 材料是 .fp-glass（宪法层级 3 的铬，不加 specular——操作条不是门面），
+ * 实色底 + 朝上阴影已退役；移动端叠在底部胶囊上方（不盖底部导航）。
  *
  * 布局 = 左右双列：note 占左侧信息位（flex:1 + 两行截断），按钮组固定右侧。
  * 无 note 时按钮仍靠右（空占位撑着）。条高因此恒定 72px（16×2 padding +
@@ -29,12 +30,9 @@ export interface BottomActionBarProps {
 export function BottomActionBar({ actions, note }: BottomActionBarProps) {
   return (
     <div
-      className="fp-bottom-bar"
-      style={{
-        background: COLOR.card,
-        // 抬升感走朝上阴影（token 唯一出处 theme.ts），生硬的顶边框退役
-        boxShadow: BAR_SHADOW,
-      }}
+      // 层级 3 的铬（宪法 §3）：玻璃、不加 specular。定位属性交给 responsive.css
+      // 的 .fp-bottom-bar；圆角 0（贴边全宽）
+      className="fp-bottom-bar fp-glass"
     >
       <div
         style={{

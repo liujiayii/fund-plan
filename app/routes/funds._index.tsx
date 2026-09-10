@@ -66,12 +66,17 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      {/* animate-fade-up：区块进场淡入（首卡无延迟） */}
-      <SectionCard className="animate-fade-up">
-        <Title level={3}>发现基金</Title>
-        <Paragraph type="secondary">
+      {/* 页标题出卡（liquid-glass spec §5.4）：标题直接压在色雾上 */}
+      <div>
+        <Title level={3} className="mb-1">发现基金</Title>
+        <Paragraph type="secondary" className="mb-0">
           搜代码或名称，或看排行榜挑热门。数据来自东方财富公开接口。
         </Paragraph>
+      </div>
+
+      {/* 搜索：一张玻璃卡，输入框填充由 token 的 colorBgContainer = well 自带（计划偏差 7：
+          井直接压在雾上看不见，所以外壳是玻璃） */}
+      <SectionCard className="animate-fade-up">
         <RouterForm method="get">
           {/* 搜索提交时保留当前 type/period，避免切回默认 */}
           <input type="hidden" name="type" value={type} />
@@ -90,6 +95,21 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
           </Space.Compact>
         </RouterForm>
       </SectionCard>
+
+      {/* 类型 / 周期 Segmented 出卡：单份渲染（不再桌面/窄屏双渲染），
+          Segmented 自带 trackBg = well 压在雾上可读；窄屏靠 fp-h-scroll 横滑 */}
+      <div className="fp-h-scroll flex flex-wrap gap-4">
+        <Segmented
+          value={type}
+          onChange={v => onTabChange(String(v), "type")}
+          options={FUND_TYPE_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+        />
+        <Segmented
+          value={period}
+          onChange={v => onTabChange(String(v), "period")}
+          options={RANK_PERIOD_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+        />
+      </div>
 
       {/* 交错进场：第 N 卡延迟 (N-1)×60ms（animate-delay 写法的坑见 uno.config.ts）。
           搜索结果卡仅在 q 非空时渲染，缺失时后面排行卡的延迟出现空档，观感无碍 */}
@@ -121,47 +141,7 @@ export default function FundsIndex({ loaderData }: Route.ComponentProps) {
       <SectionCard
         title="基金排行榜"
         className="animate-fade-up animate-delay-[120ms]"
-        extra={(
-          /* 桌面那份筛选器：767px 以下由 .fp-desktop 整体隐藏（与卡内 .fp-mobile 份成对） */
-          <div className="fp-desktop">
-            <Space size="middle">
-              <Segmented
-                size="small"
-                value={type}
-                onChange={v => onTabChange(String(v), "type")}
-                options={FUND_TYPE_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-              />
-              <Segmented
-                size="small"
-                value={period}
-                onChange={v => onTabChange(String(v), "period")}
-                options={RANK_PERIOD_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-              />
-            </Space>
-          </div>
-        )}
       >
-        {/* 筛选器双渲染：窄屏显示这份（.fp-mobile），桌面显示 extra 那份（.fp-desktop）。
-            Card 标题行是不换行的 flex，两个 Segmented 合计约 454px 在窄屏必然顶穿（spec §9），
-            所以窄屏挪到卡内首行并套 .fp-h-scroll 可横滑。
-            两份读同一份 URL 态（loader 的 type/period）、走同一个 onTabChange，无逻辑分叉 */}
-        <div
-          className="fp-h-scroll fp-mobile"
-          style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}
-        >
-          <Segmented
-            size="small"
-            value={type}
-            onChange={v => onTabChange(String(v), "type")}
-            options={FUND_TYPE_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-          />
-          <Segmented
-            size="small"
-            value={period}
-            onChange={v => onTabChange(String(v), "period")}
-            options={RANK_PERIOD_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-          />
-        </div>
         {rank.length === 0
           ? <EmptyState description="暂无排行数据，接口可能不可用" />
           : (

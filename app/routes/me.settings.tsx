@@ -143,7 +143,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
           label="角色"
           value={
             user.role === "admin"
-              ? <Tag color="blue">管理员（组合公开）</Tag>
+              ? <Tag>管理员（组合公开）</Tag>
               : <Tag>普通用户</Tag>
           }
         />

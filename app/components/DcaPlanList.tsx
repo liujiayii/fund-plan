@@ -52,7 +52,7 @@ export function DcaPlanList({ plans, renderActions }: DcaPlanListProps) {
           note={(
             <>
               {p.status === "active"
-                ? <Tag color="blue">执行中</Tag>
+                ? <Tag color="purple">执行中</Tag>
                 : <Tag>已暂停</Tag>}
               <span>
                 {frequencyText(p)}

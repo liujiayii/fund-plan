@@ -43,7 +43,7 @@ function RankBadge({ rank }: { rank: number }) {
           : "text-muted";
   return (
     <span
-      className={`inline-flex h-6 w-6 items-center justify-center rounded-xl text-[13px] font-semibold ${medal}`}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[13px] font-semibold ${medal}`}
     >
       {rank}
     </span>
@@ -60,22 +60,23 @@ function LeaderRow({
 }) {
   const isMe = meId !== null && entry.userId === meId;
   return (
-    // 自己的条目淡蓝高亮：bg-primary/6 = 主色 6% 透明度（原 rgba(22,119,255,0.06)）
+    // 自己的条目紫雾高亮：bg-primary/6 = 主色 6% 透明度
     // ⚠️ 单边边框的正确姿势是 border-b + [border-bottom-style:solid]：
     //   border-b 只出宽度不出 style，但千万别用 border-solid 补——它把 solid
     //   应用到四边，没给宽度的三边走初始值 medium（=3px），整行被 3px 浅灰
     //   框住（PR #76 上线后实测踩坑，Playwright 计算样式取证）
     <div
-      // hover 底色只给非本人的行：本人的 bg-primary/6 高亮若再叠 hover:bg-page
+      // hover 底色只给非本人的行：本人的 bg-primary/6 高亮若再叠 hover 底
       // 会被盖掉（产物同优先级、后者居后），悬停自己的行不该丢自己的高亮
-      // （CodeRabbit PR #79 修正）；transition-colors 全行保留，bg 固定时无副作用
-      className={`flex items-center gap-3 border-b border-line py-3 [border-bottom-style:solid] transition-colors ${isMe ? "bg-primary/6" : "hover:bg-page"}`}
+      // （CodeRabbit PR #79 修正）；hover 用井底而非页面底——页面底比玻璃还深，
+      // 悬停会成黑洞（宪法 §2.6）；transition-colors 全行保留
+      className={`flex items-center gap-3 border-b border-line py-3 [border-bottom-style:solid] transition-colors ${isMe ? "bg-primary/6" : "hover:bg-well"}`}
     >
       <RankBadge rank={entry.rank} />
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="font-medium text-ink">
           {entry.username}
-          {isMe && <Tag color="blue" className="ml-2">我</Tag>}
+          {isMe && <Tag className="ml-2">我</Tag>}
         </div>
         <div className="mt-0.5 text-xs text-muted">
           总资产
@@ -91,6 +92,51 @@ function LeaderRow({
           <PnlText rate={entry.totalPnlRate} size={12} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 前三领奖台（liquid-glass spec §5.3）：桌面银-金-铜（金牌略大居中），窄屏竖叠金牌在上。
+ * 每位一口井（不各自玻璃，宪法 §4「一卡多格」）；金银铜仍是页内装饰色。
+ * 顺序用 CSS order：数据数组保持 1/2/3，桌面视觉 2/1/3。不足三人时只渲染现有人数。
+ */
+function Podium({ entries, meId }: { entries: LeaderboardEntry[]; meId: number | null }) {
+  const top = entries.slice(0, 3);
+  return (
+    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end">
+      {top.map((e) => {
+        const isMe = meId !== null && e.userId === meId;
+        // 桌面 order：金 2 居中、银 1 左、铜 3 右；金牌略放大
+        const place = e.rank === 1
+          ? "md:order-2 md:pt-6 md:scale-105"
+          : e.rank === 2 ? "md:order-1" : "md:order-3";
+        return (
+          <div
+            key={e.userId}
+            className={`flex flex-1 items-center gap-3 rounded-[16px] p-4 md:flex-col md:text-center ${isMe ? "bg-primary-bg" : "bg-well"} ${place}`}
+          >
+            <RankBadge rank={e.rank} />
+            <div className="min-w-0 flex-1 md:flex-none">
+              <div className="truncate font-medium text-ink">
+                {e.username}
+                {isMe && <Tag className="ml-2">我</Tag>}
+              </div>
+              <div className="text-xs text-muted">
+                总资产
+                {" "}
+                {fmtYuan(e.totalAssetCents)}
+                {" "}
+                元
+              </div>
+            </div>
+            <div className="text-right md:text-center">
+              <PnlText cents={e.totalPnlCents} size={16} />
+              <div className="mt-0.5"><PnlText rate={e.totalPnlRate} size={12} /></div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -132,16 +178,23 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                   {
                     key: "rate",
                     label: "收益率榜",
-                    children: lb.byRate.map(e => (
-                      <LeaderRow key={e.userId} entry={e} meId={meId} />
-                    )),
+                    // 前三上领奖台，第 4 名起仍是列表行
+                    children: (
+                      <>
+                        <Podium entries={lb.byRate} meId={meId} />
+                        {lb.byRate.slice(3).map(e => <LeaderRow key={e.userId} entry={e} meId={meId} />)}
+                      </>
+                    ),
                   },
                   {
                     key: "pnl",
                     label: "总收益榜",
-                    children: lb.byPnl.map(e => (
-                      <LeaderRow key={e.userId} entry={e} meId={meId} />
-                    )),
+                    children: (
+                      <>
+                        <Podium entries={lb.byPnl} meId={meId} />
+                        {lb.byPnl.slice(3).map(e => <LeaderRow key={e.userId} entry={e} meId={meId} />)}
+                      </>
+                    ),
                   },
                 ]}
               />

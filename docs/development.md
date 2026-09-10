@@ -315,3 +315,22 @@ function useIsClient() {
 只有真正访问基金详情页时才下载。
 
 **以后再引入任何依赖 canvas / window / document 的库，都照这个模式处理。**
+
+## 液态玻璃材料层（2026-09-10）
+
+- 材料上位法：`docs/liquid-glass.md`。改色 / 模糊 / 描边 / 层级先改它再动代码。
+- `backdrop-filter` 全站只在 `app/styles/liquid-glass.css`；组件只挂 `fp-glass`。
+  `tests/domain/liquid-glass-guard.test.ts` 扫源码钉死，谁在 tsx 写 `backdrop-blur-*` 谁红。
+- `.fp-glass` 三条材料属性带 `!important`：antd cssinjs 的样式标签由 `entry.server.tsx`
+  注入到 `</head>` 前、排在我们的 `<link>` 之后，同特异性下 `.ant-card` 的 `background`
+  简写会把渐变冲成实色。这与 `responsive.css` 盖 antd 内部类是同一个坑。
+- 每视口带 `backdrop-filter` 的节点 ≤ 8：一卡多格用一张玻璃 + `bg-well` 井格。
+  新增页面先数节点（SSR 产物里 grep `fp-glass` 即可）。
+- 色雾软边用 radial-gradient，只动 transform；CSS 滤镜高斯模糊在低端安卓每帧重算，禁。
+- antd 走 `theme.darkAlgorithm`；`ANTD_TOKEN` 只钉品牌与材料（`well` / `elevated` / `mask`）。
+  Modal / Drawer / Dropdown / Select 的玻璃在 `liquid-glass.css` 直接打 antd 内部类——
+  那是**唯一**放行的地方。
+- 渲染产物里会出现一处 `#1677FF`：那是 antd 自带的 `--ant-blue` 预设色板变量，
+  不是本站 token，守卫只扫 `app/` 源码，不必追杀。
+- 导航壳：桌面 `AppSidebar`（220 / 平板 72 图标轨）+ 移动端 `MobileBrandBar`（顶胶囊）+
+  `MobileTabBar`（底胶囊）。`/` 与 `/master` 两项仍是原生 `<a>`（边缘缓存纪律）。

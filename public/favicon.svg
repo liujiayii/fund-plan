@@ -1,14 +1,15 @@
 <!-- 品牌视觉锤（与 app/components/ui/Logo.tsx 同款图形）。
-     色值对应 theme.ts：#3B6BFF=COLOR.primary、#6E5BFF=COLOR.primaryTo。
+     色值对应 theme.ts：#58C4F5=COLOR.primary、#B5E6FF=COLOR.primaryTo、
+     #07202E=COLOR.onPrimary（冰川药丸是亮冰蓝，曲线用深海墨而非白）。
      静态资源吃不到 --fp-* 变量，改色时两处同步。 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3B6BFF"/>
-      <stop offset="1" stop-color="#6E5BFF"/>
+      <stop stop-color="#58C4F5"/>
+      <stop offset="1" stop-color="#B5E6FF"/>
     </linearGradient>
   </defs>
   <rect width="32" height="32" rx="9" fill="url(#g)"/>
-  <path d="M8 21.5 L13 15.5 L17.5 19 L24 10.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <circle cx="24" cy="10.5" r="2" fill="#fff"/>
+  <path d="M8 21.5 L13 15.5 L17.5 19 L24 10.5" stroke="#07202E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="24" cy="10.5" r="2" fill="#07202E"/>
 </svg>
