@@ -69,6 +69,8 @@ export function AssetOverviewCard({
     <div>
       <StatBig
         label="总资产"
+        // 辉光白名单之一（宪法 §2.4）：总资产
+        glow="ink"
         value={(
           // 数字滚动：SSR 直出终值，客户端从 0 滚到位（spec §5 #3）
           <CountUpText
@@ -95,6 +97,8 @@ export function AssetOverviewCard({
               : "—"}
             suffix={latest ? "元" : undefined}
             color={latest ? pnlColor(latest.dayPnlCents) : undefined}
+            // 辉光白名单之二：当日涨跌，同色辉光；0 或无数据不加
+            glow={latest && latest.dayPnlCents !== 0 ? (latest.dayPnlCents > 0 ? "rise" : "fall") : undefined}
             size={20}
             extra={untilLabel ?? undefined}
           />

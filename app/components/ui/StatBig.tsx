@@ -21,6 +21,11 @@ export interface StatBigProps {
   suffix?: ReactNode;
   /** 副行说明，如「收益率 +2.31%」 */
   extra?: ReactNode;
+  /**
+   * 数字辉光（宪法 §2.4）：只给总资产（ink）与当日涨跌（rise/fall）两处，
+   * 其余金额不许加——辉光铺满就是噪音。类定义在 liquid-glass.css §4
+   */
+  glow?: "rise" | "fall" | "ink";
 }
 
 /**
@@ -35,6 +40,7 @@ export function StatBig({
   size = 32,
   suffix,
   extra,
+  glow,
 }: StatBigProps) {
   return (
     <div>
@@ -51,7 +57,7 @@ export function StatBig({
         }}
       >
         <span
-          className="font-num"
+          className={`font-num${glow ? ` fp-glow-${glow}` : ""}`}
           style={{
             fontSize: size,
             fontWeight: 500,
