@@ -1,5 +1,5 @@
 import type { Route } from "./+types/_index";
-import { Button, Col, Row, Space, Tag, Typography } from "antd";
+import { Button, Col, Collapse, Row, Space, Tag, Typography } from "antd";
 import { Link } from "react-router";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
 import { AssetTrendChart } from "~/components/AssetTrendChart";
@@ -93,6 +93,37 @@ const FEATURES = [
   {
     title: "自动定投",
     desc: "支持日/周/月定投，系统每天定时扫描到期计划并自动下单。",
+  },
+];
+
+/** 三步上手：给第一次进来的人一条最短路径（首页此前只有卖点，没有「怎么玩」） */
+const STEPS = [
+  { n: "01", title: "注册领本金", desc: "用户名 + 密码即可，注册即到账 10 万模拟本金，每日签到再领 100~500 元。" },
+  { n: "02", title: "挑基金下单", desc: "搜代码或看排行榜，买入后按真实 T+1 规则撮合；也可以设日 / 周 / 月定投。" },
+  { n: "03", title: "看盘复盘", desc: "总资产走势、收益日历、逐笔订单与份额批次全透明，随时对照真实规则复盘。" },
+];
+
+/** 规则速览：把散落在各面板小字里的撮合 / 费用规则集中一处，游客不注册也能先看懂 */
+const RULES = [
+  {
+    key: "t1",
+    label: "T+1 是怎么撮合的？",
+    children: "交易日 15:00 前下单按当日净值成交，15:00 后、周末与节假日顺延到下一交易日。系统每晚 20:30 拉取当日净值后统一确认，确认前订单可撤可改。",
+  },
+  {
+    key: "fee",
+    label: "申购费 / 赎回费怎么算？",
+    children: "申购用内扣法：净申购额 = 金额 ÷ (1 + 费率)。赎回按份额批次先进先出，每一批按各自持有天数套阶梯费率——同一笔赎回可能同时命中两档费率，和真实基金一致。",
+  },
+  {
+    key: "cash",
+    label: "钱从哪来、能提现吗？",
+    children: "本金全部是模拟资金：注册送 10 万，每日签到连签递增（100 元起、每天 +50、封顶 500）。不涉及任何真实资金，不能提现，亏了不心疼。",
+  },
+  {
+    key: "data",
+    label: "数据是真的吗？",
+    children: "基金档案、费率、历史净值全部来自东方财富公开接口，净值每晚同步；排行榜按全站用户的模拟盘实时计算。",
   },
 ];
 
@@ -263,9 +294,28 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         </div>
       </SectionCard>
 
+      {/* 上手与规则：一张玻璃卡装「三步」井格 + 规则折叠面板（一卡两组，守节点预算）。
+          规则文案与 domain/config、trading-calendar、redeem 的真实口径一致，改规则要同步这里 */}
+      <SectionCard title="怎么玩 · 规则速览" className="animate-fade-up animate-delay-[300ms]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {STEPS.map(s => (
+            <div key={s.n} className="rounded-[12px] bg-well p-4">
+              <div className="font-num text-xs text-primary">{s.n}</div>
+              <div className="mt-1 mb-1 font-medium text-ink">{s.title}</div>
+              <div className="text-xs leading-5 text-muted">{s.desc}</div>
+            </div>
+          ))}
+        </div>
+        <Collapse
+          ghost
+          className="mt-4"
+          items={RULES.map(r => ({ key: r.key, label: r.label, children: <Paragraph type="secondary" className="mb-0 text-sm leading-6">{r.children}</Paragraph> }))}
+        />
+      </SectionCard>
+
       {/* 底 CTA（游客） */}
       {!me && (
-        <SectionCard className="animate-fade-up animate-delay-[300ms] text-center">
+        <SectionCard className="animate-fade-up animate-delay-[360ms] text-center">
           <Title level={4}>准备好开自己的盘了吗？</Title>
           <Paragraph type="secondary">
             用户名 + 密码即可注册，不用邮箱、不用手机号。

@@ -61,7 +61,7 @@ describe("视觉 token 不变式", () => {
   });
 
   it("暗底夜盘：页面底是近黑紫，主文字是近白（liquid-glass 宪法 §2.1/§2.4）", () => {
-    expect(COLOR.bg).toBe("#07060C");
+    expect(COLOR.bg).toBe("#100E1C");
     expect(COLOR.textPrimary).toBe("#F7F4FF");
   });
 

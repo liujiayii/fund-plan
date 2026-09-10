@@ -21,6 +21,8 @@ import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { TRADE_CUTOFF_HOUR } from "~/domain/config";
+import { isTradingDay, resolveConfirmDate, toBeijing } from "~/domain/trading-calendar";
 import { getAssetTimeline } from "~/services/asset-service";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
 import { getAppContext } from "~/services/context";
@@ -46,7 +48,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     getPendingBuyCents(db, user.id),
   ]);
 
-  return { user, portfolio, checkinStatus, timeline, pendingBuyCents };
+  // 交易时钟（纯函数，零查询）：告诉用户「现在下单按哪天净值」——T+1 模拟盘里
+  // 这是最常被问的问题，此前只藏在买入面板的一行小字里。服务端算一次，
+  // 客户端不重算，避免跨过 15:00 时 SSR / 水合各算一个
+  const now = new Date();
+  const bj = toBeijing(now);
+  const today = bj.format("YYYY-MM-DD");
+  const clock = {
+    today,
+    isTradingDay: isTradingDay(today),
+    beforeCutoff: bj.hour() < TRADE_CUTOFF_HOUR,
+    confirmDate: resolveConfirmDate(now),
+  };
+
+  return { user, portfolio, checkinStatus, timeline, pendingBuyCents, clock };
 }
 
 /**
@@ -87,7 +102,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeIndex({ loaderData }: Route.ComponentProps) {
-  const { user, portfolio, checkinStatus, timeline, pendingBuyCents } = loaderData;
+  const { user, portfolio, checkinStatus, timeline, pendingBuyCents, clock } = loaderData;
   // summary 的合计市值供持仓卡标题用；其余总览数字全部交给 AssetOverviewCard
   const { summary, holdings } = portfolio;
   // 签到 fetcher：桌面签到卡与窄屏签到井共用（CheckinPanel 双渲染），提交态由面板自己读
@@ -131,6 +146,24 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
             围观。
           </Paragraph>
         )}
+        {/* 交易时钟：一行井，状态点走 pending（在途语义）/ 三级色（休市）。
+            日期是 loader 服务端算好的，不在客户端重算 */}
+        <div className="mt-3 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-well px-4 py-1.5 text-xs text-muted">
+          <span className={`inline-block h-2 w-2 rounded-full ${clock.isTradingDay && clock.beforeCutoff ? "bg-pending" : "bg-tertiary"}`} />
+          <span>
+            {clock.today}
+            {" "}
+            {clock.isTradingDay ? (clock.beforeCutoff ? "交易中" : "已过 15:00 截单") : "休市"}
+          </span>
+          <span className="text-tertiary">·</span>
+          <span>
+            现在下单按
+            {" "}
+            <span className="font-num text-ink">{clock.confirmDate}</span>
+            {" "}
+            净值确认
+          </span>
+        </div>
       </div>
 
       {/* 钱：总览（左 2/3）+ 签到（右 1/3）并排（liquid-glass spec §5.1）。

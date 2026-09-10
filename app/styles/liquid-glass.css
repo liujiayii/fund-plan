@@ -43,7 +43,9 @@ body {
   height: 60vmax;
   border-radius: 50%;
   mix-blend-mode: screen;
-  opacity: 0.55;
+  /* 0.4：雾是衬底不是聚光灯。0.55 时粉雾透过卡片直接顶到粉色涨幅数字底下，
+     文字与雾同色打架（2026-09-10 走查降档） */
+  opacity: 0.4;
   will-change: transform;
   animation-duration: 14s;
   animation-timing-function: ease-in-out;
@@ -106,7 +108,11 @@ body {
 
 /* ══════════ 2. 玻璃（宪法 §2.2）══════════ */
 
-/* ⚠️ 三条材料属性带 !important：antd cssinjs 的样式标签在 SSR 时注入到
+/* 双层背景（2026-09-10 走查改）：下层是半透明深紫底衬，上层是白色高光渐变。
+   只有白色渐变时，卡片下半截压在近黑页面底上几乎纯黑、压在雾上又被雾染色，
+   文字可读性随雾漂移；深色底衬把内容面稳定在一个可读的中间灰紫，雾仍从底下透
+   （透明度 0.5），玻璃感靠 backdrop 模糊 + 高光脊 + 描边，不靠「透得多」。
+   ⚠️ 三条材料属性带 !important：antd cssinjs 的样式标签在 SSR 时注入到
    </head> 前、排在本文件的 <link> 之后（entry.server.tsx），同特异性下
    .ant-card 的 background 简写会把渐变冲成实色。
    不写 border-radius（由角色决定：antd Card 吃 borderRadiusLG=22，手写元素
@@ -114,7 +120,8 @@ body {
    胶囊 fixed）——曾写过 border-radius: inherit，它让 antd Card 继承父级的
    0 圆角，删掉 */
 .fp-glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(34, 30, 56, 0.5) !important;
   backdrop-filter: blur(22px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
   box-shadow:
@@ -161,18 +168,27 @@ body {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.28) 50%, transparent 60%);
+  /* 宽而柔的光带（多色停渐出渐入），峰值 10%；硬边 28% 的窄带扫过去像扫码枪
+     （2026-09-10 主人反馈「质感差」后重调）。8s 一轮，其中 45% 时间静止 */
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.04) 38%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.04) 62%,
+    transparent 75%
+  );
   transform: translateX(-100%);
   mix-blend-mode: screen;
   pointer-events: none;
-  animation: fp-specular 4.8s ease-in-out infinite;
+  animation: fp-specular 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 @keyframes fp-specular {
   0% {
     transform: translateX(-100%);
   }
-  60%,
+  55%,
   100% {
     transform: translateX(100%);
   }
@@ -205,7 +221,8 @@ body {
 .ant-dropdown .ant-dropdown-menu,
 .ant-select-dropdown {
   position: relative;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(34, 30, 56, 0.5) !important;
   backdrop-filter: blur(22px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
   box-shadow:

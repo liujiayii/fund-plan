@@ -20,7 +20,7 @@ const TAB_ICON: Record<string, ReactNode> = {
  * 移动端底部悬浮胶囊 Tab（spec §4.3，宪法层级 3 的铬）。
  *
  * 从「贴底实色条」改成「左右 16px、底 12px + safe-area 的玻璃胶囊」：
- * 定位 / 尺寸在 responsive.css §4（.fp-tabbar），材料是 .fp-glass + 门面高光。
+ * 定位 / 尺寸在 responsive.css §4（.fp-tabbar），材料是 .fp-glass（不扫光，宪法 §2.3 第二版）。
  * 内容从胶囊底下透出来，.fp-content 的底 padding 按胶囊高度让位。
  *
  * 首页项保持原生 <a>：游客边缘缓存靠整页跳转命中（同 AppSidebar）。
@@ -32,7 +32,7 @@ export function MobileTabBar() {
   const labelOf = (key: string) => NAV_ITEMS.find(i => i.key === key)?.label ?? key;
 
   return (
-    <nav className="fp-tabbar fp-mobile fp-glass fp-glass-specular" aria-label="主导航">
+    <nav className="fp-tabbar fp-mobile fp-glass" aria-label="主导航">
       {MOBILE_TAB_KEYS.map((key) => {
         const active = selectedKey === key;
         // 选中：小玻璃药丸底 + 主色（宪法 §4.4 的 on 态）；未选中次要色

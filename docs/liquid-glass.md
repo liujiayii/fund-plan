@@ -28,12 +28,12 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 
 | token | 值 | 角色 |
 | --- | --- | --- |
-| `bg` | `#07060C` | 近黑紫，页面底 |
+| `bg` | `#100E1C` | 深紫黑，页面底（2026-09-10 走查从 #07060C 提亮两档：纯黑底压出的玻璃像黑板，文字读不清） |
 | `fogA` | `#6D4DFF` | 漂移色雾 · 紫 |
 | `fogB` | `#FF3D8A` | 漂移色雾 · 粉 |
 | `fogC` | `#39D6FF` | 漂移色雾 · 青（第三团，别再加第四） |
 
-色雾是 **3 团、`mix-blend-mode: screen`、14s 缓动循环** 的固定定位层（`position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden`），挂在根布局，全站同一份，不按页复制。
+色雾是 **3 团、`mix-blend-mode: screen`、透明度 0.4、14s 缓动循环** 的固定定位层（`position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden`），挂在根布局，全站同一份，不按页复制。
 `prefers-reduced-motion: reduce` 时色雾静止在初始位置，不删——删了玻璃就没衬底，会变成一块脏灰塑料。
 
 实现纪律（性能，不是审美）：
@@ -49,10 +49,15 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 
 ```css
 .fp-glass {
-  /* ⚠️ 三条都带 !important：antd cssinjs 的样式标签在 SSR 时注入到 </head> 前、
+  /* 双层：上层白色高光渐变，下层半透明深紫底衬（2026-09-10 走查改）。
+     只有白色渐变时卡片下半截压在黑底上是纯黑、压在雾上被雾染色，文字可读性随雾漂移；
+     深紫底衬把内容面稳在可读的中间灰紫，雾仍从底下透，玻璃感靠模糊 + 高光脊 + 描边。
+     ⚠️ 三条都带 !important：antd cssinjs 的样式标签在 SSR 时注入到 </head> 前、
      排在本文件的 <link> 之后（entry.server.tsx），同特异性下 .ant-card 的
      background 简写会把渐变冲成实色。responsive.css 盖 antd 内部类同此手法 */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    rgba(34, 30, 56, 0.5) !important;
   backdrop-filter: blur(22px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
   box-shadow:
@@ -97,8 +102,9 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 
 ### 2.3 镜面高光（可选，仅门面）
 
-`.fp-glass-specular` 在玻璃上叠一道 4.8s 横向扫过的高光（`mix-blend-mode: screen`）。
-**只允许**出现在：桌面侧栏、移动端胶囊 Tab、总资产卡、登录左屏、首页 hero。
+`.fp-glass-specular` 在玻璃上叠一道 8s 一轮、峰值 10%、宽而柔的横向扫光（`mix-blend-mode: screen`，一轮里 45% 时间静止）。
+**只允许**出现在：总资产卡、登录左屏、首页 hero——都是宽而矮的门面。
+**导航铬（侧栏、胶囊 Tab）不扫光**：竖长的轨上扫光像扫码枪（2026-09-10 主人反馈），铬的质感靠描边 + 高光脊。
 列表行、表格、表单、admin、抽屉内部 **禁止** 加高光——那是噪音。
 
 ### 2.4 文字与数字
@@ -106,17 +112,18 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 | 角色 | token | 色 | 字体 |
 | --- | --- | --- | --- |
 | 主文字 | `textPrimary` | `#F7F4FF` | 系统栈（中文） |
-| 次要文字 | `textSecondary` | `#B9A8FF` | 系统栈 |
-| 三级文字（标签 / 说明 / 坐标轴） | `textTertiary` | `#8A82B0` | 系统栈 |
-| 占位 / 禁用 | `textPlaceholder` | `#6E6688` | 系统栈 |
-| 平（0 盈亏 / 无数据） | `neutral` | `#8A82B0`（与三级文字同值，语义不同） | — |
+| 次要文字 | `textSecondary` | `#CDC4FF` | 系统栈 |
+| 三级文字（标签 / 坐标轴） | `textTertiary` | `#A39BCF` | 系统栈 |
+| 占位 / 禁用 | `textPlaceholder` | `#7A7398` | 系统栈 |
+| 平（0 盈亏 / 无数据） | `neutral` | `#A39BCF`（与三级文字同值，语义不同） | — |
 | 数字 | — | `#F7F4FF` | `"Space Grotesk"` + `tabular-nums`（已有 `font-num`） |
 | 涨 | `up` | `#FF5D8F` | 可加极弱 `text-shadow: 0 0 8px rgba(255,61,110,.55)`，仅强调位 |
 | 跌 | `down` | `#39FFCE` | 同上，青辉光仅强调位 |
 | 待办 / 在途 | `pending` | `#F0D078` | 第三语义，不跟涨跌混 |
 
-对比度底线（对 `bg` 实测）：主文字 ≈ 18:1、次要 ≈ 10:1、三级 ≈ 5.8:1、占位 ≈ 3.9:1（占位不承载信息，允许）。
-玻璃面上叠了 16% 白，三级文字仍 ≥ 4.5:1，可用于正文级说明。
+antd 的 `colorTextDescription` / `colorTextLabel` 必须钉到 `textSecondary`：`Typography type="secondary"` 与 Card extra 走它，默认派生自三级色，暗底上整页副标题会糊成一片（2026-09-10 走查）。三级色只留给标签与坐标轴。
+
+对比度底线（对玻璃内容面 ≈ `#2E2A48` 实测）：主文字 ≈ 12:1、次要 ≈ 8:1、三级 ≈ 5:1、占位 ≈ 3.2:1（占位不承载信息，允许）。
 
 数字 **禁止** 用渐变填字、禁止外发光铺满所有金额。辉光只给总资产和当日涨跌两处。
 
@@ -155,10 +162,10 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 从底到顶，不许跳级、不许玻璃叠玻璃超过两层。
 
 ```
-0  bg #07060C
+0  bg #100E1C
 1  色雾三团（全站一份，pointer-events: none）
 2  内容玻璃卡（.fp-glass）
-3  导航铬：桌面侧栏 / 移动端胶囊 Tab / 顶栏 / 页底操作条（.fp-glass，前三者可加 specular，操作条不加）
+3  导航铬：桌面侧栏 / 移动端胶囊 Tab / 顶栏 / 页底操作条（.fp-glass，一律不加 specular）
 4  浮层：Drawer / Modal / Dropdown / Select 下拉（.fp-glass，遮罩 rgba(7,6,12,.55)）
 4' 小浮面：Tooltip / Popover / G2 tooltip（elevated 实色，不模糊，见 §2.6）
 ```

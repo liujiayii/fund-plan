@@ -33,9 +33,9 @@ export const COLOR = {
   /** 待办浅底 */
   pendingBg: "rgba(240, 208, 120, 0.16)",
   /** 平（0 或无数据）——与三级文字同值，语义不同 */
-  neutral: "#8A82B0",
-  /** 页面底：近黑紫（宪法 §2.1） */
-  bg: "#07060C",
+  neutral: "#A39BCF",
+  /** 页面底：深紫黑（宪法 §2.1；2026-09-10 走查从 #07060C 提亮两档——纯黑底压出的玻璃像黑板） */
+  bg: "#100E1C",
   /**
    * 卡片底。⚠️ 与 well 同值：玻璃卡本身的材料在 .fp-glass（liquid-glass.css），
    * 本键只为兼容既有 bg-card 消费方（AuthShell 右屏等）；新代码一律写 well
@@ -55,9 +55,9 @@ export const COLOR = {
   fogC: "#39D6FF",
   // ── 文字四档（对齐 antd colorText* 语义，宪法 §2.4）──
   textPrimary: "#F7F4FF",
-  textSecondary: "#B9A8FF",
-  textTertiary: "#8A82B0",
-  textPlaceholder: "#6E6688",
+  textSecondary: "#CDC4FF",
+  textTertiary: "#A39BCF",
+  textPlaceholder: "#7A7398",
 } as const;
 
 /**
@@ -110,6 +110,11 @@ export const ANTD_TOKEN = {
     colorTextSecondary: COLOR.textSecondary,
     colorTextTertiary: COLOR.textTertiary,
     colorTextQuaternary: COLOR.textPlaceholder,
+    // ⚠️ Typography type="secondary" / Card extra 等走 colorTextDescription，antd 默认
+    // 派生自 colorTextTertiary——暗底上整页副标题都糊成一片（2026-09-10 走查）。
+    // 钉到次要档：「次要说明」就该是次要色，三级色只留给标签/坐标轴
+    colorTextDescription: COLOR.textSecondary,
+    colorTextLabel: COLOR.textSecondary,
     // 显式钉死：与 --fp-primary-bg 零漂移，不赌派生算法
     colorPrimaryBg: COLOR.primaryBg,
     // 材料：容器填充 = 内井，浮面 = 不透明深色，边线 = 白 16%

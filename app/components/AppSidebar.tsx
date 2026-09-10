@@ -34,6 +34,8 @@ export interface AppSidebarProps {
 
 /**
  * 桌面 / 平板玻璃侧栏轨（spec §4.1 / §4.2，宪法层级 3 的铬）。
+ * 不挂 fp-glass-specular：竖长的轨上扫光像扫码枪（主人 2026-09-10 反馈），
+ * 铬的质感靠描边 + 高光脊即可（宪法 §2.3 第二版）。
  *
  * 三档由 responsive.css 管：<768 整体隐藏（.fp-desktop）、768–1079 收成 72px
  * 图标轨（.fp-sidebar-label 隐藏 + title 提示）、≥1080 220px 全宽。
@@ -48,7 +50,7 @@ export interface AppSidebarProps {
 export function AppSidebar({ navItems, selectedKey, user }: AppSidebarProps) {
   return (
     <aside
-      className="fp-sidebar fp-desktop fp-glass fp-glass-specular sticky top-3 m-3 hidden h-[calc(100vh-24px)] w-[220px] shrink-0 flex-col rounded-[24px] p-3 md:flex"
+      className="fp-sidebar fp-desktop fp-glass sticky top-3 m-3 hidden h-[calc(100vh-24px)] w-[220px] shrink-0 flex-col rounded-[24px] p-3 md:flex"
       aria-label="主导航"
     >
       {/* 品牌：Logo + 站名（图标轨下站名隐藏） */}

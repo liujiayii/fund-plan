@@ -19,6 +19,7 @@ import { FogStage } from "~/components/FogStage";
 import { MobileBrandBar } from "~/components/MobileBrandBar";
 import { MobileTabBar } from "~/components/MobileTabBar";
 import { NavProgressBar } from "~/components/NavProgressBar";
+import { Logo } from "~/components/ui/Logo";
 import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
@@ -64,6 +65,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* 暗底站点必须声明 color-scheme：原生滚动条 / 表单控件 / 日期选择器才走深色，
+            否则玻璃页面里蹦出一根白滚动条（2026-09-10 走查补） */}
+        <meta name="color-scheme" content="dark" />
+        {/* 移动端浏览器地址栏跟页面底同色，色值与 theme.ts 的 COLOR.bg 一致（静态资源吃不到变量，改色同步） */}
+        <meta name="theme-color" content="#100E1C" />
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Meta />
@@ -112,10 +118,17 @@ export default function App() {
           antd Layout / 顶栏 Menu 退役：横向 Menu 是要杀掉的「后台管理系统」脸（spec §4.1）。
           登录态 / 登出表单收进 UserMenu（侧栏底 + 移动端品牌胶囊右侧两处共用） */}
       <div className="fp-shell relative z-1 flex min-h-screen">
+        {/* 跳转主内容：键盘用户不必逐项 Tab 过整条侧栏。平时视觉隐藏，聚焦时以玻璃药丸浮出 */}
+        <a
+          href="#fp-main-content"
+          className="fp-glass sr-only fixed top-3 left-3 z-50 rounded-full px-4 py-2 text-sm text-ink no-underline focus:not-sr-only"
+        >
+          跳到主内容
+        </a>
         <AppSidebar navItems={navItems} selectedKey={selectedKey} user={user} />
         <div className="fp-main flex min-w-0 flex-1 flex-col">
           <MobileBrandBar user={user} />
-          <main className="fp-content mx-auto w-full max-w-[1120px] px-6 pt-6 pb-12">
+          <main id="fp-main-content" className="fp-content mx-auto w-full max-w-[1120px] px-6 pt-6 pb-12">
             <Outlet />
           </main>
           {/* Pro 系标准 Footer：收在主列底，不再通栏。
@@ -147,22 +160,51 @@ export default function App() {
   );
 }
 
-/** 全局错误边界：区分 404 等路由错误与运行时异常 */
+/**
+ * 全局错误边界：区分 404 等路由错误与运行时异常。
+ *
+ * 渲染在 Layout（文档骨架）里、App 之外——所以没有 ConfigProvider / 侧栏，
+ * 只能用原生元素 + 工具类 + .fp-glass（色雾由 Layout 的 FogStage 提供，
+ * 暗底玻璃语言不断片）。404 给「回首页 / 去发现基金」两条路，其余错误给重试。
+ */
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   let title = "出错了";
   let detail = "发生了未知错误";
+  let isNotFound = false;
   if (isRouteErrorResponse(error)) {
-    title = `${error.status}`;
-    detail = error.statusText || detail;
+    isNotFound = error.status === 404;
+    title = isNotFound ? "404 · 这页不存在" : `${error.status}`;
+    detail = isNotFound ? "链接可能拼错了，或者这一页已经搬走。" : (error.statusText || detail);
   }
   else if (error instanceof Error) {
     detail = error.message;
   }
   return (
-    <div style={{ padding: 48, textAlign: "center" }}>
-      <h1>{title}</h1>
-      <p>{detail}</p>
-      <a href="/">返回首页</a>
+    <div className="relative z-1 flex min-h-screen items-center justify-center p-6">
+      <div className="fp-glass relative w-full max-w-[480px] rounded-[22px] px-8 py-10 text-center">
+        <div className="mb-3 flex justify-center">
+          <Logo size={40} />
+        </div>
+        <h1 className="m-0 text-2xl font-bold text-ink">{title}</h1>
+        <p className="mt-2 mb-6 text-sm leading-6 text-muted">{detail}</p>
+        <div className="flex flex-wrap justify-center gap-3">
+          {/* 原生 <a>：错误边界外没有 router 上下文，也顺手走边缘缓存 */}
+          <a href="/" className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-white no-underline">
+            返回首页
+          </a>
+          {isNotFound
+            ? (
+                <a href="/funds" className="rounded-full border border-line bg-well px-5 py-2 text-sm text-ink no-underline [border-style:solid]">
+                  去发现基金
+                </a>
+              )
+            : (
+                <a href="" className="rounded-full border border-line bg-well px-5 py-2 text-sm text-ink no-underline [border-style:solid]">
+                  重试
+                </a>
+              )}
+        </div>
+      </div>
     </div>
   );
 }
