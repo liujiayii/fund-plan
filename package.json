@@ -13,8 +13,8 @@
   "keywords": [],
   "main": "index.js",
   "scripts": {
-    "dev": "pnpm uno:build && react-router dev",
-    "build": "pnpm uno:build && react-router build",
+    "dev": "react-router dev",
+    "build": "react-router build && node scripts/assert-uno-bundle.mjs",
     "start": "wrangler dev",
     "deploy": "pnpm run build && wrangler deploy",
     "test": "vitest run",
@@ -28,9 +28,7 @@
     "test:all": "pnpm test && pnpm test:workers",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test",
-    "uno:build": "unocss \"app/**/*.{ts,tsx}\" -o app/uno.gen.css",
-    "uno:watch": "unocss \"app/**/*.{ts,tsx}\" -o app/uno.gen.css --watch"
+    "verify": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.7",
@@ -58,8 +56,6 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "@unocss/cli": "^66.10.0",
-    "@unocss/reset": "^66.10.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.10.0",
     "eslint-plugin-format": "^2.0.1",
@@ -68,7 +64,7 @@
     "lint-staged": "^17.5.0",
     "simple-git-hooks": "^2.14.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "unocss": "^66.10.0",
+    "unocss": "^66.10.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11",
     "wrangler": "^4.129.0"

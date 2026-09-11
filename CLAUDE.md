@@ -25,7 +25,6 @@ pnpm test:all             # 两者都跑
 pnpm db:generate          # 改了 schema 后重新生成迁移 SQL
 pnpm db:migrate:prod      # 应用迁移到线上 D1
 pnpm cf-typegen           # 重新生成 worker-configuration.d.ts
-pnpm uno:build            # 生成 UnoCSS 样式（dev/build 已自动前置）
 pnpm deploy               # build + wrangler deploy
 ```
 
@@ -186,18 +185,18 @@ react-router 的 vite 插件按 **package.json 里是否装了这些包**（`has
 dev SSR 里变成 undefined、每页 500**（真 Node / 生产 build / CI 全都不炸，纯本地
 静默）。删包即根治。最小复现与完整证据链：`../antd-icons-workerd-repro`。
 
-### UnoCSS 走 CLI 预生成，不是 Vite 插件
+### UnoCSS 走 Vite 插件（≥ 66.10.2）
 
-原因：UnoCSS 的 Vite 插件与 React Router 8 的 Vite Environment API 不兼容——
-多环境构建下 `failed to find vite:css-post plugin` 只报一行警告就"成功"，
-产物 CSS 只剩 48 字节占位符，所有工具类静默丢失（完整考证见 `docs/development.md`）。
-纯 SPA 项目（`@vitejs/plugin-react`，单环境）不受此影响。
+`vite.config.ts` 挂 `unocss/vite`，`root.tsx` 吃 `virtual:uno.css`。dev 改 class 即热更，
+不必再跑 CLI。`pnpm build` 末尾有 `scripts/assert-uno-bundle.mjs`：产物 CSS 太小或
+只剩 `#--unocss--` 占位符就红——这是当年静默丢类的回归闸门。
 
-所以 `dev`/`build` 前会跑 `pnpm uno:build` 生成 `app/uno.gen.css`（该文件**入库**，不要手改）。
-注意这步是**一次性预生成**：dev 运行中新增了类，要手动再跑一次 `pnpm uno:build`
-（vite 会 watch 到产物变化自动热更）。
+历史坑（66.10.0 及更早）：RR8 Environment API 下找不到 `vite:css-post`，构建假成功、
+产物只剩 ~48 字节占位符。66.10.1/66.10.2 按环境 `outDir` 登记 css-post 后修好。
+完整考证见 `docs/development.md`。**不要把 unocss 降回 66.10.0。**
 
-两个配置必须保持关闭（`uno.config.ts`）：
+`postcss: false` 必须保持（PostCSS 模式历史上会把构建挂死）。
+另外两个配置必须保持关闭（`uno.config.ts`）：
 
 - `preflights.reset: false` —— UnoCSS 的全局重置会冲掉 antd 自带的重置
 - **不启用 `presetAttributify`** —— 会把 antd 的 `color="red"`、`align="middle"` 等 props

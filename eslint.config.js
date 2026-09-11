@@ -41,8 +41,6 @@ export default antfu(
       // 已被 git ignore；里面的代码块同样是讲解用片段，不是可运行代码。
       // 不豁免则 markdown formatter 会报数百个错，把真实的 lint 失败淹没。
       ".superpowers/**",
-      // UnoCSS CLI 生成的产物，改它没意义（下次生成就被覆盖）
-      "app/uno.gen.css",
     ],
   },
   {

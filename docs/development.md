@@ -224,32 +224,34 @@ TS 7 是 Go 重写版，`typescript-eslint` 还不支持（会直接抛错拒绝
 配置在 `uno.config.ts`，另有几个自定义快捷方式：
 `text-rise`（涨红）、`text-fall`（跌绿）、`flex-center`、`flex-between`。
 
-### ⚠️ 为什么是 CLI 预生成，不是 Vite 插件
+### 接入方式：Vite 插件（unocss ≥ 66.10.2）
 
-`pnpm dev` / `pnpm build` 都会先跑 `pnpm uno:build`，把样式生成到 `app/uno.gen.css`
-（该文件**入库**，不要手改，改了下次生成就被覆盖）。
+`vite.config.ts` 挂 `unocss/vite`，`root.tsx` 吃 `virtual:uno.css`。dev 改 class 即热更。
+`pnpm build` 末尾跑 `scripts/assert-uno-bundle.mjs`：client 产物 CSS 必须 >10KB 且含
+`.text-ink` / `--fp-primary` / `.font-num`，不得出现 `#--unocss--` 占位符。
 
-原因是踩了两个坑：
+#### 历史：为什么曾经走 CLI
 
-1. **`unocss/vite` 插件与 React Router 8 的 Vite Environment API 不兼容**。
+66.10.0 及更早，`unocss/vite` 与 React Router 8 的 Vite Environment API 不兼容。
+RR8 framework mode 把流水线拆成 client/ssr 多环境，UnoCSS 的
+`unocss:global:build:generate` 只按顶层 `build.outDir` 登记 `vite:css-post`，
+环境自己的 `outDir`（`build/client` vs `build/server`）对不上。构建只报一行
+`failed to find vite:css-post plugin` 警告就「成功」，产物 CSS 只剩 ~48 字节占位符，
+**所有工具类静默丢失**。纯 SPA 单环境不受影响。
 
-   ⚠️ 这**不是** Vite 8 的问题——裸 Vite 8 + `unocss/vite` 实测完全正常，
-   纯 SPA 项目（`@vitejs/plugin-react` 单环境构建）也能正常用该插件。
+当时的绕法是 `pnpm uno:build` 预生成 `app/uno.gen.css` 入库。
 
-   问题出在 RR8 framework mode 会启用 Environment API（构建日志里能看到
-   `Using Vite Environment API`），把流水线拆成 client/ssr 多个环境。
-   UnoCSS 的 `unocss:global:build:generate` 要去当前环境的插件容器里找
-   `vite:css-post` 注入生成的 CSS，多环境下找不到。
+66.10.1（[#5324](https://github.com/unocss/unocss/pull/5324)）给每个 environment 的
+`outDir` 登记 css-post；66.10.2（[#5330](https://github.com/unocss/unocss/pull/5330)）
+修好 isolated 环境配置下实例被覆写。本仓库 2026-09-11 在 RR8 + Cloudflare Vite
+插件栈上实测：构建无 css-post 警告，client CSS ~30KB，工具类进包。于是拆掉 CLI。
 
-   表现极其隐蔽——构建只报一行 `failed to find vite:css-post plugin` 警告就"成功"了，
-   但产出的 CSS 里只有一个 48 字节的占位符，**所有工具类全部丢失**。
-2. **PostCSS 模式会让构建挂死**（超过 7 分钟无响应）。
+**不要把 unocss 降回 66.10.0。** 降回去断言脚本会红。
 
-CLI 方案已验证可靠：工具类正确进入最终产物。改了 class 之后如果样式没生效，
-先确认 `pnpm uno:build` 跑过（或用 `pnpm uno:watch` 开监听）。
+#### 仍须保持的开关
 
-### ⚠️ 两个必须保持关闭的配置
-
+- **`postcss: false`**（vite 插件选项）—— PostCSS 模式历史上会把构建挂死（>7 分钟无响应）。
+  css-post 注入本身不依赖 PostCSS。
 - **`preflights.reset: false`** —— UnoCSS 的全局重置会冲掉 antd 自带的样式重置，
   导致按钮没背景色、输入框没边框。antd 已有 reset，不要第二套。
 - **不启用 `presetAttributify`** —— 属性化写法会把 antd 组件的普通 props 误当工具类：

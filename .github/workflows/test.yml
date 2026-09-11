@@ -58,7 +58,7 @@ jobs:
       - name: 类型检查
         run: pnpm typecheck
 
-      - name: 构建（含 UnoCSS 产物生成）
+      - name: 构建（含 UnoCSS 产物断言）
         run: pnpm build
 
   # 测试：领域层单测（node 环境）+ 应用层集成测试（真实 workerd + D1）

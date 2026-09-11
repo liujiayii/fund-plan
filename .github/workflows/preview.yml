@@ -66,7 +66,7 @@ jobs:
         env:
           npm_config_registry: https://registry.npmjs.org/
 
-      - name: 构建（含 UnoCSS 产物生成，并产出重定向配置）
+      - name: 构建（含 UnoCSS 产物断言，并产出重定向配置）
         run: pnpm build
 
       # 上传为 fund-plan 的一个版本（别名 pr-<PR号>），生产流量/域名/cron 零改动。
