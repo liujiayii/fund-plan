@@ -10,6 +10,7 @@ import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { yuanToCents } from "~/domain/money";
+import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import {
   createDcaPlan,
@@ -24,7 +25,7 @@ import { getDcaPlans } from "~/services/portfolio-service";
 const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "我的定投 · 模拟基金" }];
+  return pageMeta({ title: "我的定投", path: "/me/dca", index: false });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

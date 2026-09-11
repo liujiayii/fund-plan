@@ -2,6 +2,7 @@ import type { Route } from "./+types/login";
 import { Alert, Button, Form, Input, Typography } from "antd";
 import { Link, redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
 import { AuthShell } from "~/components/ui/AuthShell";
+import { pageMeta } from "~/domain/seo";
 import { loginUser } from "~/services/auth";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
@@ -10,7 +11,11 @@ import { createSession, sessionCookie } from "~/services/session";
 const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "登录 · 模拟基金" }];
+  return pageMeta({
+    title: "登录",
+    description: "登录模拟基金定投系统，继续你的模拟盘",
+    path: "/login",
+  });
 }
 
 /** 已登录的话直接送去仪表盘，别让人重复登录 */

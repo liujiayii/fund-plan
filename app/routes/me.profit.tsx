@@ -1,6 +1,7 @@
 import type { Route } from "./+types/me.profit";
 import { Space, Typography } from "antd";
 import { ProfitContent } from "~/components/ProfitContent";
+import { pageMeta } from "~/domain/seo";
 import { getProfitDetail } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
@@ -8,7 +9,7 @@ import { requireUser } from "~/services/guard";
 const { Title } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "收益明细 · 模拟基金" }];
+  return pageMeta({ title: "收益明细", path: "/me/profit", index: false });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

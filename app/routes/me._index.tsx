@@ -22,6 +22,7 @@ import { NavButton } from "~/components/ui/NavButton";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { TRADE_CUTOFF_HOUR } from "~/domain/config";
+import { pageMeta } from "~/domain/seo";
 import { isTradingDay, resolveConfirmDate, toBeijing } from "~/domain/trading-calendar";
 import { getAssetTimeline } from "~/services/asset-service";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
@@ -32,7 +33,7 @@ import { getPendingBuyCents, getPortfolio } from "~/services/portfolio-service";
 const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "我的仪表盘 · 模拟基金" }];
+  return pageMeta({ title: "我的仪表盘", path: "/me", index: false });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

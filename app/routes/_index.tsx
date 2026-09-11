@@ -11,6 +11,7 @@ import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { CHECKIN_BASE_CENTS, CHECKIN_MAX_CENTS } from "~/domain/checkin";
 import { INITIAL_CASH_CENTS } from "~/domain/config";
+import { DEFAULT_DESCRIPTION, pageMeta, SITE_NAME } from "~/domain/seo";
 import { getAssetTimeline } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
@@ -20,13 +21,12 @@ import { getSiteStats } from "~/services/stats-service";
 const { Title, Paragraph, Text } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [
-    { title: "模拟基金 · 定投系统" },
-    {
-      name: "description",
-      content: "用真实基金数据玩模拟盘：真实 T+1 撮合、内扣申购费、FIFO 阶梯赎回费，每日签到领本金",
-    },
-  ];
+  return pageMeta({
+    title: SITE_NAME,
+    description: DEFAULT_DESCRIPTION,
+    path: "/",
+    brandSuffix: false,
+  });
 }
 
 /**

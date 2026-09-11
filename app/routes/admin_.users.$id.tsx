@@ -12,6 +12,7 @@ import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { pageMeta } from "~/domain/seo";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getUserDetail } from "~/services/admin-service";
 import { getProfitDetail } from "~/services/asset-service";
@@ -27,7 +28,7 @@ const { Title, Paragraph } = Typography;
 const PAGE_SIZE = 15;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "用户详情 · 管理后台 · 模拟基金" }];
+  return pageMeta({ title: "用户详情 · 管理后台", path: "/admin", index: false });
 }
 /**
  * admin 看某个用户的盘：只读。IA 对齐 /me（钱 → 仓 → tabs），
