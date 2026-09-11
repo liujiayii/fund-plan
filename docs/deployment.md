@@ -83,6 +83,59 @@ Cloudflare Dashboard → Workers & Pages → 你的 Worker → Settings → Trig
 3. 等当晚 20:30 Cron 跑完（或在 Dashboard 手动触发），订单应变 `已确认`
 4. `/me/holdings` 应出现持仓
 
+## 搜索引擎收录（Google / Bing / 百度）
+
+仓库里已经备好爬虫基建，上线后还差**你去三大站长平台提交站点**这一步——
+没有人工提交，光有 `robots.txt` / `sitemap.xml` 也可能几个月没人来。
+
+主站钉死 `https://liujiayii.dpdns.org`（备用域 `liujiayi.dpdns.org` 不进
+canonical / sitemap，避免双域名互抢权重）。部署后先自检：
+
+```bash
+curl -sI https://liujiayii.dpdns.org/robots.txt     # 200，text/plain
+curl -s  https://liujiayii.dpdns.org/robots.txt     # 含 Sitemap: …/sitemap.xml
+curl -sI https://liujiayii.dpdns.org/sitemap.xml    # 200，application/xml
+```
+
+公开页（`/` `/master` `/leaderboard` `/funds` `/login` `/register`）应有
+`canonical` + `og:*`；`/me*` `/admin*` 应有 `robots: noindex, nofollow`。
+
+### Google Search Console
+
+1. 打开 [Google Search Console](https://search.google.com/search-console)
+2. 添加资源 → **网址前缀** → `https://liujiayii.dpdns.org`
+3. 验证：用 **DNS TXT**（Cloudflare Dashboard → 该 zone → DNS → 加一条 TXT）。
+   本站没有 Google Analytics 跟踪代码（只有 CF Web Analytics 自动注入），
+   别选 GA 验证；「已登录的 Google 账号」也不能单独过 URL-prefix 验证
+4. 验证通过后：左侧 **站点地图** → 提交 `https://liujiayii.dpdns.org/sitemap.xml`
+5. **网址检查** 里抽查首页，点「请求编入索引」。Google 通常几天到几周收录
+
+### Bing Webmaster Tools
+
+1. 打开 [Bing Webmaster](https://www.bing.com/webmasters)
+2. 添加站点 `https://liujiayii.dpdns.org`
+3. 验证：同样用 DNS TXT，或直接 **导入 Google Search Console**（GSC 先过就能一键同步）
+4. **站点地图** → 提交同一条 `sitemap.xml`
+5. Bing 收录通常比 Google 快，常在几天内
+
+### 百度搜索资源平台
+
+1. 打开 [百度搜索资源平台](https://ziyuan.baidu.com/)
+2. 用户中心 → 添加网站 → `https://liujiayii.dpdns.org`
+3. 验证：文件验证（把验证文件内容做成 Worker 路由）或 HTML 标签都行；
+   DNS TXT 百度也支持
+4. 数据引入 → **链接提交** → 填写 sitemap 地址
+5. **预期要降**：`*.dpdns.org` 是免费二级域，百度对这类域名很苛刻，
+   可能长期不收或收了也不给展现。真想在百度搜到，长期还是得有自己的域名
+
+### 心里有数
+
+- 提交 ≠ 立刻排到第一。索引只是入场券，排名靠外链、查询量和内容
+- 基金详情只收录**库里已落档**的代码（有人访问过、`ensureFund` 写过的），
+  空 404 不进 sitemap
+- `/me` `/admin` 被 `robots.txt` Disallow 且页面 `noindex`，登录盘不会进索引
+- 改了公开页文案不用重新提交 sitemap，爬虫会按缓存头（sitemap 1h、robots 1 天）再来
+
 ## PR 预览环境
 
 每个 PR 会自动上传为生产 Worker `fund-plan` 的一个**预览版本**

@@ -2,6 +2,7 @@ import type { Route } from "./+types/register";
 import { Alert, Button, Form, Input, Typography } from "antd";
 import { Link, redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
 import { AuthShell } from "~/components/ui/AuthShell";
+import { pageMeta } from "~/domain/seo";
 import { registerUser } from "~/services/auth";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
@@ -10,7 +11,11 @@ import { createSession, sessionCookie } from "~/services/session";
 const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "注册 · 模拟基金" }];
+  return pageMeta({
+    title: "注册",
+    description: "注册即送 10 万模拟本金，用户名 + 密码即可，不要邮箱不要手机号",
+    path: "/register",
+  });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

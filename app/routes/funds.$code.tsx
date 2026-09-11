@@ -22,6 +22,7 @@ import { account, fundNav } from "~/db/schema";
 import { navToDisplay, rateToPercent } from "~/domain/money";
 import { calcPeriodReturns } from "~/domain/performance";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
+import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import {
   ensureFund,
@@ -41,9 +42,14 @@ import { pnlColor } from "~/theme";
 
 const { Title, Paragraph, Text } = Typography;
 
-export function meta({ loaderData }: Route.MetaArgs) {
+export function meta({ loaderData, params }: Route.MetaArgs) {
   const name = loaderData?.fund?.name ?? "基金详情";
-  return [{ title: `${name} · 模拟基金` }];
+  const code = params.code ?? "";
+  return pageMeta({
+    title: name,
+    description: `${name}${code ? `（${code}）` : ""}的模拟盘档案：真实净值、费率与风险等级，可练申购与定投`,
+    path: code ? `/funds/${code}` : "/funds",
+  });
 }
 
 /**

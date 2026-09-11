@@ -7,6 +7,7 @@ import { fmtInt, fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
+import { pageMeta } from "~/domain/seo";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getAdminStats, listUsersOverview } from "~/services/admin-service";
 import { getAppContext } from "~/services/context";
@@ -15,7 +16,7 @@ import { requireAdmin } from "~/services/guard";
 const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "管理后台 · 模拟基金" }];
+  return pageMeta({ title: "管理后台", path: "/admin", index: false });
 }
 
 /** admin 只读后台：全局统计 + 用户列表。写操作一概没有（见设计文档非目标） */
