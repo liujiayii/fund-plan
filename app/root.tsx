@@ -140,7 +140,8 @@ export default function App() {
         </a>
         <AppSidebar navItems={navItems} selectedKey={selectedKey} user={user} />
         <div className="fp-main flex min-w-0 flex-1 flex-col">
-          <MobileBrandBar user={user} />
+          {/* navItems 一并传入：更多菜单与桌面侧栏同源（含 admin 追加项） */}
+          <MobileBrandBar navItems={navItems} user={user} />
           <main id="fp-main-content" className="fp-content mx-auto w-full max-w-[1120px] px-6 pt-6 pb-12">
             <Outlet />
           </main>
