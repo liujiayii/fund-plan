@@ -3,7 +3,7 @@ import { Alert, Button, Form, Input, Typography } from "antd";
 import { Link, redirect, Form as RouterForm, useActionData, useNavigation } from "react-router";
 import { AuthShell } from "~/components/ui/AuthShell";
 import { pageMeta } from "~/domain/seo";
-import { registerUser } from "~/services/auth";
+import { extractRegisterMeta, registerUser } from "~/services/auth";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { createSession, sessionCookie } from "~/services/session";
@@ -38,7 +38,8 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
 
   try {
-    const user = await registerUser(db, env, username, password);
+    // 注册来源（IP/UA/国家/城市）随账号落库，事后排查用
+    const user = await registerUser(db, env, username, password, extractRegisterMeta(request));
     // 注册即登录，省一步
     const token = await createSession(db, user.id);
     return redirect("/me", {
@@ -118,6 +119,7 @@ export default function Register() {
       </Paragraph>
       <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
         提示：本站不发邮件，忘记密码需联系管理员重置，请记好密码。
+        注册时会记录你的 IP 与浏览器标识（仅用于排查异常注册，不对外展示）。
       </Paragraph>
     </AuthShell>
   );

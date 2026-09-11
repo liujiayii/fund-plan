@@ -100,10 +100,42 @@ export async function verifyPassword(
 const USERNAME_RE = /^[\w\u4E00-\u9FA5]{3,20}$/;
 
 /**
+ * 注册来源上下文。从注册请求的 headers 与 Cloudflare 的 request.cf 抽取，
+ * 落到 user 表供事后排查（存量用户为 NULL）。
+ * 全部可空：cf 对象只在 CF 运行时存在，且个别字段可能缺失。
+ */
+export interface RegisterMeta {
+  /** cf-connecting-ip，即访客真实 IP */
+  ip?: string;
+  /** User-Agent，排查脚本注册用 */
+  userAgent?: string;
+  /** 国家代码（如 "CN"） */
+  country?: string;
+  /** 城市（如 "Guangzhou"） */
+  city?: string;
+}
+
+/**
+ * 从 Request 抽出注册来源上下文。
+ * 放在 service 而不是 route：抽完的纯数据可注入测试，route 只管传 request。
+ */
+export function extractRegisterMeta(request: Request): RegisterMeta {
+  // request.cf 是 Cloudflare 扩展（标准 Request 接口没有），需断言；
+  // 本地 dev（workerd）也有 cf，但国家/城市与线上口径不同，仅线上值有参考意义
+  const cf = (request as Request & { cf?: Record<string, unknown> }).cf;
+  return {
+    ip: request.headers.get("cf-connecting-ip") ?? undefined,
+    userAgent: request.headers.get("user-agent") ?? undefined,
+    country: typeof cf?.country === "string" ? cf.country : undefined,
+    city: typeof cf?.city === "string" ? cf.city : undefined,
+  };
+}
+
+/**
  * 注册新用户。
  *
  * 副作用（同一个 D1 batch 内原子完成）：
- *  1. 建 user 记录（角色由 ADMIN_USERNAME 决定）
+ *  1. 建 user 记录（角色由 ADMIN_USERNAME 决定，附带注册来源）
  *  2. 建 account，发 10 万初始本金
  *  3. 记一条 type='init' 的资金流水，便于对账
  *
@@ -115,6 +147,7 @@ export async function registerUser(
   env: Env,
   username: string,
   password: string,
+  meta: RegisterMeta = {},
 ): Promise<{ id: number; username: string; role: "admin" | "user" }> {
   const name = username.trim();
 
@@ -145,6 +178,11 @@ export async function registerUser(
       passwordHash: hash,
       salt,
       role,
+      // 注册来源：排查「这号是谁/是不是脚本」时的第一手证据
+      registerIp: meta.ip,
+      registerUserAgent: meta.userAgent,
+      registerCountry: meta.country,
+      registerCity: meta.city,
       createdAt: now,
     })
     .returning();

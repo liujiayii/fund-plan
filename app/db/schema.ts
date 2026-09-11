@@ -78,6 +78,14 @@ export const user = sqliteTable("user", {
   salt: text("salt").notNull(),
   /** 角色：admin（主理人，组合公开）| user */
   role: text("role", { enum: ["admin", "user"] }).notNull().default("user"),
+  /** 注册来源 IP（cf-connecting-ip）。存量用户无此记录（NULL） */
+  registerIp: text("register_ip"),
+  /** 注册时的 User-Agent，排查脚本注册用 */
+  registerUserAgent: text("register_user_agent"),
+  /** 注册地：国家代码（cf.country，如 "CN"） */
+  registerCountry: text("register_country"),
+  /** 注册地：城市（cf.city，如 "Guangzhou"） */
+  registerCity: text("register_city"),
   createdAt: integer("created_at").notNull(),
 });
 

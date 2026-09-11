@@ -1,7 +1,7 @@
 import type { TableProps } from "antd";
 import type { Route } from "./+types/admin";
 import type { UserOverview } from "~/services/admin-service";
-import { Space, Table, Tag, Typography } from "antd";
+import { Space, Table, Tag, Tooltip, Typography } from "antd";
 import { Link } from "react-router";
 import { fmtInt, fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
@@ -81,6 +81,31 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
       width: 110,
       render: v => toBeijing(new Date(v)).format("YYYY-MM-DD"),
     },
+    {
+      // 注册来源：排查「这号是谁/是不是脚本」的第一手证据。
+      // UA 全串太长，悬浮才展示；IP/地区常显。存量用户（加列之前注册）显示 —
+      title: "注册来源",
+      dataIndex: "registerIp",
+      width: 170,
+      render: (_, r) => {
+        // 四字段全空才算「无记录」（存量用户）；IP 缺失但地区/UA 在时
+        // 照常展示已有数据，IP 单独占位 —（评审修正：不能只看 registerIp）
+        const hasSource
+          = r.registerIp || r.registerUserAgent || r.registerCountry || r.registerCity;
+        if (!hasSource)
+          return <Typography.Text type="secondary">—</Typography.Text>;
+        // 地区串：城市缺失退国家，都缺就只显 IP
+        const region = [r.registerCity, r.registerCountry].filter(Boolean).join(" · ");
+        return (
+          <Tooltip title={r.registerUserAgent ?? "无 UA 记录"} placement="topLeft">
+            <div className="text-xs leading-16px">
+              <div className="font-num">{r.registerIp ?? "—"}</div>
+              {region && <div className="text-muted">{region}</div>}
+            </div>
+          </Tooltip>
+        );
+      },
+    },
   ];
 
   return (
@@ -110,7 +135,7 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
           dataSource={users}
           pagination={false}
           size="middle"
-          scroll={{ x: 720 }}
+          scroll={{ x: 880 }}
         />
       </SectionCard>
     </Space>
