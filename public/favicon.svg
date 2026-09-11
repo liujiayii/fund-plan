@@ -1,15 +1,38 @@
-<!-- 品牌视觉锤（与 app/components/ui/Logo.tsx 同款图形）。
-     色值对应 theme.ts：#58C4F5=COLOR.primary、#B5E6FF=COLOR.primaryTo、
-     #07202E=COLOR.onPrimary（冰川药丸是亮冰蓝，曲线用深海墨而非白）。
-     静态资源吃不到 --fp-* 变量，改色时两处同步。 -->
+<!-- 浏览器角标：暗海玻璃瓦 + 冰蓝净值线（与 Logo 图形同源、色板分治）。
+     站内 Logo 仍是亮冰蓝药丸 + 深海墨折线；角标要在亮/暗标签栏里都立得住，
+     所以瓦面改成 elevated 深海蓝（#0A1A28），折线吃品牌渐变。
+     色值对应 theme.ts：#0A1A28 ≈ COLOR.elevated 实色、#58C4F5=COLOR.primary、
+     #B5E6FF=COLOR.primaryTo、#A8E4FF=COLOR.fogC。静态资源吃不到 --fp-*，改色时同步。
+     16px 糊不出 backdrop-filter，玻璃感用顶边高光脊 + 左上斜切高光 + 冰色描边骗出来。 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+    <!-- 净值折线：左冰蓝 → 右冰白，跟 PRIMARY_GRADIENT 同色、方向跟走势走 -->
+    <linearGradient id="line" x1="8" y1="21.5" x2="24" y2="10.5" gradientUnits="userSpaceOnUse">
       <stop stop-color="#58C4F5"/>
       <stop offset="1" stop-color="#B5E6FF"/>
     </linearGradient>
+    <!-- 左上斜切高光：一块很淡的冰白径向，只占一角，模仿玻璃折射 -->
+    <radialGradient id="spec" cx="6" cy="4" r="18" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 圆角裁切：高光层必须跟瓦同圆角，否则斜切会漏出方角 -->
+    <clipPath id="tile">
+      <rect width="32" height="32" rx="9"/>
+    </clipPath>
   </defs>
-  <rect width="32" height="32" rx="9" fill="url(#g)"/>
-  <path d="M8 21.5 L13 15.5 L17.5 19 L24 10.5" stroke="#07202E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <circle cx="24" cy="10.5" r="2" fill="#07202E"/>
+  <!-- 瓦：elevated 实底，比页面底 #071018 抬一档，暗标签栏里不会溶掉 -->
+  <rect width="32" height="32" rx="9" fill="#0A1A28"/>
+  <g clip-path="url(#tile)">
+    <rect width="32" height="32" fill="url(#spec)"/>
+    <!-- 顶边高光脊：对齐 .fp-glass 的 inset 0 1px 0 rgba(255,255,255,.45) -->
+    <rect x="0" y="0" width="32" height="1.5" fill="#FFFFFF" fill-opacity="0.45"/>
+  </g>
+  <!-- 冰色描边停：暗 chrome 里把瓦框住，色相吃 fogC。
+       stroke 默认居中描边，外半圈会被 viewBox 裁掉，所以整圈内收 0.5 -->
+  <rect x="0.5" y="0.5" width="31" height="31" rx="8.5" fill="none" stroke="#A8E4FF" stroke-opacity="0.35" stroke-width="1"/>
+  <!-- 净值折线：路径与 Logo.tsx 完全同款，16px 仍是「上扬的三折」 -->
+  <!-- 折线比 Logo 的 2.6 略粗：16px 标签栏下采样后 2.6 会糊成一段灰，3.2 还能读出三折 -->
+  <path d="M8 21.5 L13 15.5 L17.5 19 L24 10.5" stroke="url(#line)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="24" cy="10.5" r="2.2" fill="#B5E6FF"/>
 </svg>
