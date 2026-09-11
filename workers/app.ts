@@ -30,6 +30,9 @@ const requestHandler = createRequestHandler(
 /** Cron 表达式 → 任务名，注释标注对应北京时间（UTC+8） */
 const CRON_DCA_SCAN = "0 2 * * *"; // 北京 10:00
 const CRON_SETTLE = "30 12 * * *"; // 北京 20:30
+// 北京 21:30 —— 撮合兜底重跑（幂等），与 20:30 同一段逻辑：
+// CF 偶发漏派发触发（2026-09-10 实测），或东财净值当晚还没发布完
+const CRON_SETTLE_RETRY = "30 13 * * *";
 
 /**
  * 从 Request 抽出访问判定所需的方法与三个请求头，喂给纯函数 isPageVisit。
@@ -267,8 +270,10 @@ export default {
       return;
     }
 
-    if (controller.cron === CRON_SETTLE) {
-      // 先同步净值，再撮合——顺序不能颠倒，否则撮合拿不到当日净值
+    if (controller.cron === CRON_SETTLE || controller.cron === CRON_SETTLE_RETRY) {
+      // 先同步净值，再撮合——顺序不能颠倒，否则撮合拿不到当日净值。
+      // 两个表达式跑同一段逻辑：21:30 是 20:30 的幂等兜底
+      // （漏派发 / 东财净值晚发布都能在这一轮补上）
       try {
         const s = await syncNav(db, env);
         console.log(`[cron] 净值同步完成：写入 ${s.synced} 条`);
