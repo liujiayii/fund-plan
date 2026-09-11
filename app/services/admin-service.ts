@@ -18,6 +18,14 @@ export interface UserOverview {
   id: number;
   username: string;
   role: "admin" | "user";
+  /** 注册来源 IP（存量用户为 null） */
+  registerIp: string | null;
+  /** 注册时的 User-Agent（存量用户为 null） */
+  registerUserAgent: string | null;
+  /** 注册地：国家代码（存量用户为 null） */
+  registerCountry: string | null;
+  /** 注册地：城市（存量用户为 null） */
+  registerCity: string | null;
   /** 可用现金（分） */
   cashCents: number;
   /** 持仓市值（分） */
@@ -99,6 +107,10 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
       id: u.id,
       username: u.username,
       role: u.role,
+      registerIp: u.registerIp,
+      registerUserAgent: u.registerUserAgent,
+      registerCountry: u.registerCountry,
+      registerCity: u.registerCity,
       cashCents: summary.cashCents,
       marketValueCents: summary.marketValueCents,
       totalPnlCents: summary.totalPnlCents,
