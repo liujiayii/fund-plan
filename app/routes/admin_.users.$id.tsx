@@ -1,11 +1,16 @@
 import type { Route } from "./+types/admin_.users.$id";
-import { Space, Tag, Typography } from "antd";
+import type { DcaPlanView, HoldingView, OrderView } from "~/services/portfolio-service";
+import { Pagination, Space, Tabs, Tag, Typography } from "antd";
+import { useMemo, useState } from "react";
 import { AssetOverviewCard } from "~/components/AssetOverviewCard";
-import { AssetTrendChart } from "~/components/AssetTrendChart";
+import { DcaPlanList } from "~/components/DcaPlanList";
+import { HoldingList, sharesAndNavNote } from "~/components/HoldingList";
 import { OrderList } from "~/components/OrderList";
-import { HoldingListReadonly } from "~/components/PortfolioView";
-import { ProfitCalendarCard } from "~/components/ProfitCalendarCard";
+import { ProfitContent } from "~/components/ProfitContent";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
+import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getUserDetail } from "~/services/admin-service";
@@ -15,12 +20,18 @@ import { requireAdmin } from "~/services/guard";
 
 const { Title, Paragraph } = Typography;
 
+/**
+ * 每页条数。沿用 /master 交易记录 tab 的 `pageSize: 15`，
+ * 订单全铺开会变成几十张卡。
+ */
+const PAGE_SIZE = 15;
+
 export function meta(_: Route.MetaArgs) {
   return [{ title: "用户详情 · 管理后台 · 模拟基金" }];
 }
 /**
- * admin 看某个用户的盘：只读。总览/走势/日历已换 /me 同款布局（ux-polish #11），
- * 持仓与订单仍是只读列表；只读铁律不变——全页没有任何操作按钮。
+ * admin 看某个用户的盘：只读。IA 对齐 /me（钱 → 仓 → tabs），
+ * 只读铁律不变——全页没有任何操作按钮。
  *
  * ⚠️ 文件名里的 `admin_.` 尾下划线是刻意的：断开与 admin.tsx 的嵌套。
  * 此前叫 admin.users.$id.tsx（点号串联=嵌套路由），但 admin.tsx 是普通
@@ -34,22 +45,39 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 
   const id = Number(params.id);
   // 非数字 id（如 /admin/users/abc）与不存在的用户一并 404
-  const detail = Number.isInteger(id) && id > 0
-    ? await getUserDetail(db, id)
-    : null;
-  if (!detail) {
+  if (!Number.isInteger(id) || id <= 0) {
     throw new Response("用户不存在", { status: 404 });
   }
 
-  // 收益三件套（走势+日历+明细）的序列数据；查询数 3+N+1，单用户页面远低于 D1 硬顶
-  const profit = await getProfitDetail(db, id);
+  // 详情包（组合/订单/在途/定投）与收益三件套互不依赖，一波并行。
+  // 用户不存在时 getProfitDetail 只是空序列，多查几条换掉串行的一跳往返划算
+  const [detail, profit] = await Promise.all([
+    getUserDetail(db, id),
+    getProfitDetail(db, id),
+  ]);
+  if (!detail) {
+    throw new Response("用户不存在", { status: 404 });
+  }
 
   return { detail, profit };
 }
 
 export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
-  const { detail } = loaderData;
-  const { user, portfolio, orders } = detail;
+  const { detail, profit } = loaderData;
+  const { user, portfolio, orders, pendingBuyCents, plans } = detail;
+  const { summary, holdings } = portfolio;
+
+  // 持仓排序：持有金额（市值）/ 持有收益两键切换，降序；默认持有金额。
+  // 客户端排——持仓数据 loader 已全量带回，几十只以内零成本（/me 同款）
+  const [sortKey, setSortKey] = useState<"amount" | "pnl">("amount");
+  const sortedHoldings = useMemo(
+    () =>
+      [...holdings].sort((a, b) =>
+        sortKey === "amount"
+          ? b.marketValueCents - a.marketValueCents
+          : b.pnlCents - a.pnlCents),
+    [holdings, sortKey],
+  );
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -72,45 +100,118 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
       {/* 返回列表的入口放标题区下方，排查问题时在多个用户间跳转是高频动作 */}
       <NavButton to="/admin">← 返回用户列表</NavButton>
 
-      {/* 总览与收益三件套：与 /me 同款布局（ux-polish #11）。
-          只读铁律不变——没有任何操作按钮。
-          animate-fade-up：区块进场淡入（首卡无延迟），第 N 卡延迟 (N-1)×60ms
-          （animate-delay 写法的坑见 uno.config.ts 注释） */}
-      <SectionCard className="animate-fade-up">
+      {/* 钱：总览卡是门面，挂 fp-glass-specular 高光（宪法 §2.3 白名单：总资产卡）。
+          pendingBuyCents 把申购中在途并回持仓金额与总资产——pending 窗口内
+          总资产才跟 /me 同口径，排查「钱凭空少一笔」靠它 */}
+      <SectionCard className="animate-fade-up fp-glass-specular">
         <AssetOverviewCard
-          summary={portfolio.summary}
-          daily={loaderData.profit.daily}
-          latest={loaderData.profit.latest}
-          totalDepositedCents={loaderData.profit.totalDepositedCents}
+          summary={summary}
+          daily={profit.daily}
+          latest={profit.latest}
+          totalDepositedCents={profit.totalDepositedCents}
+          pendingBuyCents={pendingBuyCents}
         />
       </SectionCard>
 
-      {/* 走势与日历仅 daily 非空时渲染：该用户从没交易过就不摆空图（/master 同款守卫）。
-          走势卡不再叠 AssetPnlSummary 两格（2026-09-09 删）：与顶部总览
-          四小格的昨日/累计收益重复，曲线末点 + tooltip 全覆盖 */}
-      {loaderData.profit.daily.length > 0 && (
-        <>
-          <SectionCard title="资产走势" className="animate-fade-up animate-delay-[60ms]">
-            <AssetTrendChart data={loaderData.profit.daily} />
-          </SectionCard>
-          <SectionCard title="收益日历" className="animate-fade-up animate-delay-[120ms]">
-            <ProfitCalendarCard detail={loaderData.profit} />
-          </SectionCard>
-        </>
-      )}
-
-      <SectionCard title={`持仓（${portfolio.holdings.length} 只）`} className="animate-fade-up animate-delay-[180ms]">
-        <HoldingListReadonly holdings={portfolio.holdings} />
+      {/* 仓：持仓紧跟钱（/me 同款 IA）。标题带只数与合计市值；
+          只读——无买入/卖出，行链仍走默认 /funds/:code */}
+      <SectionCard
+        title={`持仓（${holdings.length} 只 · 市值 ${fmtYuan(summary.marketValueCents)} 元）`}
+        className="animate-fade-up animate-delay-[60ms]"
+        extra={(
+          <PeriodTabs
+            options={[
+              { key: "amount", label: "持有金额" },
+              { key: "pnl", label: "持有收益" },
+            ]}
+            value={sortKey}
+            onChange={v => setSortKey(v as "amount" | "pnl")}
+          />
+        )}
+      >
+        <HoldingsPane holdings={sortedHoldings} />
       </SectionCard>
 
-      <SectionCard title={`订单（最近 ${orders.length} 条）`} className="animate-fade-up animate-delay-[240ms]">
-        {/* detailed 模式：成交净值/份额/手续费全展开，failed 的原因在
-            OrderList 的 failReason Tooltip 里——排查「为什么没成交」就靠它。
-            renderActions 刻意不传：admin 只读，绝不出现撤单/改单按钮 */}
-        {orders.length === 0
-          ? <Paragraph type="secondary" style={{ marginBottom: 0 }}>无订单</Paragraph>
-          : <OrderList orders={orders} detailed />}
+      {/* 账：收益明细 / 交易记录 / 定投计划 tabs 垫底（/me 同款三 tab）。
+          走势+日历并进收益明细 tab，不再单独占两张卡把钱和仓切开。
+          rc-tabs 惰性挂载：图表首次激活才 mount，不会在隐藏容器里起 0×0 canvas */}
+      <SectionCard className="animate-fade-up animate-delay-[120ms]">
+        <Tabs
+          defaultActiveKey="profit"
+          items={[
+            {
+              key: "profit",
+              label: "收益明细",
+              children: <ProfitContent detail={profit} />,
+            },
+            {
+              key: "orders",
+              label: `交易记录（${orders.length}）`,
+              children: <OrdersPane orders={orders} />,
+            },
+            {
+              key: "dca",
+              label: `定投计划（${plans.length}）`,
+              children: <DcaPane plans={plans} />,
+            },
+          ]}
+        />
       </SectionCard>
     </Space>
   );
+}
+
+/* ─────────── 三个只读面板 ─────────── */
+
+/** 持仓面板：只读列表。note 补成本（/me 持仓模块同款信息密度），无操作按钮 */
+function HoldingsPane({ holdings }: { holdings: HoldingView[] }) {
+  if (holdings.length === 0) {
+    return <EmptyState description="暂无持仓" />;
+  }
+  return (
+    <>
+      <HoldingList
+        holdings={holdings}
+        renderNote={h => `${sharesAndNavNote(h)} · 成本 ${fmtYuan(h.costCents)} 元`}
+      />
+      <Paragraph type="secondary" className="mb-0 mt-3 text-xs">
+        「批次」是同一只基金分次买入形成的份额批，赎回时按买入时间先进先出消耗，
+        每批按各自持有天数计赎回费。
+      </Paragraph>
+    </>
+  );
+}
+
+/** 定投面板：只读计划列表。renderActions 刻意不传——admin 绝不出现暂停/删除 */
+function DcaPane({ plans }: { plans: DcaPlanView[] }) {
+  return plans.length === 0
+    ? <EmptyState description="暂无定投计划" />
+    : <DcaPlanList plans={plans} />;
+}
+
+/** 交易记录面板：只读订单卡 + 客户端分页。detailed 展开成交明细，failed 原因在 Tooltip */
+function OrdersPane({ orders }: { orders: OrderView[] }) {
+  // 翻页状态在面板内：切 tab 再切回不丢（rc-tabs 切走不卸载）
+  const [page, setPage] = useState(1);
+  return orders.length === 0
+    ? <EmptyState description="暂无交易记录" />
+    : (
+        <>
+          <OrderList orders={orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)} detailed />
+          {orders.length > PAGE_SIZE && (
+            // 窄屏包一层横向滚动容器：翻页器页码多了能滑，不顶穿卡片
+            <div className="fp-h-scroll mt-4">
+              <Pagination
+                align="end"
+                responsive
+                current={page}
+                pageSize={PAGE_SIZE}
+                total={orders.length}
+                showSizeChanger={false}
+                onChange={setPage}
+              />
+            </div>
+          )}
+        </>
+      );
 }
