@@ -34,6 +34,3 @@ Thumbs.db
 # 测试与缓存
 coverage/
 *.log
-
-# 旧 UnoCSS CLI 产物（已改走 Vite 插件，禁止再入库）
-app/uno.gen.css

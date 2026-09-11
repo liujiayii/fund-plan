@@ -185,19 +185,13 @@ react-router 的 vite 插件按 **package.json 里是否装了这些包**（`has
 dev SSR 里变成 undefined、每页 500**（真 Node / 生产 build / CI 全都不炸，纯本地
 静默）。删包即根治。最小复现与完整证据链：`../antd-icons-workerd-repro`。
 
-### UnoCSS 走 Vite 插件（≥ 66.10.2）
+### UnoCSS 走 Vite 插件
 
-`vite.config.ts` 挂 `unocss/vite`，`root.tsx` 吃 `virtual:uno.css`。dev 改 class 即热更，
-不必再跑 CLI。`pnpm build` 末尾有 `scripts/assert-uno-bundle.mjs`：产物 CSS 太小或
-只剩 `#--unocss--` 占位符就红——这是当年静默丢类的回归闸门。
+`vite.config.ts` 挂 `unocss/vite`，`root.tsx` 吃 `virtual:uno.css`。dev 改 class 即热更。
 
-历史坑（66.10.0 及更早）：RR8 Environment API 下找不到 `vite:css-post`，构建假成功、
-产物只剩 ~48 字节占位符。66.10.1/66.10.2 按环境 `outDir` 登记 css-post 后修好。
-完整考证见 `docs/development.md`。**不要把 unocss 降回 66.10.0。**
+三个配置必须保持关闭：
 
-`postcss: false` 必须保持（PostCSS 模式历史上会把构建挂死）。
-另外两个配置必须保持关闭（`uno.config.ts`）：
-
+- `postcss: false`（vite 插件选项）—— PostCSS 模式历史上会把 RR8 多环境构建挂死
 - `preflights.reset: false` —— UnoCSS 的全局重置会冲掉 antd 自带的重置
 - **不启用 `presetAttributify`** —— 会把 antd 的 `color="red"`、`align="middle"` 等 props
   误当工具类生成污染规则

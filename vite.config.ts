@@ -4,19 +4,12 @@ import UnoCSS from "unocss/vite";
 import { defineConfig } from "vite";
 
 /**
- * UnoCSS 走 Vite 插件（unocss ≥ 66.10.2）。
- *
- * 历史：66.10.0 及更早在 RR8 的 Vite Environment API 下找不到
- * `vite:css-post`，产物 CSS 只剩 ~48 字节占位符（完整考证见
- * docs/development.md）。66.10.1/66.10.2 按环境 outDir 登记 css-post
- * 之后，本仓库 `react-router build` 已能吐出真工具类。
- *
- * ⚠️ `postcss: false` 必须保持。PostCSS 模式历史上会把构建挂死
- * （超过 7 分钟无响应），css-post 注入本身不依赖 PostCSS。
+ * UnoCSS 走 Vite 插件。`postcss: false` 必须保持——PostCSS 模式历史上
+ * 会把本仓库的 RR8 多环境构建挂死（>7 分钟无响应）。
  */
 export default defineConfig({
   plugins: [
-    // 必须进插件链，virtual:uno.css 才有人生成；放 Cloudflare / RR 之前
+    // virtual:uno.css 的生成方，放 Cloudflare / RR 之前
     UnoCSS({ postcss: false }),
     // Cloudflare 插件：让 dev/build 跑在真实 workerd 运行时里，绑定 D1/KV 可直接用
     cloudflare({ viteEnvironment: { name: "ssr" } }),

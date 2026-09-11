@@ -224,34 +224,13 @@ TS 7 是 Go 重写版，`typescript-eslint` 还不支持（会直接抛错拒绝
 配置在 `uno.config.ts`，另有几个自定义快捷方式：
 `text-rise`（涨红）、`text-fall`（跌绿）、`flex-center`、`flex-between`。
 
-### 接入方式：Vite 插件（unocss ≥ 66.10.2）
+### 接入方式：Vite 插件
 
 `vite.config.ts` 挂 `unocss/vite`，`root.tsx` 吃 `virtual:uno.css`。dev 改 class 即热更。
-`pnpm build` 末尾跑 `scripts/assert-uno-bundle.mjs`：client 产物 CSS 必须 >10KB 且含
-`.text-ink` / `--fp-primary` / `.font-num`，不得出现 `#--unocss--` 占位符。
 
-#### 历史：为什么曾经走 CLI
+三个配置必须保持关闭：
 
-66.10.0 及更早，`unocss/vite` 与 React Router 8 的 Vite Environment API 不兼容。
-RR8 framework mode 把流水线拆成 client/ssr 多环境，UnoCSS 的
-`unocss:global:build:generate` 只按顶层 `build.outDir` 登记 `vite:css-post`，
-环境自己的 `outDir`（`build/client` vs `build/server`）对不上。构建只报一行
-`failed to find vite:css-post plugin` 警告就「成功」，产物 CSS 只剩 ~48 字节占位符，
-**所有工具类静默丢失**。纯 SPA 单环境不受影响。
-
-当时的绕法是 `pnpm uno:build` 预生成 `app/uno.gen.css` 入库。
-
-66.10.1（[#5324](https://github.com/unocss/unocss/pull/5324)）给每个 environment 的
-`outDir` 登记 css-post；66.10.2（[#5330](https://github.com/unocss/unocss/pull/5330)）
-修好 isolated 环境配置下实例被覆写。本仓库 2026-09-11 在 RR8 + Cloudflare Vite
-插件栈上实测：构建无 css-post 警告，client CSS ~30KB，工具类进包。于是拆掉 CLI。
-
-**不要把 unocss 降回 66.10.0。** 降回去断言脚本会红。
-
-#### 仍须保持的开关
-
-- **`postcss: false`**（vite 插件选项）—— PostCSS 模式历史上会把构建挂死（>7 分钟无响应）。
-  css-post 注入本身不依赖 PostCSS。
+- **`postcss: false`**（vite 插件选项）—— PostCSS 模式历史上会把 RR8 多环境构建挂死（>7 分钟无响应）。
 - **`preflights.reset: false`** —— UnoCSS 的全局重置会冲掉 antd 自带的样式重置，
   导致按钮没背景色、输入框没边框。antd 已有 reset，不要第二套。
 - **不启用 `presetAttributify`** —— 属性化写法会把 antd 组件的普通 props 误当工具类：
