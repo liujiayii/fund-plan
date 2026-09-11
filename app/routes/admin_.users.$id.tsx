@@ -147,7 +147,10 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
             {
               key: "orders",
               label: `交易记录（${orders.length}）`,
-              children: <OrdersPane orders={orders} />,
+              // key=user.id：同路由换用户时组件会复用（RR 不按 params 卸载），
+              // 不换 key 的话上一个用户翻到第 2 页、下一个用户订单不足 16 条，
+              // slice 出空数组却走不到 EmptyState（CodeRabbit PR #82）
+              children: <OrdersPane key={user.id} orders={orders} />,
             },
             {
               key: "dca",
