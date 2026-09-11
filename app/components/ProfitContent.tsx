@@ -14,8 +14,9 @@ export interface ProfitContentProps {
 /**
  * 收益明细内容体：资产走势图 + 收益日历（2026-09-09 随 DCA 同款手法收拢）。
  *
- * 两个消费方一份真相：/me 的「收益明细」tab（MeTabsPanels.ProfitPanel
- * 懒加载 /me/profit 的 loader）、/me/profit 深链页（自带 loader）。
+ * 三个消费方一份真相：/me 的「收益明细」tab（MeTabsPanels.ProfitPanel
+ * 懒加载 /me/profit 的 loader）、/me/profit 深链页（自带 loader）、
+ * /admin/users/:id 的只读收益 tab（宿主 loader 直传 getProfitDetail）。
  * 口径（spec §2/§8）：累计收益 = Σ dayPnl，含已实现盈亏与全部费用、
  * 剔除净入金——与资产走势曲线、收益日历逐日同口径。
  *

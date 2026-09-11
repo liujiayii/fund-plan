@@ -52,7 +52,12 @@ export const FP_CHART_THEME = {
     itemLabelFill: COLOR.textTertiary,
   },
   // tooltip 走交互选项的 css（选择器键）。它压在 canvas 上，用 elevated 实色
-  // 不透明面（宪法 §2.6）：模糊在这里没意义，可读性第一
+  // 不透明面（宪法 §2.6）：模糊在这里没意义，可读性第一。
+  // ⚠️ 必须把 title / name / value 三个子选择器一并钉死：@antv/component 默认
+  // stylesheet 给它们写了浅底深字（rgba(0,0,0,.45 / .85)），特异性压过容器
+  // color——只刷 `.g2-tooltip` 会得到「深色弹窗 + 深色日期/金额」（用户走查
+  // 实测）。G2 Dark 主题就是靠这几个键覆盖的，这里对齐钉到 COLOR 文字档。
+  // 文字走文字 token，不跟序列色（dataviz：text wears text tokens）
   tooltip: {
     css: {
       ".g2-tooltip": {
@@ -61,6 +66,18 @@ export const FP_CHART_THEME = {
         "border-radius": "12px",
         "box-shadow": "0 18px 40px rgba(0, 0, 0, 0.35)",
         "color": COLOR.textPrimary,
+      },
+      // 日期（X 轴 title）：次要档，比金额弱一档
+      ".g2-tooltip-title": {
+        color: COLOR.textSecondary,
+      },
+      // 系列名（「累计收益（元）」）：次要档
+      ".g2-tooltip-list-item-name-label": {
+        color: COLOR.textSecondary,
+      },
+      // 金额：主文字，对比最高——读者已经认了系列，这里要的是数字
+      ".g2-tooltip-list-item-value": {
+        color: COLOR.textPrimary,
       },
     },
   },

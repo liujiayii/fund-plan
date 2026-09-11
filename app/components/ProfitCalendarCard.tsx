@@ -12,7 +12,7 @@ import { COLOR } from "~/theme";
  * （用户视角「有收益」= 收益非零，纯现金/零收益日跳过）；全零回落最新快照日。
  * 点击日历其他有数据的日期切换明细——弹窗退役，明细常驻卡内。
  *
- * 消费方：/me/profit、/master、/admin/users/:id（三处同构）；
+ * 消费方：/me/profit、/master、/admin/users/:id（三处同构，后两者经 ProfitContent）；
  * 首页只要日历不要明细，直接用裸 ProfitCalendar。
  */
 export function ProfitCalendarCard({ detail }: { detail: ProfitDetailView }) {

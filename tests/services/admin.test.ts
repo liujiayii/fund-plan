@@ -224,6 +224,65 @@ describe("getUserDetail 单用户详情", () => {
     // 隔离断言靠数量：admin 也有一笔单，若查询没按 userId 过滤会查出 2 笔
     expect(d!.orders).toHaveLength(1);
     expect(d!.portfolio.summary.cashCents).toBeGreaterThan(0);
+    // pending 买单在途：alice 那笔 100000 分还没撮合，必须并回总览口径
+    expect(d!.pendingBuyCents).toBe(100000);
+    // 没建定投计划时是空数组，不是 undefined——页面 tabs 靠 length 画标签
+    expect(d!.plans).toEqual([]);
+  });
+
+  it("pendingBuyCents 只累计该用户 pending 买单，定投计划不串号", async () => {
+    const db = getDb(env.DB);
+    const alice = await registerUser(db, env, "alice", "hunter2");
+    const bob = await registerUser(db, env, "bob", "hunter2");
+
+    const today = toBeijing(new Date()).format("YYYY-MM-DD");
+    await db.insert(orders).values([
+      { userId: alice.id, fundCode: "000001", side: "buy", status: "pending", source: "manual", amount: 50_000, placeDate: today, confirmDate: today, createdAt: Date.now() },
+      { userId: alice.id, fundCode: "000001", side: "buy", status: "confirmed", source: "manual", amount: 99_999, placeDate: today, confirmDate: today, createdAt: Date.now() },
+      { userId: alice.id, fundCode: "000001", side: "sell", status: "pending", source: "manual", amount: 77_777, placeDate: today, confirmDate: today, createdAt: Date.now() },
+      { userId: bob.id, fundCode: "000001", side: "buy", status: "pending", source: "manual", amount: 66_666, placeDate: today, confirmDate: today, createdAt: Date.now() },
+    ]);
+    await db.insert(fund).values({
+      code: "000001",
+      name: "测试成长混合",
+      type: "混合型",
+      purchaseRate: 150,
+      redeemTiers: DEFAULT_REDEEM_TIERS,
+      minPurchase: 1000,
+      updatedAt: Date.now(),
+    });
+    await db.insert(dcaPlan).values({
+      userId: alice.id,
+      fundCode: "000001",
+      amount: 30000,
+      frequency: "monthly",
+      dayOfMonth: 15,
+      status: "active",
+      nextRun: today,
+      runCount: 0,
+      totalInvested: 0,
+      createdAt: Date.now(),
+    });
+    await db.insert(dcaPlan).values({
+      userId: bob.id,
+      fundCode: "000001",
+      amount: 10000,
+      frequency: "weekly",
+      dayOfWeek: 1,
+      status: "active",
+      nextRun: today,
+      runCount: 0,
+      totalInvested: 0,
+      createdAt: Date.now(),
+    });
+
+    const d = await getUserDetail(db, alice.id);
+    expect(d).not.toBeNull();
+    // confirmed / 赎回 / 别人的 pending 买单都不算
+    expect(d!.pendingBuyCents).toBe(50_000);
+    expect(d!.plans).toHaveLength(1);
+    expect(d!.plans[0]!.fundCode).toBe("000001");
+    expect(d!.plans[0]!.amount).toBe(30000);
   });
 
   it("用户不存在返回 null（路由层据此 404）", async () => {

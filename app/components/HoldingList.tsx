@@ -10,9 +10,9 @@ export interface HoldingListProps {
   holdings: HoldingView[];
   /**
    * 名称下方的补充说明。**必填**。
-   * 只读页（`HoldingListReadonly`：公开盘与 admin 只读后台）传 `sharesAndNavNote`
-   * —— 份额 + 估值时点；/me 持仓模块传份额 + 估值时点 + 成本（`sharesAndNavNote`
-   * 外再拼一层成本，批次/待赎回留在单只持仓详情页）。
+   * 只读页（`HoldingListReadonly`：公开盘）传 `sharesAndNavNote`
+   * —— 份额 + 估值时点；/me 与 /admin/users/:id 持仓模块传份额 + 估值时点 + 成本
+   * （`sharesAndNavNote` 外再拼一层成本，批次/待赎回留在单只持仓详情页）。
    * ⚠️ 刻意做成必填而非可选：「只读页也得给份额和净值」这条规则此前只写在注释里，
    * 结果被漏掉过两轮（期四引入、期八延续，「持有份额」「净值」各丢过一次）——
    * 旧表格的五列里两者都在，只读不等于可以少给字段。必填把注释约束换成编译错误。
@@ -25,8 +25,8 @@ export interface HoldingListProps {
    *
    * 这是期一在 `FundListItem` 上预留的 `href` 口子的兑现：
    * `/me` 持仓列表行的语义是「点进单只持仓详情」，应链到 `/me/holdings/{code}`
-   * 而非基金详情页 `/funds/{code}`；不传本 prop 的只剩 `HoldingListReadonly`
-   * （公开盘）——继续走默认基金详情页链接（me._index 的持仓行传本 prop）。
+   * 而非基金详情页 `/funds/{code}`；不传本 prop 的是公开盘（HoldingListReadonly）
+   * 与 admin 只读后台——继续走默认基金详情页链接。
    */
   getHref?: (h: HoldingView) => string;
 }
