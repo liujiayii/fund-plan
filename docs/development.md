@@ -156,6 +156,25 @@ curl -X DELETE http://localhost:5173/cdn-cgi/local/explorer/api/storage/kv/names
 
 曾经因为带错 UA 时把空搜索结果缓存下来，导致修好代码后仍然搜不到东西。
 
+## React Router 默认会把 404 打成 error 日志
+
+扫描器每天探测 `/firebase-key.json`、`/wp-admin`、`/.env` 这类本站根本没有的路径。
+React Router 对未匹配路由抛内部 404（`ErrorResponseImpl`），默认 `handleError`
+一律 `console.error`。Cloudflare Observability 把 `console.error` 当 error 上报，
+于是错误面板被噪声淹没，真 500 反而不显眼。
+
+页面本身没问题：根 `ErrorBoundary` 会正常渲染 404 页，HTTP 状态也是 404。
+坏的是日志口径。
+
+处理：`app/entry.server.tsx` 覆盖 `handleError`，判定内核在
+`app/domain/server-error-report.ts`（`shouldReportServerError`）：
+
+- 请求已中止、以及 4xx 路由错误 → 静音
+- 5xx 与未知异常 → 照常 `console.error`
+
+不要在 Worker `fetch` 里提前短路未知路径：那会绕过 ErrorBoundary，
+游客看到的就不是站点自己的 404 页了。
+
 ## 代码规范与 git 钩子
 
 用 `@antfu/eslint-config`（flat config，见 `eslint.config.js`），风格是**双引号 + 分号 + 2 空格缩进**。
