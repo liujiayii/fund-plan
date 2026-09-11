@@ -12,6 +12,13 @@ export interface UserMenuProps {
    * 桌面侧栏底部用完整形态：头像 + 用户名 + 身份后缀
    */
   compact?: boolean;
+  /**
+   * 游客只显「登录」一个胶囊（默认登录+注册两个）。
+   * 移动端品牌胶囊的账户位用它：两态各占一个元素位（登录胶囊 ⇄ 头像），
+   * 注册走登录页的既有链路（方案 B，2026-09-11）。
+   * 桌面侧栏底不用——那边有整行空间放两个按钮
+   */
+  loginOnly?: boolean;
 }
 
 /**
@@ -23,11 +30,14 @@ export interface UserMenuProps {
  * 登出仍走 form post /logout（服务端清 session + 重定向的标准链路），
  * 隐藏表单由本组件自带，宿主不用再管。
  */
-export function UserMenu({ user, compact }: UserMenuProps) {
+export function UserMenu({ user, compact, loginOnly }: UserMenuProps) {
   const navigate = useNavigate();
   const logoutFormRef = useRef<HTMLFormElement>(null);
 
   if (!user) {
+    if (loginOnly) {
+      return <NavButton size="small" to="/login">登录</NavButton>;
+    }
     return (
       /* fp-guest-actions：折叠侧栏（768–1079 图标轨）里纵向排列的锚点，
          排列方向由 responsive.css §10 作用域规则控制（CodeRabbit PR #80 指正）；
