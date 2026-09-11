@@ -5,7 +5,7 @@
  * （tests/domain/liquid-glass-guard.test.ts 钉死）。组件只挂 .fp-glass 类，
  * 禁止在 tsx 里再发明第二种透明、第二种描边、第二种模糊。
  *
- * import 顺序（root.tsx）：antd reset → uno.gen.css → 本文件 → responsive.css。
+ * import 顺序（root.tsx）：antd reset → virtual:uno.css → 本文件 → responsive.css。
  * 色值一律 var(--fp-*)（uno.config 的 preflight 从 theme.ts 全量输出）；
  * 只有玻璃本体的白色透明度与描边彩虹是材料常量，允许写 rgba 字面量。
  */

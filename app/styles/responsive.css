@@ -7,14 +7,13 @@
  * 「窄屏长什么样」只认这一个文件。
  *
  * 为什么是手写 CSS 文件而不是 UnoCSS 断点变体类：
- *  - uno.gen.css 是 pnpm uno:build 的纯产物，手改必被覆盖；
  *  - preflights.reset=false 意味着 UnoCSS 不产出全局重置，而本文件的职责之一
  *    就是覆盖 antd 内部类（.ant-card-body 等）——工具类只够得着自己的元素，
  *    够不着 antd 渲染出来的内部 DOM；
  *  - 媒体查询需要「全站窄屏规则聚合一处」，散进各组件的 sm: 变体类会失控。
  * 色值一律走 var(--fp-*)（uno.config 的 preflight 从 theme.ts 全量输出）。
  *
- * import 顺序（root.tsx）：antd reset → uno.gen.css → 本文件。
+ * import 顺序（root.tsx）：antd reset → virtual:uno.css → 本文件。
  * 排最后才能覆盖工具类与 antd 组件类。
  */
 
@@ -305,8 +304,8 @@
 /* 装饰性动画尊重系统「减弱动态」请求：晕动症/前庭障碍用户关闭一切非必要动效。
    animate-fade-up / animate-float 都是纯装饰（进场浮现、空态呼吸），
    关掉不损失任何信息——内容直出。本文件是全站唯一媒体查询出处，
-   动效类定义在 uno.gen.css（animation 简写），靠 import 顺序压过它
-   （root.tsx：uno.gen.css → responsive.css，同 specificity 后到者胜）。
+   动效类由 UnoCSS animation 简写生成，靠 import 顺序压过它
+   （root.tsx：virtual:uno.css → responsive.css，同 specificity 后到者胜）。
    卡上残留的 animate-delay-[…] 在 animation:none 下不参与渲染，无需一并清 */
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
@@ -328,7 +327,7 @@
    antd md=768（uno.config.ts），768 边界无隙；本段是显式兜底 + 注释锚点：
    本文件是「窄屏长什么样」的唯一出处（文件头铁律），auth 后续的窄屏定制
    （如表单区 padding 收窄）顺延在此写。
-   无需 !important：display 无 inline 来源，本文件又排 uno.gen.css 之后
+   无需 !important：display 无 inline 来源，本文件又排 virtual:uno.css 之后
    （同特异性源序已胜）；md:flex 是 min-width:768，与本段 max-width:767
    宽度互斥、永不同时命中（与 §4.5 桌面基线/窄屏覆盖同款结构）。
    spec §6.3 原文「移动端左屏退化成顶部渐变横幅」实现从简为整块隐藏，
