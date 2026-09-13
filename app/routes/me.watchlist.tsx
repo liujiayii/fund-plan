@@ -11,6 +11,7 @@ import { NavButton } from "~/components/ui/NavButton";
 import { PnlText } from "~/components/ui/PnlText";
 import { account } from "~/db/schema";
 import { navToDisplay } from "~/domain/money";
+import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { listWatch } from "~/services/watchlist-service";
@@ -19,7 +20,7 @@ import { COLOR } from "~/theme";
 const { Title } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "我的自选 · 模拟基金" }];
+  return pageMeta({ title: "我的自选", path: "/me/watchlist", index: false });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

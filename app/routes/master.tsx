@@ -14,6 +14,7 @@ import { ProfitCalendarCard } from "~/components/ProfitCalendarCard";
 import { TxList } from "~/components/TxList";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { pageMeta } from "~/domain/seo";
 import { getProfitDetail } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { getAdminUser } from "~/services/guard";
@@ -33,10 +34,11 @@ const { Title, Paragraph } = Typography;
 const PAGE_SIZE = 15;
 
 export function meta(_: Route.MetaArgs) {
-  return [
-    { title: "主理人的示范盘 · 模拟基金" },
-    { name: "description", content: "围观管理员的模拟基金组合：持仓、定投与交易流水全公开" },
-  ];
+  return pageMeta({
+    title: "主理人的示范盘",
+    description: "围观管理员的模拟基金组合：持仓、定投与交易流水全公开",
+    path: "/master",
+  });
 }
 
 /**

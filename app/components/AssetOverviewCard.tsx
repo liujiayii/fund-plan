@@ -18,7 +18,7 @@ export interface AssetOverviewCardProps {
   /** 累计投入本金（分）= 初始 + 历次签到。累计收益率的分母 */
   totalDepositedCents: number;
   /**
-   * pending 买单的在途资金（分），/me 专用。
+   * pending 买单的在途资金（分），/me 与 /admin/users/:id 传入。
    * 买单冻结的现金已从余额扣、份额未生成，不并回的话 pending 窗口内
    * 总资产凭空少一笔——并回「持仓金额」与「总资产」，四格拆解才自洽
    * （总资产 = 持仓 + 余额）。/master 与首页不传，保持纯市值口径。
@@ -33,7 +33,7 @@ function signedYuan(cents: number): string {
 
 /**
  * 资产总览卡（支付宝式）：总资产主位 + 昨日收益/累计收益/持仓金额/可用余额一行四格。
- * /me 与 /master 共用——主理人的盘就是公开盘，一份口径两种身份。
+ * /me、/master、/admin/users/:id 共用——主理人的盘就是公开盘，一份口径三种身份。
  *
  * 口径（spec §2/§8）：
  *  - 昨日收益 = 最新有净值交易日的 dayPnlCents（净值延迟同步、周末顺延），
@@ -41,7 +41,7 @@ function signedYuan(cents: number): string {
  *  - 累计收益 = Σ dayPnl（含已实现盈亏与全部费用、剔除净入金），
  *    与资产走势曲线、收益日历逐日同口径
  *  - 累计收益率 = 累计收益 ÷ 累计投入本金（分母 0 显示 —，防御性兜底）
- *  - 持仓金额 = 市值 + 申购中在途（仅 /me 传 pendingBuyCents 时；标注「含申购中」）
+ *  - 持仓金额 = 市值 + 申购中在途（传 pendingBuyCents 时；标注「含申购中」）
  */
 export function AssetOverviewCard({
   summary,

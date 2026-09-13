@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MOBILE_TAB_KEYS, NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
+import { MOBILE_TAB_KEYS, moreMenuItems, NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 
 /**
  * 导航高亮 —— 顶栏 Menu 与移动端底部 TabBar 共用（spec §6.4）。
@@ -58,5 +58,36 @@ describe("MOBILE_TAB_KEYS", () => {
     const keys = new Set(NAV_ITEMS.map(i => i.key));
     for (const k of MOBILE_TAB_KEYS)
       expect(keys.has(k)).toBe(true);
+  });
+});
+
+describe("moreMenuItems（移动端「更多」菜单）", () => {
+  it("普通用户：底栏四项之外的全部导航进更多菜单（主理人的盘 + 排行榜）", () => {
+    expect(moreMenuItems(NAV_ITEMS)).toEqual([
+      { key: "/master", label: "主理人的盘" },
+      { key: "/leaderboard", label: "排行榜" },
+    ]);
+  });
+
+  it("admin：追加的 /admin 项也进更多菜单", () => {
+    const withAdmin = [...NAV_ITEMS, { key: "/admin", label: "管理" }];
+    expect(moreMenuItems(withAdmin)).toEqual([
+      { key: "/master", label: "主理人的盘" },
+      { key: "/leaderboard", label: "排行榜" },
+      { key: "/admin", label: "管理" },
+    ]);
+  });
+
+  it("保持 NAV_ITEMS 原有顺序，不重排", () => {
+    const withAdmin = [...NAV_ITEMS, { key: "/admin", label: "管理" }];
+    const keys = moreMenuItems(withAdmin).map(i => i.key);
+    // /master 在 NAV_ITEMS 里排在 /leaderboard 之前，筛掉后顺序不变
+    expect(keys.indexOf("/master")).toBeLessThan(keys.indexOf("/leaderboard"));
+  });
+
+  it("底栏已含的项绝不重复出现在更多菜单——两处导航不漂移", () => {
+    const keys = moreMenuItems(NAV_ITEMS).map(i => i.key);
+    for (const k of keys)
+      expect(MOBILE_TAB_KEYS).not.toContain(k);
   });
 });

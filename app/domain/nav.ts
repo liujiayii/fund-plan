@@ -36,6 +36,22 @@ export const NAV_ITEMS: readonly NavItem[] = [
 export const MOBILE_TAB_KEYS: readonly string[] = ["/", "/funds", "/me/watchlist", "/me"];
 
 /**
+ * 移动端「更多」菜单项：从 navItems（含 root.tsx 运行时追加的 /admin）里
+ * 筛掉底栏四项，剩下的就是「只在更多菜单出现」的导航。
+ *
+ * 2026-09-11 起移动端顶部品牌胶囊右端只放一个「更多」圆钮，页面导航
+ * （主理人的盘/排行榜/管理）全走这里——与底栏同源于 NAV_ITEMS，
+ * 以后加新导航项两边自动同步，不会出现第二份漂移的导航源。
+ * 顺序：保持传入数组的原顺序（与桌面侧栏一致），不重排。
+ */
+export function moreMenuItems(
+  navItems: readonly NavItem[],
+): NavItem[] {
+  const tabKeys = new Set(MOBILE_TAB_KEYS);
+  return navItems.filter(i => !tabKeys.has(i.key));
+}
+
+/**
  * 由 pathname 解析当前高亮的导航 key。
  * 规则：非根项按 startsWith 取数组顺序首个命中；全是前缀不命中时，
  * 根路径("/") 命中「首页」，否则返回空串（不高亮）。

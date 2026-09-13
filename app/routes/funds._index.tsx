@@ -9,6 +9,7 @@ import { NavButton } from "~/components/ui/NavButton";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { navToDisplay } from "~/domain/money";
+import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import { searchFunds } from "~/services/fund-data";
 import {
@@ -22,7 +23,11 @@ import { COLOR } from "~/theme";
 const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "发现基金 · 模拟基金" }];
+  return pageMeta({
+    title: "发现基金",
+    description: "搜索真实基金、看排行榜挑热门，用模拟盘练申购与定投",
+    path: "/funds",
+  });
 }
 
 /** 合法类型/周期，非法值回退默认 */

@@ -3,6 +3,7 @@ import { Space, Typography } from "antd";
 import { OrdersContent } from "~/components/OrdersContent";
 import { NavButton } from "~/components/ui/NavButton";
 import { SHARE_SCALE, yuanToCents } from "~/domain/money";
+import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
 import { getOrders, getOrdersByFund } from "~/services/portfolio-service";
@@ -11,7 +12,7 @@ import { amendOrder, cancelOrder } from "~/services/trade";
 const { Title } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "我的订单 · 模拟基金" }];
+  return pageMeta({ title: "我的订单", path: "/me/orders", index: false });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

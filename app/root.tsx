@@ -21,6 +21,7 @@ import { MobileTabBar } from "~/components/MobileTabBar";
 import { NavProgressBar } from "~/components/NavProgressBar";
 import { Logo } from "~/components/ui/Logo";
 import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
+import { buildJsonLd } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { ANTD_TOKEN } from "~/theme";
@@ -73,6 +74,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Meta />
         <Links />
+        {/* 站点级 JSON-LD：WebApplication 卡，内容与具体哪一页无关，挂在 Layout
+            比首页组件里更稳（Layout 是文档骨架，爬虫第一眼就能看到）。
+            dangerouslySetInnerHTML 是 schema.org 脚本的标准姿势，序列化由
+            domain 纯函数完成、不含用户输入 */}
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml -- JSON-LD 必须是原始 JSON 文本节点
+          dangerouslySetInnerHTML={{ __html: buildJsonLd() }}
+        />
       </head>
       <body>
         {/* 色雾舞台放 body 首位：fixed 层，DOM 顺序与视觉层级（雾在最底）一致 */}
@@ -129,7 +139,8 @@ export default function App() {
         </a>
         <AppSidebar navItems={navItems} selectedKey={selectedKey} user={user} />
         <div className="fp-main flex min-w-0 flex-1 flex-col">
-          <MobileBrandBar user={user} />
+          {/* navItems 一并传入：更多菜单与桌面侧栏同源（含 admin 追加项） */}
+          <MobileBrandBar navItems={navItems} user={user} />
           <main id="fp-main-content" className="fp-content mx-auto w-full max-w-[1120px] px-6 pt-6 pb-12">
             <Outlet />
           </main>

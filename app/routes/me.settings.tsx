@@ -25,6 +25,7 @@ import {
   transactions,
   user as userTable,
 } from "~/db/schema";
+import { pageMeta } from "~/domain/seo";
 import { changePassword } from "~/services/auth";
 import { getAppContext } from "~/services/context";
 import { requireUser } from "~/services/guard";
@@ -32,7 +33,7 @@ import { requireUser } from "~/services/guard";
 const { Title, Text, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "设置 · 模拟基金" }];
+  return pageMeta({ title: "设置", path: "/me/settings", index: false });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

@@ -5,6 +5,7 @@ import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { getLeaderboard } from "~/services/leaderboard-service";
@@ -12,7 +13,11 @@ import { getLeaderboard } from "~/services/leaderboard-service";
 const { Title, Paragraph } = Typography;
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "收益排行榜 · 模拟基金" }];
+  return pageMeta({
+    title: "收益排行榜",
+    description: "全站模拟盘收益率 / 总收益双榜，游客免登录围观",
+    path: "/leaderboard",
+  });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

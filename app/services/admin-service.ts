@@ -1,17 +1,31 @@
-import type { OrderView, PortfolioView } from "./portfolio-service";
+import type { DcaPlanView, OrderView, PortfolioView } from "./portfolio-service";
 import type { Db } from "~/db/client";
 import type { HoldingValuation } from "~/domain/portfolio";
 import { desc, eq, sql } from "drizzle-orm";
 import { account, holding, orders, user } from "~/db/schema";
 import { costBasisNavScaled, valuateHolding, valuatePortfolio } from "~/domain/portfolio";
 import { toBeijing } from "~/domain/trading-calendar";
-import { getOrders, getPortfolio, latestNavMap } from "./portfolio-service";
+import {
+  getDcaPlans,
+  getOrders,
+  getPendingBuyCents,
+  getPortfolio,
+  latestNavMap,
+} from "./portfolio-service";
 
 /** /admin 用户列表一行的数据 */
 export interface UserOverview {
   id: number;
   username: string;
   role: "admin" | "user";
+  /** 注册来源 IP（存量用户为 null） */
+  registerIp: string | null;
+  /** 注册时的 User-Agent（存量用户为 null） */
+  registerUserAgent: string | null;
+  /** 注册地：国家代码（存量用户为 null） */
+  registerCountry: string | null;
+  /** 注册地：城市（存量用户为 null） */
+  registerCity: string | null;
   /** 可用现金（分） */
   cashCents: number;
   /** 持仓市值（分） */
@@ -93,6 +107,10 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
       id: u.id,
       username: u.username,
       role: u.role,
+      registerIp: u.registerIp,
+      registerUserAgent: u.registerUserAgent,
+      registerCountry: u.registerCountry,
+      registerCity: u.registerCity,
       cashCents: summary.cashCents,
       marketValueCents: summary.marketValueCents,
       totalPnlCents: summary.totalPnlCents,
@@ -133,11 +151,19 @@ export interface AdminUserDetail {
   user: { id: number; username: string; role: "admin" | "user"; createdAt: number };
   portfolio: PortfolioView;
   orders: OrderView[];
+  /** pending 买单在途资金（分）。总览卡并回持仓/总资产，与 /me 同口径 */
+  pendingBuyCents: number;
+  /** 该用户全部定投计划（只读列表用） */
+  plans: DcaPlanView[];
 }
 
 /**
- * 单用户详情（组合 + 订单）。用户不存在返回 null，
+ * 单用户详情（组合 + 订单 + 在途 + 定投）。用户不存在返回 null，
  * 路由层据此抛 404——与 getHoldingDetail 的「查不到 → 404」套路一致。
+ *
+ * 查询数：用户 1 + 组合若干 + 订单 1 + pending 1 + 定投 1~2，单用户页远低于 D1 硬顶。
+ * 收益三件套（走势/日历）由路由层另调 getProfitDetail，不塞进本函数——
+ * 那边是 3+N，跟组合查询互相独立，路由层 Promise.all 并行。
  */
 export async function getUserDetail(
   db: Db,
@@ -147,15 +173,19 @@ export async function getUserDetail(
   if (!u)
     return null;
 
-  // 组合与订单互不依赖，并行发出（跨大区部署时每跳都是百毫秒级往返）
-  const [portfolio, orderList] = await Promise.all([
+  // 组合 / 订单 / 在途 / 定投互不依赖，一波并行（跨大区时每跳都是百毫秒级往返）
+  const [portfolio, orderList, pendingBuyCents, plans] = await Promise.all([
     getPortfolio(db, userId),
     getOrders(db, userId, 200),
+    getPendingBuyCents(db, userId),
+    getDcaPlans(db, userId),
   ]);
 
   return {
     user: { id: u.id, username: u.username, role: u.role, createdAt: u.createdAt },
     portfolio,
     orders: orderList,
+    pendingBuyCents,
+    plans,
   };
 }

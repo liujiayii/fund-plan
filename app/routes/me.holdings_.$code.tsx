@@ -39,6 +39,7 @@ import { StatBig } from "~/components/ui/StatBig";
 import { account } from "~/db/schema";
 import { rateToPercent, SHARE_SCALE, sharesToDisplay } from "~/domain/money";
 import { findRedeemRate } from "~/domain/redeem";
+import { pageMeta } from "~/domain/seo";
 import { countDays, resolveConfirmDate, toBeijing } from "~/domain/trading-calendar";
 import { getFundProfitDetail } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
@@ -49,10 +50,15 @@ import { pnlColor } from "~/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
-export function meta({ loaderData }: Route.MetaArgs) {
+export function meta({ loaderData, params }: Route.MetaArgs) {
   // 带 fundName 的标题，浏览器多标签时可辨；loader 抛 404 时兜底通用标题
   const name = loaderData?.detail?.fundName ?? "持仓详情";
-  return [{ title: `${name} · 模拟基金` }];
+  const code = params.code ?? "";
+  return pageMeta({
+    title: name,
+    path: code ? `/me/holdings/${code}` : "/me",
+    index: false,
+  });
 }
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
