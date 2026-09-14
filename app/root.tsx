@@ -109,8 +109,10 @@ export default function App() {
   // 高亮当前所在的一级导航（侧栏与底部胶囊共用同一份纯函数）
   const selectedKey = resolveSelectedKey(location.pathname, navItems);
 
-  // 页底固定操作条（BottomActionBar）只在持仓详情/基金详情两页出现；
-  // Footer 在主列底，bar 护不到它，这两页要额外让位（ux-polish 终审 I-1）
+  // 页底固定操作条（BottomActionBar）只在持仓详情/基金详情两页出现。两个用途：
+  // ① Footer 在主列底，bar 护不到它，这两页要额外让位（ux-polish 终审 I-1）；
+  // ② 窄屏时壳层挂 fp-has-bottom-bar 藏 tabbar，底部整层让给贴底的操作条
+  //    （导航兜底 = 顶部汉堡抽屉；2026-09-14 业界范式改造）
   const hasBottomBar = useMatches().some(
     m => /^\/me\/holdings\/.+/.test(m.pathname) || /^\/funds\/.+/.test(m.pathname),
   );
@@ -126,7 +128,7 @@ export default function App() {
       {/* 壳：relative z-1 压在色雾（fixed z-0）之上，玻璃才透得到雾。
           antd Layout / 顶栏 Menu 退役：横向 Menu 是要杀掉的「后台管理系统」脸（spec §4.1）。
           登录态 / 登出表单收进 UserMenu（侧栏底 + 移动端品牌胶囊右侧两处共用） */}
-      <div className="fp-shell relative z-1 flex min-h-screen">
+      <div className={`fp-shell relative z-1 flex min-h-screen${hasBottomBar ? " fp-has-bottom-bar" : ""}`}>
         {/* 跳转主内容：键盘用户不必逐项 Tab 过整条侧栏。平时视觉隐藏，
             聚焦时以玻璃药丸浮出（focus 样式在 responsive.css §0——
             不能用 not-sr-only：它把 position 打回 static，链接挤进
