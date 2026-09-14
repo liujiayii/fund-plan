@@ -218,9 +218,12 @@ body {
 /* Modal / Drawer / Dropdown / Select 面板挂在 portal，tsx 拿不到根节点，
    材料只能在这里写。这些选择器就是 .fp-glass 的复制（不能用 @apply：
    uno 的 transformerDirectives 只处理 uno 管的文件）。antd 的 contentBg /
-   colorBgElevated 在 theme.ts 已钉 transparent，这里的 !important 是双保险 */
+   colorBgElevated 在 theme.ts 已钉 transparent，这里的 !important 是双保险。
+   ⚠️ Drawer 面板节点 antd v6 起从 .ant-drawer-content 改名 .ant-drawer-section
+   （v5 旧名在 v6 DOM 里不存在，钉旧名的规则会静默失效——导航抽屉 2026-09-14
+   走查时实锤，连 BuyDrawer 系弹层也一直在裸奔，这里一并修正） */
 .ant-modal .ant-modal-content,
-.ant-drawer .ant-drawer-content,
+.ant-drawer .ant-drawer-section,
 .ant-dropdown .ant-dropdown-menu,
 .ant-select-dropdown {
   position: relative;
@@ -244,7 +247,7 @@ body {
 }
 
 /* 移动端底抽屉顶角 22（antd Drawer 无圆角 token）；桌面右抽屉贴边不圆 */
-.ant-drawer-bottom .ant-drawer-content {
+.ant-drawer-bottom .ant-drawer-section {
   border-radius: 22px 22px 0 0 !important;
 }
 
@@ -263,7 +266,7 @@ body {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .fp-glass,
   .ant-modal .ant-modal-content,
-  .ant-drawer .ant-drawer-content,
+  .ant-drawer .ant-drawer-section,
   .ant-dropdown .ant-dropdown-menu,
   .ant-select-dropdown {
     background: var(--fp-elevated) !important;
