@@ -196,6 +196,19 @@
   z-index: 15;
 }
 
+/* ══════════ 4.6 移动端导航抽屉（2026-09-14）══════════ */
+
+/* MobileNavDrawer（顶栏汉堡钮拉开的左侧抽屉，与桌面侧栏同构的全量导航）。
+   材料（玻璃）由 liquid-glass.css §5 给所有 .ant-drawer-section（antd v6
+   面板节点名），这里只管几何：
+   宽度 min(300px, 82%)——82% 贴主流 App 手势习惯，平板竖屏（<768 但
+   宽 600+px）82% 会撑到半屏，300px 封顶。width 走 CSS 而非 Drawer 的
+   width prop：v6 已弃用该 prop（size 只有固定档位给不了百分比），
+   !important 顺带盖掉 antd 可能内联的默认宽 */
+.fp-nav-drawer .ant-drawer-content-wrapper {
+  width: min(300px, 82%) !important;
+}
+
 /* 767px 以下隐藏、768px+ 恢复 —— 与上面 .fp-desktop 的 !important 成对使用。
    这里其实是普通类选择器（specificity 0,1,0），并不比工具类更高，
    真正的胜负手是 import 顺序：本文件在 root.tsx 里排最后、同 specificity 后来者胜；
