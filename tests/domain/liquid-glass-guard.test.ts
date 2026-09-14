@@ -58,6 +58,19 @@ describe("液态玻璃宪法守卫", () => {
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
+  it("antd v6 面板节点名钉死：Modal 走 ant-modal-container、Drawer 走 ant-drawer-section", () => {
+    // v5 旧名（ant-modal-content / ant-drawer-content）在 v6 DOM 里不存在，
+    // 钉旧名的规则会**静默失效**——Modal 因此裸奔了整个 v6 早期，主人
+    // 2026-09-14 验收「Modal 没吃玻璃」才抓出来。升级 antd 时这条会红，
+    // 红了就去查新 DOM 结构改选择器（别急着改测试迁就）。
+    // 用「类名后紧跟 , 或 {」的选择器形态匹配，注释里的类名提及不误杀
+    const css = readFileSync(GLASS_CSS, "utf8");
+    expect(css).toMatch(/\.ant-modal \.ant-modal-container\s*,/);
+    expect(css).toMatch(/\.ant-drawer \.ant-drawer-section\s*,/);
+    expect(css).not.toMatch(/\.ant-modal-content\s*[,{]/);
+    expect(css).not.toMatch(/\.ant-drawer-content\s*[,{]/);
+  });
+
   it("色雾软边不用 filter: blur（宪法 §2.1 性能纪律）", () => {
     const css = readFileSync(GLASS_CSS, "utf8");
     // 只禁 filter: blur；backdrop-filter: blur 是玻璃本体，允许

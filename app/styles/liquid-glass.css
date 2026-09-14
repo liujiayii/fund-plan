@@ -224,7 +224,17 @@ body {
    ⚠️ Drawer 面板节点 antd v6 起从 .ant-drawer-content 改名 .ant-drawer-section
    （v5 旧名在 v6 DOM 里不存在，钉旧名的规则会静默失效——导航抽屉 2026-09-14
    走查时实锤，连 BuyDrawer 系弹层也一直在裸奔，这里一并修正） */
-.ant-modal .ant-modal-content,
+/* Modal / Drawer / Dropdown / Select 面板挂在 portal，tsx 拿不到根节点，
+   材料只能在这里写。这些选择器就是 .fp-glass 的复制（不能用 @apply：
+   uno 的 transformerDirectives 只处理 uno 管的文件）。antd 的 contentBg /
+   colorBgElevated 在 theme.ts 已钉 transparent，这里的 !important 是双保险。
+   ⚠️ antd v6 两个面板节点改名/改构（2026-09-14 走查实锤）：
+   - Drawer：.ant-drawer-content → .ant-drawer-section
+   - Modal：.ant-modal-content 节点取消，内容挪进新增的 .ant-modal-container
+     （rc-dialog v1.10 的 Panel.js：面板根是 prefixCls 本身，close/header/
+     body/footer 全包在 container 里）——钉旧名的规则静默失效，Modal
+     一直在裸奔，主人验收时发现「Modal 没吃玻璃」才抓出来 */
+.ant-modal .ant-modal-container,
 .ant-drawer .ant-drawer-section,
 .ant-dropdown .ant-dropdown-menu,
 .ant-select-dropdown {
@@ -239,7 +249,7 @@ body {
 }
 
 /* 弹窗 22、下拉 12（宪法 §2.2 角色圆角表） */
-.ant-modal .ant-modal-content {
+.ant-modal .ant-modal-container {
   border-radius: 22px !important;
 }
 
@@ -272,7 +282,7 @@ body {
    不用 JS 探测、不加第二个类名——同一批选择器换一套 background */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .fp-glass,
-  .ant-modal .ant-modal-content,
+  .ant-modal .ant-modal-container,
   .ant-drawer .ant-drawer-section,
   .ant-dropdown .ant-dropdown-menu,
   .ant-select-dropdown {
