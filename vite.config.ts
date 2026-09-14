@@ -31,12 +31,14 @@ export default defineConfig({
   // antd 体积较大，交给 Vite 自动分包即可，这里只关掉 sourcemap 以加快构建
   build: {
     sourcemap: false,
-    // ⚠️ 必须 "esbuild"：Vite 8 默认的 lightningcss 会按 build target（含
-    // Safari 16）把无前缀 backdrop-filter 判为「无 target 支持」而整个删掉、
-    // 只留 -webkit- 前缀版；而现代 Chromium 已移除 -webkit-backdrop-filter
-    // 别名——两者叠加 = 生产构建里全站玻璃模糊（liquid-glass 的灵魂）静默
-    // 失效（2026-09-14 PR #90 预览与 dev 对比实测：dev 磨砂、build 半透明）。
-    // esbuild 只按 target 补前缀、不删标准声明，双声明共存。
+    // ⚠️ 必须 "esbuild"：Vite 8 默认的 lightningcss 有同名属性级联去重 bug
+    // （parcel-bundler/lightningcss#1327，open）——手写 -webkit-backdrop-filter
+    // 时，排在它前面的无前缀 backdrop-filter 被当作级联冗余整个删掉（实测
+    // 与 build target 无关：cssTarget 怎么设都删；css.lightningcss.targets
+    // 旁路也被 vite 强制覆盖）。叠加「现代 Chromium 已移除 -webkit- 别名」，
+    // 生产构建里全站玻璃模糊静默失效（2026-09-14 PR #90 实测：dev 磨砂、
+    // build 半透明）。esbuild 只压缩+按 target 补前缀、从不删用户声明。
+    // lightningcss 修复 #1327 发版后可切回，顺带源文件可去掉 -webkit- 行。
     cssMinify: "esbuild",
   },
 });
