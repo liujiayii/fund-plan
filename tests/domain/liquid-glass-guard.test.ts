@@ -58,17 +58,28 @@ describe("液态玻璃宪法守卫", () => {
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
-  it("antd v6 面板节点名钉死：Modal 走 ant-modal-container、Drawer 走 ant-drawer-section", () => {
-    // v5 旧名（ant-modal-content / ant-drawer-content）在 v6 DOM 里不存在，
-    // 钉旧名的规则会**静默失效**——Modal 因此裸奔了整个 v6 早期，主人
-    // 2026-09-14 验收「Modal 没吃玻璃」才抓出来。升级 antd 时这条会红，
-    // 红了就去查新 DOM 结构改选择器（别急着改测试迁就）。
-    // 用「类名后紧跟 , 或 {」的选择器形态匹配，注释里的类名提及不误杀
+  it("弹层玻璃走 semantic 官方通道：配置在 antd-popup-glass.ts，CSS 不追内部类名", () => {
+    // v5→v6 antd 内部面板节点两次改名（drawer content→section、modal
+    // content 节点取消），钉旧类名的 CSS 规则静默失效、Modal 裸奔了
+    // 整个 v6 早期（主人 2026-09-14 验收抓出）。此后材料一律走
+    // ConfigProvider 的 semantic classNames——官方 API 把类挂到面板，
+    // 类名叫什么 antd 说了算。CSS 侧只许 Dropdown 追内部类名
+    // （它没有 popup 级 semantic，是独苗）。配置本体在
+    // antd-popup-glass.ts（root.tsx 与本守卫共用一份真相）。
+    // semantic 通道的 DOM 级验证（面板真挂上 fp-glass）由 2026-09-14
+    // 的 happy-dom 人工诊断完成，已实锤三件套全过；antd 大版本升级时
+    // 建议重跑同款诊断（临时装 happy-dom 渲染 Modal/Drawer/Select）。
     const css = readFileSync(GLASS_CSS, "utf8");
-    expect(css).toMatch(/\.ant-modal \.ant-modal-container\s*,/);
-    expect(css).toMatch(/\.ant-drawer \.ant-drawer-section\s*,/);
-    expect(css).not.toMatch(/\.ant-modal-content\s*[,{]/);
-    expect(css).not.toMatch(/\.ant-drawer-content\s*[,{]/);
+    const popupConf = readFileSync(path.join(APP_DIR, "antd-popup-glass.ts"), "utf8");
+    const root = readFileSync(path.join(APP_DIR, "root.tsx"), "utf8");
+    expect(popupConf).toContain("container: \"fp-glass\"");
+    expect(popupConf).toContain("section: \"fp-glass\"");
+    expect(popupConf).toContain("root: \"fp-glass\"");
+    expect(root).toContain("POPUP_GLASS");
+    expect(css).toMatch(/\.ant-dropdown \.ant-dropdown-menu\s*\{/);
+    // modal / drawer / select 的内部类名零命中（选择器形态；注释里
+    // 的类名提及不误杀——同条规则里 [,{] 只跟在选择器后面）
+    expect(css).not.toMatch(/\.(?:ant-modal|ant-drawer|ant-select)[\w-]*\s*[,{]/);
   });
 
   it("色雾软边不用 filter: blur（宪法 §2.1 性能纪律）", () => {
