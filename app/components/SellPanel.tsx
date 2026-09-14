@@ -19,7 +19,6 @@ import {
   sharesToDisplay,
 } from "~/domain/money";
 import { calcRedeem } from "~/domain/redeem";
-import { COLOR, pnlColor } from "~/theme";
 
 const { Text, Paragraph } = Typography;
 
@@ -112,7 +111,8 @@ export function SellPanel(props: SellPanelProps) {
       <input type="hidden" name="intent" value="sell" />
       <input type="hidden" name="fundCode" value={fundCode} />
 
-      <div style={{ marginBottom: 16 }}>
+      {/* 基础信息井格（bg-well）：四行裸排收进卡片 */}
+      <div className="mb-4 rounded-xl bg-well px-4">
         <DataRow label="基金代码" value={fundCode} />
         <DataRow
           label="最新净值"
@@ -147,6 +147,7 @@ export function SellPanel(props: SellPanelProps) {
             <Button
               key={r}
               size="small"
+              className="rounded-full px-4"
               onClick={() =>
                 setSharesInput((availableSharesScaled * r / SHARE_SCALE).toFixed(4))}
             >
@@ -231,57 +232,63 @@ export function SellPanel(props: SellPanelProps) {
             ))}
           </div>
 
-          <div>
-            赎回总额：
-            <Text strong>
-              {fmtYuan(estimate.totalGrossCents)}
-              {" "}
-              元
-            </Text>
+          {/* 汇总结论卡（2026-09-14 从四行裸文本收进井格）：预计到账是
+              卖出的核心输出做主视觉（主色大字）；总额/费合计是推导过程收小字。
+              「赎回费刻意不标红」的原则不变：手续费是成本，既不是盈亏也不是
+              收益——在「红=涨」的系统里给它上红会被读成收益。这块的读法：
+              总额、费合计朴素（推导），预计到账（主色）与已实现盈亏（涨跌色）
+              才是结论。费率高的警示由底部小字文案承载，不需要颜色再喊一遍。 */}
+          <div className="mt-3 rounded-xl bg-well p-4">
+            <div className="text-xs text-muted">预计到账</div>
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold font-num text-primary">
+                {fmtYuan(estimate.totalNetCents)}
+              </span>
+              <span className="text-sm text-muted">元</span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+              <span>
+                赎回总额
+                <span className="font-num text-ink">
+                  {" "}
+                  {fmtYuan(estimate.totalGrossCents)}
+                  {" "}
+                  元
+                </span>
+              </span>
+              <span>
+                赎回费合计
+                <span className="font-num text-ink">
+                  {" "}
+                  {fmtYuan(estimate.totalFeeCents)}
+                  {" "}
+                  元
+                </span>
+              </span>
+              <span>
+                已实现盈亏
+                <span
+                  className={`font-num ${
+                    estimate.realizedPnlCents > 0
+                      ? "text-rise"
+                      : estimate.realizedPnlCents < 0 ? "text-fall" : "text-flat"
+                  }`}
+                >
+                  {" "}
+                  {estimate.realizedPnlCents > 0 ? "+" : ""}
+                  {fmtYuan(estimate.realizedPnlCents)}
+                  {" "}
+                  元
+                </span>
+              </span>
+            </div>
+            <Paragraph type="secondary" className="mt-2 mb-0 text-xs">
+              按最新净值试算，实际
+              <Text strong>以确认日净值为准</Text>
+              。
+              持有不满 7 天的批次赎回费高达 1.5%，可考虑再等等。
+            </Paragraph>
           </div>
-          <div>
-            赎回费合计：
-            {/*
-              刻意不标红：手续费是成本，既不是盈亏也不是收益，就是个金额。
-              在「红=涨」的系统里给它上红色，会被读成收益；而 antd 的
-              type="danger"（#ff4d4f）与两行下面 pnlColor 的涨红（#F04438）
-              肉眼分不出来，同一小块里出现两种红只有一个是盈亏，更糟。
-              这块的读法：赎回总额、赎回费合计是推导过程（朴素），
-              预计到账（蓝）与已实现盈亏（红绿）才是结论。
-              费率高的警示由下方 Paragraph 的文案承载，不需要颜色再喊一遍。
-            */}
-            <Text strong>
-              {fmtYuan(estimate.totalFeeCents)}
-              {" "}
-              元
-            </Text>
-          </div>
-          <div>
-            预计到账：
-            <Text strong style={{ color: COLOR.primary }}>
-              {fmtYuan(estimate.totalNetCents)}
-              {" "}
-              元
-            </Text>
-          </div>
-          <div>
-            已实现盈亏：
-            <Text
-              strong
-              style={{ color: pnlColor(estimate.realizedPnlCents) }}
-            >
-              {estimate.realizedPnlCents > 0 ? "+" : ""}
-              {fmtYuan(estimate.realizedPnlCents)}
-              {" "}
-              元
-            </Text>
-          </div>
-          <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-            按最新净值试算，实际
-            <Text strong>以确认日净值为准</Text>
-            。
-            持有不满 7 天的批次赎回费高达 1.5%，可考虑再等等。
-          </Paragraph>
         </div>
       )}
 

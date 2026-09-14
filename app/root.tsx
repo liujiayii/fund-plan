@@ -14,6 +14,7 @@ import {
   useLocation,
   useMatches,
 } from "react-router";
+import { POPUP_GLASS } from "~/antd-popup-glass";
 import { AppSidebar } from "~/components/AppSidebar";
 import { FogStage } from "~/components/FogStage";
 import { MobileBrandBar } from "~/components/MobileBrandBar";
@@ -122,6 +123,11 @@ export default function App() {
     <ConfigProvider
       locale={zhCN}
       theme={{ algorithm: theme.darkAlgorithm, ...ANTD_TOKEN }}
+      // 弹层玻璃走 semantic classNames（官方把 .fp-glass 挂到 modal/drawer/
+      // select 的面板节点，不再追 antd 内部类名）。配置本体与 DOM 守卫
+      // 测试共用一份真相，见 app/antd-popup-glass.ts 的注释——里面有
+      // v5→v6 两次内部改名静默翻车的完整教训
+      {...POPUP_GLASS}
     >
       {/* 全局导航进度条：SPA 导航 pending 时视口顶部反馈（大陆慢链路下防重复点击） */}
       <NavProgressBar />

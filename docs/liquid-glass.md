@@ -55,16 +55,18 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
 .fp-glass {
   /* 双层：上层白色高光渐变，下层半透明深海底衬（冰川版）。
      只有白色渐变时卡片下半截压在黑底上是纯黑、压在雾上被雾染色，文字可读性随雾漂移；
-     深海底衬把内容面稳在可读的中间蓝灰，雾仍从底下透（透明度 0.42，比紫夜版 0.5
-     略收——冰雾更亮，衬留暗些光边对比才够），玻璃感靠模糊 + 高光脊 + 描边。
+     深海底衬把内容面稳在可读的中间蓝灰，雾仍从底下透。2026-09-14 主人验收
+     三轮定稿：底衬 0.45、模糊 4——通透不靠低衬而靠不糊（材料从「磨砂玻璃」
+     改宗「透明亚克力」，下层内容清晰直透；前两轮低衬路线 0.30/16、0.22/12
+     均被否）。玻璃感余量交给描边与高光脊。
      ⚠️ 三条都带 !important：antd cssinjs 的样式标签在 SSR 时注入到 </head> 前、
      排在本文件的 <link> 之后（entry.server.tsx），同特异性下 .ant-card 的
      background 简写会把渐变冲成实色。responsive.css 盖 antd 内部类同此手法 */
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
-    rgba(12, 30, 48, 0.42) !important;
-  backdrop-filter: blur(22px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+    rgba(12, 30, 48, 0.45) !important;
+  backdrop-filter: blur(4px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(4px) saturate(180%) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),  /* 顶边高光脊 */
     0 18px 40px rgba(0, 0, 0, 0.35) !important;

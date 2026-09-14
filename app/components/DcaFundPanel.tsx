@@ -1,13 +1,11 @@
 import type { DcaPlanView } from "~/services/portfolio-service";
-import { Button, Space, Typography } from "antd";
+import { Button } from "antd";
 import { useState } from "react";
 import { DcaPlanFormModal } from "~/components/DcaPlanFormModal";
 import { DcaPlanList } from "~/components/DcaPlanList";
 import { DcaPlanRowActions } from "~/components/DcaPlanRowActions";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
-
-const { Text } = Typography;
 
 export interface DcaFundPanelProps {
   fundCode: string;
@@ -32,23 +30,26 @@ export function DcaFundPanel({ fundCode, fundName, plans }: DcaFundPanelProps) {
   const activeCount = plans.filter(p => p.status === "active").length;
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Space style={{ width: "100%", justifyContent: "space-between" }}>
-        <Text type="secondary">
-          {plans.length}
+    // 外层纵排容器：Space direction 在 antd v6 已弃用（orientation 接替），
+    // 这里本来就不需要 Space 的对齐能力，直接 flex 纵排（gap-6 = size large）
+    <div className="flex w-full flex-col gap-6">
+      {/* 摘要条：计数与累计投入收进井格（数字走 font-num），新建钮常驻右端 */}
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-well px-4 py-3">
+        <div className="min-w-0 text-xs text-muted">
+          <span className="font-num text-ink">{plans.length}</span>
           {" "}
           个计划 · 执行中
-          {activeCount}
+          <span className="font-num text-ink">{activeCount}</span>
           {" "}
           · 累计投入
-          {fmtYuan(totalInvested)}
+          <span className="font-num text-ink">{fmtYuan(totalInvested)}</span>
           {" "}
           元
-        </Text>
+        </div>
         <Button type="primary" onClick={() => setCreateOpen(true)}>
           新建定投
         </Button>
-      </Space>
+      </div>
 
       {plans.length === 0
         ? <EmptyState description={`${fundName} 还没有定投计划`} />
@@ -67,6 +68,6 @@ export function DcaFundPanel({ fundCode, fundName, plans }: DcaFundPanelProps) {
           lockedFund={{ code: fundCode, name: fundName }}
         />
       )}
-    </Space>
+    </div>
   );
 }

@@ -111,9 +111,11 @@ body {
 
 /* 双层背景（冰川版）：下层是半透明深海底衬，上层是白色高光渐变。
    只有白色渐变时，卡片下半截压在近黑页面底上几乎纯黑、压在雾上又被雾染色，
-   文字可读性随雾漂移；深色底衬把内容面稳定在一个可读的中间蓝灰，雾仍从底下透
-   （透明度 0.42，比紫夜版 0.5 略收——冰雾更亮，衬留暗些光边对比才够），
-   玻璃感靠 backdrop 模糊 + 高光脊 + 描边，不靠「透得多」。
+   文字可读性随雾漂移；深色底衬把内容面稳定在一个可读的中间蓝灰，雾仍从底下透。
+   2026-09-14 主人验收三轮定稿：底衬 0.45、模糊 4——前两轮走「低衬高糊」
+   （0.30/16、0.22/12）主人仍嫌闷；第三轮主人拍板反着调：衬抬回 0.45
+   保对比，模糊砍到 4 让下层内容**清晰直透**——材料从「磨砂玻璃」改宗
+   「透明亚克力」，通透不靠低衬而靠不糊。玻璃感余量交给描边与高光脊。
    ⚠️ 三条材料属性带 !important：antd cssinjs 的样式标签在 SSR 时注入到
    </head> 前、排在本文件的 <link> 之后（entry.server.tsx），同特异性下
    .ant-card 的 background 简写会把渐变冲成实色。
@@ -123,9 +125,9 @@ body {
    0 圆角，删掉 */
 .fp-glass {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(12, 30, 48, 0.42) !important;
-  backdrop-filter: blur(22px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(12, 30, 48, 0.45) !important;
+  backdrop-filter: blur(4px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(4px) saturate(180%) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
     0 18px 40px rgba(0, 0, 0, 0.35) !important;
@@ -213,42 +215,40 @@ body {
   text-shadow: 0 0 12px color-mix(in srgb, var(--fp-text-primary) 35%, transparent);
 }
 
-/* ══════════ 5. antd 浮层材料（宪法 §3：唯一放行打内部类的地方）══════════ */
+/* ══════════ 5. antd 浮层材料（宪法 §3）══════════ */
 
-/* Modal / Drawer / Dropdown / Select 面板挂在 portal，tsx 拿不到根节点，
-   材料只能在这里写。这些选择器就是 .fp-glass 的复制（不能用 @apply：
-   uno 的 transformerDirectives 只处理 uno 管的文件）。antd 的 contentBg /
-   colorBgElevated 在 theme.ts 已钉 transparent，这里的 !important 是双保险。
-   ⚠️ Drawer 面板节点 antd v6 起从 .ant-drawer-content 改名 .ant-drawer-section
-   （v5 旧名在 v6 DOM 里不存在，钉旧名的规则会静默失效——导航抽屉 2026-09-14
-   走查时实锤，连 BuyDrawer 系弹层也一直在裸奔，这里一并修正） */
-.ant-modal .ant-modal-content,
-.ant-drawer .ant-drawer-section,
-.ant-dropdown .ant-dropdown-menu,
-.ant-select-dropdown {
+/* 2026-09-14 起弹层材料主通道是 root.tsx ConfigProvider 的 semantic
+   classNames（modal/drawer/select 把 .fp-glass 官方挂到面板节点），
+   本节只剩 Dropdown 独苗：它没有 popup 级 semantic（只有 root/item），
+   CSS 追内部类名是唯一通道。antd 改它 DOM 时这里会静默失效——
+   排查弹层裸奔先看这条（教训：v5→v6 内部节点两次改名，
+   Modal 裸奔了整个 v6 早期才被主人抓出来，才有了 semantic 迁移）。
+   材料规则是 .fp-glass 的复制（不能用 @apply：uno 的
+   transformerDirectives 只处理 uno 管的文件）。!important 双保险 */
+.ant-dropdown .ant-dropdown-menu {
   position: relative;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(12, 30, 48, 0.42) !important;
-  backdrop-filter: blur(22px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(12, 30, 48, 0.45) !important;
+  backdrop-filter: blur(4px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(4px) saturate(180%) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
     0 18px 40px rgba(0, 0, 0, 0.35) !important;
-}
-
-/* 弹窗 22、下拉 12（宪法 §2.2 角色圆角表） */
-.ant-modal .ant-modal-content {
-  border-radius: 22px !important;
-}
-
-.ant-dropdown .ant-dropdown-menu,
-.ant-select-dropdown {
+  /* 下拉 12（宪法 §2.2 角色圆角表；Modal 22 / Select 12 走 root.tsx
+     semantic styles 的 inline，不再此处管） */
   border-radius: 12px !important;
 }
 
-/* 移动端底抽屉顶角 22（antd Drawer 无圆角 token）；桌面右抽屉贴边不圆 */
-.ant-drawer-bottom .ant-drawer-section {
+/* Drawer 的 placement 级圆角与描边：placement 类（bottom/right）是公开
+   概念、稳定；面板节点挂的是官方 semantic 给的 .fp-glass（root.tsx），
+   两侧都不追内部类名。bottom 顶角 22 与底弹层同语言；right 贴边不圆、
+   左缘补一道描边与内容分界（2026-09-14） */
+.ant-drawer-bottom .fp-glass {
   border-radius: 22px 22px 0 0 !important;
+}
+
+.ant-drawer-right .fp-glass {
+  border-left: 1px solid var(--fp-border);
 }
 
 /* Tooltip / Popover 是小浮面：elevated 实色，不模糊（宪法 §2.6）。
@@ -264,11 +264,10 @@ body {
 /* 老 WebView 没有 backdrop-filter：玻璃退成 elevated 实色，描边保留。
    不用 JS 探测、不加第二个类名——同一批选择器换一套 background */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  /* .fp-glass 一行已覆盖 semantic 挂类的 modal/drawer/select 面板；
+     dropdown 走 CSS 通道，降级也得自己带 */
   .fp-glass,
-  .ant-modal .ant-modal-content,
-  .ant-drawer .ant-drawer-section,
-  .ant-dropdown .ant-dropdown-menu,
-  .ant-select-dropdown {
+  .ant-dropdown .ant-dropdown-menu {
     background: var(--fp-elevated) !important;
   }
 }
