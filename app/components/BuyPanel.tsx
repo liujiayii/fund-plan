@@ -96,7 +96,8 @@ export function BuyPanel(props: BuyPanelProps) {
       <input type="hidden" name="intent" value="buy" />
       <input type="hidden" name="fundCode" value={fundCode} />
 
-      <div style={{ marginBottom: 16 }}>
+      {/* 基础信息井格（bg-well）：五行裸排收进卡片，权重不再平铺 */}
+      <div className="mb-4 rounded-xl bg-well px-4">
         <DataRow label="基金代码" value={fundCode} />
         <DataRow
           label="最新净值"
@@ -145,7 +146,7 @@ export function BuyPanel(props: BuyPanelProps) {
           不划算。所以这是个决定，不是漏改。
         */}
         {[100, 500, 1000, 5000, 10000].map(v => (
-          <Button key={v} size="small" onClick={() => setAmountYuan(String(v))}>
+          <Button key={v} size="small" className="rounded-full px-4" onClick={() => setAmountYuan(String(v))}>
             {v}
             {" "}
             元
@@ -154,6 +155,7 @@ export function BuyPanel(props: BuyPanelProps) {
         {cashCents !== null && (
           <Button
             size="small"
+            className="rounded-full px-4"
             // ⚠️ 这个值直接进 Input，绝不能换成 fmtYuan：
             // Number("100,000.00") 是 NaN → amountCents 归 0 → canSubmit 为 false，
             // 「确认买入」按钮当场置灰点不动（真到了 action 也判「请输入正确的金额」）
@@ -181,47 +183,45 @@ export function BuyPanel(props: BuyPanelProps) {
         />
       )}
 
-      {/* 内扣法预估 */}
+      {/* 内扣法预估结论卡：预计份额是买入的核心输出（花多少得多少份），
+          做主视觉；费用与净申购是推导过程，收小字。2026-09-14 从 info Alert
+          降维重排——Alert 的语义是提示，试算结果是内容，井格才是它的家 */}
       {estimate && (
-        <Alert
-          type="info"
-          style={{ marginBottom: 16 }}
-          message="费用预估（内扣法）"
-          description={(
-            <div>
-              <div>
-                申购费用：
-                <Text strong>
-                  {fmtYuan(estimate.feeCents)}
-                  {" "}
-                  元
-                </Text>
-                <Text type="secondary">（从申购金额中扣除）</Text>
-              </div>
-              <div>
-                净申购金额：
-                <Text strong>
-                  {fmtYuan(estimate.netAmountCents)}
-                  {" "}
-                  元
-                </Text>
-              </div>
-              <div>
-                预计份额：
-                <Text strong>
-                  {sharesToDisplay(estimate.sharesScaled)}
-                  {" "}
-                  份
-                </Text>
-              </div>
-              <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-                以上按最新净值试算。实际成交份额
-                <Text strong>以确认日净值为准</Text>
-                （交易日 15:00 前下单用当日净值，之后顺延至下一交易日）。
-              </Paragraph>
-            </div>
-          )}
-        />
+        <div className="mb-4 rounded-xl bg-well p-4">
+          <div className="text-xs text-muted">费用预估（内扣法）</div>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold font-num text-primary">
+              {sharesToDisplay(estimate.sharesScaled)}
+            </span>
+            <span className="text-sm text-muted">份</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+            <span>
+              申购费
+              <span className="font-num text-ink">
+                {" "}
+                {fmtYuan(estimate.feeCents)}
+                {" "}
+                元
+              </span>
+              （从申购金额中扣）
+            </span>
+            <span>
+              净申购
+              <span className="font-num text-ink">
+                {" "}
+                {fmtYuan(estimate.netAmountCents)}
+                {" "}
+                元
+              </span>
+            </span>
+          </div>
+          <Paragraph type="secondary" className="mt-2 mb-0 text-xs">
+            按最新净值试算，实际成交份额
+            <Text strong>以确认日净值为准</Text>
+            （交易日 15:00 前下单用当日净值，之后顺延至下一交易日）。
+          </Paragraph>
+        </div>
       )}
 
       {fetcher.data?.error && (

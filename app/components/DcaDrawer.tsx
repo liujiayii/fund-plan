@@ -1,12 +1,11 @@
 import type { DcaPlanView } from "~/services/portfolio-service";
-import { Drawer } from "antd";
 import { DcaFundPanel } from "~/components/DcaFundPanel";
-import { useIsMobile } from "~/hooks/useIsMobile";
+import { TradeDrawerShell } from "~/components/ui/TradeDrawerShell";
 
 export interface DcaDrawerProps {
   /** 开合受控：true 展开 */
   open: boolean;
-  /** 请求关闭（点遮罩 / 右上角 ×） */
+  /** 请求关闭（点遮罩 / 头部关闭钮） */
   onClose: () => void;
   fundCode: string;
   fundName: string;
@@ -15,8 +14,8 @@ export interface DcaDrawerProps {
 }
 
 /**
- * 定投抽屉：DcaFundPanel 的弹层壳，与 BuyDrawer 同款范式
- * （桌面右侧抽屉 400px / 移动端底部弹层 88%，destroyOnHidden 重开即重置）。
+ * 定投抽屉：DcaFundPanel 的弹层壳，外观交给 TradeDrawerShell（2026-09-14
+ * 起三个交易抽屉统一 App 式自绘头部）。
  *
  * 面板内部的创建/修改/暂停/删除统一提交到 /me/dca 的 action（共享组件
  * 内已写死）——持仓详情页与基金详情页共用一个真相；从这两页发起时基金
@@ -33,24 +32,21 @@ export function DcaDrawer({
   fundName,
   plans,
 }: DcaDrawerProps) {
-  const isMobile = useIsMobile();
-
   return (
-    <Drawer
-      title={`定投 · ${fundName}`}
+    <TradeDrawerShell
       open={open}
       onClose={onClose}
-      placement={isMobile ? "bottom" : "right"}
-      width={400}
-      height="88%"
+      actionLabel="定投"
+      tone="primary"
+      fundName={fundName}
+      fundCode={fundCode}
       zIndex={900}
-      destroyOnHidden
     >
       <DcaFundPanel
         fundCode={fundCode}
         fundName={fundName}
         plans={plans}
       />
-    </Drawer>
+    </TradeDrawerShell>
   );
 }

@@ -81,14 +81,13 @@
     margin-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
-  /* 有操作条页面的 Footer 窄屏让位：操作条 72 + 呼吸 16 = 88 + 安全区。
-     tabbar 已在下方 .fp-has-bottom-bar 规则里藏起，不再计入让位高度
-     （旧值 176 = 胶囊 + 操作条两层，叠罗汉时代遗迹，2026-09-14 退役）。
+  /* 有操作条页面的 Footer 窄屏让位：操作条 3 行 note 满配 ≈130 + 呼吸 16。
+     tabbar 已在下方 .fp-has-bottom-bar 规则里藏起，不再计入让位高度。
      与 .fp-footer 同为 0,1,0，靠紧跟其后的 source-order 压过上面的让位
-     （勿挪到 .fp-footer 之前）；桌面 88px 基线在下方 min-width:768px 块里，
+     （勿挪到 .fp-footer 之前）；桌面 104px 基线在下方 min-width:768px 块里，
      与本块宽度互斥、永不同时命中，故无需 !important */
   .fp-footer-bar-clear {
-    margin-bottom: calc(88px + env(safe-area-inset-bottom));
+    margin-bottom: calc(146px + env(safe-area-inset-bottom));
   }
 
   /* 任务页（基金/持仓详情）窄屏藏 tabbar：操作条贴底后底部只留一层铬。
@@ -100,13 +99,6 @@
      20 > 15）——初版就这么翻的车，CodeRabbit PR #92 抓的准 */
   .fp-shell.fp-has-bottom-bar ~ .fp-tabbar {
     display: none;
-  }
-
-  /* 操作条内距窄屏收窄：全宽贴底后左右 24 太肥，16 即可；上下 16 与
-     「条高恒定 72px」契约（BottomActionBar 头注释）绑定不动。
-     inline 的 padding 需 !important 盖，与 .fp-content 同手法 */
-  .fp-bottom-bar-inner {
-    padding: 16px 16px !important;
   }
 
   /* ══════════ 5. FundListItem 窄屏两段式（spec §8）══════════ */
@@ -206,10 +198,11 @@
 
 /* ══════════ 4.5 页底固定操作条（ux-polish spec §4①）══════════ */
 
-/* 桌面基线：贴底全宽。z-index 15 < 底部胶囊 20，两者分属不同区域互不重叠；
-   antd Drawer（1000）在其上，抽屉展开时正确盖住操作条。
-   窄屏的 bottom 上移（让开 TabBar）在文件末尾的 767px 块里覆盖本基线——
-   同 specificity 靠 source-order 取胜，务必保持「基线在前、覆盖在后」的次序 */
+/* 窄屏基线：全宽贴底（bottom/圆角在文件末尾 767px 块覆盖成底弹层顶角 22）。
+   桌面形态在下方 768+ 块：悬浮玻璃卡（主人 2026-09-14 验收「PC 没区别」
+   后升级——贴边系统条退役，浮卡与内容列对齐）。
+   z-index 15 < 底部胶囊 20，两者分属不同区域互不重叠；
+   antd Drawer（1000）在其上，抽屉展开时正确盖住操作条 */
 .fp-bottom-bar {
   position: fixed;
   left: 0;
@@ -247,12 +240,28 @@
     white-space: nowrap;
   }
 
-  /* 有页底操作条的页面（持仓/基金详情）：Footer 额外让位（操作条 72 + 呼吸 16）。
+  /* 有页底操作条的页面（持仓/基金详情）：Footer 额外让位。
+     操作条已是悬浮玻璃卡（72 高 + 16 底距 + 16 呼吸 = 104）。
      刻意放 min-width 块而非顶层基线：与上方 767px 块里的窄屏让位宽度互斥，
      两条规则不会同时命中，从结构上免除 source-order 之争，也就不用 !important */
   .fp-footer-bar-clear {
-    margin-bottom: 88px;
+    margin-bottom: 104px;
   }
+}
+
+/* ══════════ 4.7 交易抽屉几何（TradeDrawerShell，2026-09-14）══════════ */
+
+/* 买入/卖出/定投共用壳的宽高：antd v6 弃用 Drawer 的 width/height props
+   （size 只有固定档位给不了 400px/88%），CSS 管——同 §4.6 .fp-nav-drawer
+   手法。按 antd 自带的形态类区分：右抽屉 400px、底抽屉 88% 高
+   （面板整高约 600px，留出顶部透气）。isMobile 的 placement 切换
+   与本处选择器一一对应（useIsMobile 的断点就是 768） */
+.fp-trade-drawer.ant-drawer-right .ant-drawer-content-wrapper {
+  width: 400px !important;
+}
+
+.fp-trade-drawer.ant-drawer-bottom .ant-drawer-content-wrapper {
+  height: 88% !important;
 }
 
 /* ══════════ 10. 侧栏三档（liquid-glass spec §8）══════════ */
@@ -286,19 +295,23 @@
   }
 }
 
-/* 页底操作条在桌面两档让出侧栏（CodeRabbit PR #80 指正）：
-   .fp-bottom-bar 是 fixed left:0 贴底全宽，z-index 15 盖过
-   无 z-index 的侧栏底部 UserMenu。left = 侧栏宽 + 侧栏左右缝
-   (72+2×12=96 / 220+2×12=244)，right:0 基线不动 */
+/* 桌面操作条 = 悬浮玻璃卡（2026-09-14）：不贴边，与内容列对齐——
+   左 = 侧栏让位（244/96）+ 24 缝，右 24、底 16，四角 22（浮面圆角，
+   与 Modal/Drawer 的 22 同一语言）。旧形态 fixed left:0 贴底全宽
+   直角（「系统条」脸），z-index 15 曾盖过无 z-index 的侧栏底部
+   UserMenu——浮卡后左右留缝，问题一并消失 */
 @media (min-width: 768px) {
   .fp-bottom-bar {
-    left: 244px;
+    left: 268px;
+    right: 24px;
+    bottom: 16px;
+    border-radius: 22px;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1079px) {
   .fp-bottom-bar {
-    left: 96px;
+    left: 120px;
   }
 }
 
@@ -325,14 +338,60 @@
     height: 220px !important;
   }
 
-  /* 窄屏操作条贴底（与桌面形态统一）：只让 iOS home indicator 安全区。
-     任务页 tabbar 已藏（见上方 .fp-has-bottom-bar），不再为胶囊上移 72px——
-     旧值 calc(72px + …) 是叠罗汉时代遗迹（2026-09-14 主人拍板贴底）。
+  /* 窄屏操作条 = 底弹层同款形态（2026-09-14 三改）：全宽贴底 + 顶角 22，
+     与 .ant-drawer-bottom 的 22px 顶角（liquid-glass.css §5）同一语言。
+     999 大圆角胶囊主人验收枪毙（圆滚滚太臃肿）——勿回魂。
      必须放在桌面基线（本文件 4.5 节 .fp-bottom-bar）之后：同 specificity
-     同属性下 source-order 后者胜，放文件头部的 767px 块里会被基线 bottom:0
-     反杀成死代码（review 修正，勿挪回） */
+     同属性下 source-order 后者胜，放文件头部的 767px 块里会被基线反杀成
+     死代码（review 修正，勿挪回） */
   .fp-bottom-bar {
     bottom: env(safe-area-inset-bottom);
+    border-radius: 22px 22px 0 0;
+  }
+
+  /* 贴底内纵向：note 在上、按钮组撑满在下。note 不截断全展示（主人
+     2026-09-14 验收拍板）——inline 的 -webkit-box + clamp 2 + overflow
+     hidden 三件套全要 !important 盖，display: block 让 clamp 失效；
+     条高随 note 行数浮动（1 行 88 ~ 3 行 ~130） */
+  .fp-bottom-bar-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 16px !important;
+  }
+  .fp-bottom-bar-note {
+    display: block !important;
+    overflow: visible !important;
+  }
+  .fp-bottom-bar-actions {
+    flex: 1;
+  }
+  /* 按钮组撑满条宽：把调用方传来的 antd Space 摊平成一排等宽按钮。
+     Space 的 DOM 是 .ant-space > .ant-space-item > (按钮 | form>按钮)——
+     「自选」按钮外面包着 fetcher.Form，item 加 flex 后 form 得跟着
+     display:flex 才轮得到里面的按钮吃满宽（flex:1 + min-width:0） */
+  .fp-bottom-bar-actions .ant-space {
+    display: flex;
+    width: 100%;
+  }
+  .fp-bottom-bar-actions .ant-space-item {
+    flex: 1;
+    display: flex;
+  }
+  .fp-bottom-bar-actions .ant-space-item > form {
+    display: flex;
+    flex: 1;
+  }
+  .fp-bottom-bar-actions .ant-btn {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* 任务页（操作条贴底）内容让位：note 3 行满配 ≈130 + 呼吸。
+     note 不截断后条高浮动，让位按最坏行数给足（1 行场景多留的空白
+     换信息完整，值得）。非任务页仍走上面的 88 基线（tabbar 胶囊） */
+  .fp-has-bottom-bar .fp-content {
+    padding-bottom: calc(146px + env(safe-area-inset-bottom)) !important;
   }
 }
 

@@ -1,33 +1,30 @@
 import type { SellPanelProps } from "~/components/SellPanel";
-import { Drawer, message } from "antd";
+import { message } from "antd";
 import { SellPanel } from "~/components/SellPanel";
-import { useIsMobile } from "~/hooks/useIsMobile";
+import { TradeDrawerShell } from "~/components/ui/TradeDrawerShell";
 
 export interface SellDrawerProps extends Omit<SellPanelProps, "onSuccess"> {
   /** 开合受控：true 展开 */
   open: boolean;
-  /** 请求关闭（点遮罩 / 右上角 × / 提交成功后自动调） */
+  /** 请求关闭（点遮罩 / 头部关闭钮 / 提交成功后自动调） */
   onClose: () => void;
 }
 
 /**
- * 卖出抽屉：SellPanel 的弹层壳，与 BuyDrawer 同款范式
- * （桌面右侧抽屉 400px / 移动端底部弹层 88%，destroyOnHidden 重开即重置——
- * 等价于旧版页面的 tick 重挂，宿主零状态）。
+ * 卖出抽屉：SellPanel 的弹层壳，外观交给 TradeDrawerShell（2026-09-14
+ * 起三个交易抽屉统一 App 式自绘头部）。pill 走 danger 红——卖出/赎回的
+ * 动作语义，与面板里「确认赎回」按钮（type="primary" danger）同源。
  * 成功处理由本壳接管（onSuccess 不外露）：toast + 关抽屉。
  */
 export function SellDrawer({ open, onClose, ...panel }: SellDrawerProps) {
-  const isMobile = useIsMobile();
-
   return (
-    <Drawer
-      title={`卖出 ${panel.fundName}`}
+    <TradeDrawerShell
       open={open}
       onClose={onClose}
-      placement={isMobile ? "bottom" : "right"}
-      width={400}
-      height="88%"
-      destroyOnHidden
+      actionLabel="卖出"
+      tone="danger"
+      fundName={panel.fundName}
+      fundCode={panel.fundCode}
     >
       <SellPanel
         {...panel}
@@ -36,6 +33,6 @@ export function SellDrawer({ open, onClose, ...panel }: SellDrawerProps) {
           onClose();
         }}
       />
-    </Drawer>
+    </TradeDrawerShell>
   );
 }
