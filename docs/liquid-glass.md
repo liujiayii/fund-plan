@@ -279,7 +279,7 @@ antd 浮层挂在 portal 里，tsx 拿不到它的根节点，`.fp-glass` 材料
 ## 7. 与现有基建的关系
 
 - **唯一色值出处仍是 `app/theme.ts`。** 本文件的 hex 是规范，落地时抄进 `COLOR`，uno 映射自动跟进。不准在组件里写第二份。
-- Uno 工具类优先；`.fp-glass` / `.fp-glass-specular` / 色雾层 是少数必须手写的 CSS，放 `app/styles/liquid-glass.css`，在 `root.tsx` 里排在 `uno.gen.css` 之后、`responsive.css` 之前。
+- Uno 工具类优先；`.fp-glass` / `.fp-glass-specular` / 色雾层 是少数必须手写的 CSS，放 `app/styles/liquid-glass.css`，在 `root.tsx` 里排在 `virtual:uno.css` 之后、`responsive.css` 之前。
 - 不启用 `presetAttributify`，不写自定义提取器，`preflights.reset: false` 保持。
 - antd 切 **`theme.darkAlgorithm`**（root.tsx 引；`theme.ts` 仍零 import）。默认算法在暗底上派生的是白容器、浅灰边、深字——每个组件都要手改，改不完。暗色算法把 Tag / Alert / Table / Segmented / Dropdown 的中性色一次派生对，`ANTD_TOKEN` 只钉品牌与材料：
   - seed：`colorPrimary` `colorInfo` = `primary`；`colorBgLayout` = `bg`；`colorBgBase` = `bg`（暗色算法从它派生全部中性面）；`colorTextBase` = `textPrimary`；`borderRadius` 12；`controlHeight` 36

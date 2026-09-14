@@ -184,7 +184,7 @@ export default defineConfig({
    *
    * 死类 = 源码里恰好长得像工具类的词生成的无人引用规则（如 PeriodReturnGrid
    * 的周期 key "m1"、注释里的「fixed 条」）。它们无害——没有元素挂这些类，
-   * 规则就是死文本。uno.gen.css 里看到属正常现象，不要追杀，
+   * 规则就是死文本。Inspector / 产物 CSS 里看到属正常现象，不要追杀，
    * 更不要为消灭它们去改业务代码或注释。
    */
 });

@@ -1,6 +1,6 @@
 /* 全局导航进度条（NavProgressBar.tsx 专用）——原生 CSS 的唯一出处。
    不走 UnoCSS：进度条的时序编排（渐进推进/冲顶/淡出）由组件 JS 精确驱动，
-   工具类改了要重跑 uno:build；也不写进 uno.gen.css（那是生成文件，禁止手改）。 */
+   工具类扛不住这种 JS 接管的时序。 */
 
 .fp-nav-progress {
   position: fixed;

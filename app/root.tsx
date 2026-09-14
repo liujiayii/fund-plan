@@ -34,12 +34,11 @@ import "@fontsource/space-grotesk/700.css";
 // 才能让 UnoCSS 工具类在同级覆盖 reset；antd 组件样式走 cssinjs 运行时注入，
 // 顺序不受此处影响，故 reset 放在所有值导入之后即可。
 import "antd/dist/reset.css";
-// UnoCSS 预生成的工具类样式（由 `pnpm uno:build` 产出）。
-import "./uno.gen.css";
+import "virtual:uno.css";
 // 液态玻璃材料层（色雾 / .fp-glass / 高光 / 降级）：全站唯一的模糊材料出处（守卫测试钉死），
-// 排在 uno.gen.css 之后（材料压过工具类）、responsive.css 之前（壳的媒体查询最后说话）
+// 排在 virtual:uno.css 之后（材料压过工具类）、responsive.css 之前（壳的媒体查询最后说话）
 import "./styles/liquid-glass.css";
-// 期五移动端适配：唯一的媒体查询出处，必须排在 uno.gen.css 之后
+// 期五移动端适配：唯一的媒体查询出处，必须排在 UnoCSS 之后
 // 才能覆盖工具类与 antd 组件类（顺序理由见该文件头注释）
 import "./styles/responsive.css";
 

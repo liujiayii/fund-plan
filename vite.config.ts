@@ -1,18 +1,16 @@
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { reactRouter } from "@react-router/dev/vite";
+import UnoCSS from "unocss/vite";
 import { defineConfig } from "vite";
 
 /**
- * 注意：UnoCSS 走 CLI 预生成（`pnpm uno:build` → `app/uno.gen.css`，由 root.tsx 导入），
- * 没有用 unocss/vite 插件。
- * 原因：**不是 Vite 8 的问题**（裸 Vite 8 + unocss/vite 实测正常），
- * 而是 UnoCSS 的 Vite 插件与 React Router 8 的 Vite Environment API 不兼容——
- * RR8 把构建拆成 client/ssr 多环境，UnoCSS 找不到 `vite:css-post` 来注入样式，
- * 于是产物 CSS 只剩 48 字节占位符，所有工具类静默丢失（构建只报一行警告就"成功"）。
- * 纯 SPA 项目（单环境构建）不受影响，可正常用 unocss/vite 插件。
+ * UnoCSS 走 Vite 插件。`postcss: false` 必须保持——PostCSS 模式历史上
+ * 会把本仓库的 RR8 多环境构建挂死（>7 分钟无响应）。
  */
 export default defineConfig({
   plugins: [
+    // virtual:uno.css 的生成方，放 Cloudflare / RR 之前
+    UnoCSS({ postcss: false }),
     // Cloudflare 插件：让 dev/build 跑在真实 workerd 运行时里，绑定 D1/KV 可直接用
     cloudflare({ viteEnvironment: { name: "ssr" } }),
     // React Router framework mode：文件路由 + SSR
