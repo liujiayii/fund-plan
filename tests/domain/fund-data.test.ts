@@ -595,7 +595,34 @@ describe("fetchIndexNav 沪深300", () => {
     ]);
   });
 
-  it("网络异常返回空数组", async () => {
+  it("成功时双写：主缓存 + 无过期陈旧兜底 key", async () => {
+    const kv = fakeKV();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(indexResp))));
+    await fetchIndexNav(fakeEnv(kv), "1.000300", 30);
+    const payload = JSON.stringify([
+      { date: "2026-08-25", close: 4552.03 },
+      { date: "2026-08-26", close: 4590.79 },
+    ]);
+    expect(kv._store.get("fund:index:1.000300:30")).toBe(payload);
+    // 兜底 key 内容一致（fakeKV 不模拟 TTL，过期行为靠真实 KV 保证）
+    expect(kv._store.get("fund:index:1.000300:30:stale")).toBe(payload);
+  });
+
+  it("拉取全灭但有陈旧兜底：返回旧数据，基准线仍可画", async () => {
+    const kv = fakeKV();
+    const stale = JSON.stringify([{ date: "2026-08-20", close: 4500.0 }]);
+    kv._store.set("fund:index:1.000300:30:stale", stale);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("Network connection lost");
+      }),
+    );
+    expect(await fetchIndexNav(fakeEnv(kv), "1.000300", 30))
+      .toEqual([{ date: "2026-08-20", close: 4500.0 }]);
+  });
+
+  it("网络异常且无兜底（冷启动）返回空数组", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
