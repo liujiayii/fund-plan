@@ -1,6 +1,6 @@
 import type { NavItem } from "~/domain/nav";
 import { MenuOutlined } from "@ant-design/icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { MobileNavDrawer } from "~/components/MobileNavDrawer";
 import { Logo } from "~/components/ui/Logo";
@@ -31,6 +31,17 @@ export function MobileBrandBar({ navItems, user }: MobileBrandBarProps) {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   const selectedKey = resolveSelectedKey(location.pathname, navItems);
+
+  // 任意 SPA 跳转后收抽屉（CodeRabbit PR #90 指正）：NavLinks 的 <Link> 自带
+  // onNavigate，但底部 UserMenu 的「设置」走自己的 navigate() 不经过它——
+  // 跳转后抽屉仍遮着页面。监听 location.key 一并兜住（含浏览器前进/后退）。
+  // 「登出」是 form POST 整页跳转、NavLinks 的首页/主理人的盘是原生 <a>
+  // 整页跳转，页面重载抽屉自然消失，不依赖这条。
+  // setNavOpen 是稳定引用（useState setter），挂载首跑一次 setNavOpen(false)
+  // 幂等无渲染开销。
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.key]);
 
   return (
     <>
