@@ -42,6 +42,8 @@
 @media (max-width: 767px) {
   /* Content padding 24→12：所有溢出的放大器（spec §5.1）。
      底部让位 = 胶囊 60 + 底距 12 + 呼吸 16 = 88 + 安全区（liquid-glass 偏差 6）。
+     巧合：任务页（操作条贴底、tabbar 已藏）= 操作条 72 + 呼吸 16，同为 88——
+     两种底部形态一个让位值，无需按页面分叉。
      工具类 px-6/pt-6/pb-12 是桌面值，需 !important 盖 */
   .fp-content {
     padding: 12px 12px calc(88px + env(safe-area-inset-bottom)) !important;
@@ -79,12 +81,32 @@
     margin-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
-  /* 有操作条页面的 Footer 窄屏让位：胶囊 72（含缝）+ 操作条 72 + 呼吸 + 安全区。
+  /* 有操作条页面的 Footer 窄屏让位：操作条 72 + 呼吸 16 = 88 + 安全区。
+     tabbar 已在下方 .fp-has-bottom-bar 规则里藏起，不再计入让位高度
+     （旧值 176 = 胶囊 + 操作条两层，叠罗汉时代遗迹，2026-09-14 退役）。
      与 .fp-footer 同为 0,1,0，靠紧跟其后的 source-order 压过上面的让位
      （勿挪到 .fp-footer 之前）；桌面 88px 基线在下方 min-width:768px 块里，
      与本块宽度互斥、永不同时命中，故无需 !important */
   .fp-footer-bar-clear {
-    margin-bottom: calc(176px + env(safe-area-inset-bottom));
+    margin-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
+  /* 任务页（基金/持仓详情）窄屏藏 tabbar：操作条贴底后底部只留一层铬。
+     业界范式（蚂蚁财富/天天基金/雪球同款）：详情页是任务页，tabbar 退场，
+     导航兜底 = 顶部汉堡抽屉（MobileNavDrawer）。判定类 fp-has-bottom-bar
+     由 root.tsx 的 hasBottomBar 挂在壳上——只藏这两页，其余页面胶囊常驻。
+     ⚠️ 必须用同级组合器 ~：MobileTabBar 是 .fp-shell 之后的同级元素而非
+     后代，后代选择器匹配不到、tabbar 藏不住还反过来盖操作条（z-index
+     20 > 15）——初版就这么翻的车，CodeRabbit PR #92 抓的准 */
+  .fp-shell.fp-has-bottom-bar ~ .fp-tabbar {
+    display: none;
+  }
+
+  /* 操作条内距窄屏收窄：全宽贴底后左右 24 太肥，16 即可；上下 16 与
+     「条高恒定 72px」契约（BottomActionBar 头注释）绑定不动。
+     inline 的 padding 需 !important 盖，与 .fp-content 同手法 */
+  .fp-bottom-bar-inner {
+    padding: 16px 16px !important;
   }
 
   /* ══════════ 5. FundListItem 窄屏两段式（spec §8）══════════ */
@@ -303,12 +325,14 @@
     height: 220px !important;
   }
 
-  /* 窄屏操作条叠在底部胶囊上方：胶囊 60 + 底距 12 + 安全区（liquid-glass 偏差 6）。
+  /* 窄屏操作条贴底（与桌面形态统一）：只让 iOS home indicator 安全区。
+     任务页 tabbar 已藏（见上方 .fp-has-bottom-bar），不再为胶囊上移 72px——
+     旧值 calc(72px + …) 是叠罗汉时代遗迹（2026-09-14 主人拍板贴底）。
      必须放在桌面基线（本文件 4.5 节 .fp-bottom-bar）之后：同 specificity
      同属性下 source-order 后者胜，放文件头部的 767px 块里会被基线 bottom:0
      反杀成死代码（review 修正，勿挪回） */
   .fp-bottom-bar {
-    bottom: calc(72px + env(safe-area-inset-bottom));
+    bottom: env(safe-area-inset-bottom);
   }
 }
 
