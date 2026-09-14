@@ -31,5 +31,12 @@ export default defineConfig({
   // antd 体积较大，交给 Vite 自动分包即可，这里只关掉 sourcemap 以加快构建
   build: {
     sourcemap: false,
+    // ⚠️ 必须 "esbuild"：Vite 8 默认的 lightningcss 会按 build target（含
+    // Safari 16）把无前缀 backdrop-filter 判为「无 target 支持」而整个删掉、
+    // 只留 -webkit- 前缀版；而现代 Chromium 已移除 -webkit-backdrop-filter
+    // 别名——两者叠加 = 生产构建里全站玻璃模糊（liquid-glass 的灵魂）静默
+    // 失效（2026-09-14 PR #90 预览与 dev 对比实测：dev 磨砂、build 半透明）。
+    // esbuild 只按 target 补前缀、不删标准声明，双声明共存。
+    cssMinify: "esbuild",
   },
 });
