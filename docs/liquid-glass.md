@@ -64,9 +64,9 @@ iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，
      background 简写会把渐变冲成实色。responsive.css 盖 antd 内部类同此手法 */
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
-    rgba(12, 30, 48, 0.3) !important;
-  backdrop-filter: blur(16px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+    rgba(12, 30, 48, 0.45) !important;
+  backdrop-filter: blur(4px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(4px) saturate(180%) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),  /* 顶边高光脊 */
     0 18px 40px rgba(0, 0, 0, 0.35) !important;

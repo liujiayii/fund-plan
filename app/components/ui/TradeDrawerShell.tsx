@@ -66,6 +66,10 @@ export function TradeDrawerShell({
       rootClassName="fp-trade-drawer"
       styles={{ body: { padding: 0 } }}
       destroyOnHidden
+      // 无障碍名称：壳自绘头部（closable=false 干掉了 antd 的 title 轴），
+      // 读屏软件需要 aria-label 才能把弹层念成「买入 华田XX」而不是无名
+      // 对话框（CodeRabbit PR #93 指正）
+      aria-label={`${actionLabel} ${fundName}`}
     >
       <div className="flex h-full flex-col">
         {/* 头部：把手（仅窄屏底弹层）+ 动作 pill / 基金名 / 关闭钮 */}
