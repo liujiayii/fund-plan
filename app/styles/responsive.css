@@ -94,8 +94,11 @@
   /* 任务页（基金/持仓详情）窄屏藏 tabbar：操作条贴底后底部只留一层铬。
      业界范式（蚂蚁财富/天天基金/雪球同款）：详情页是任务页，tabbar 退场，
      导航兜底 = 顶部汉堡抽屉（MobileNavDrawer）。判定类 fp-has-bottom-bar
-     由 root.tsx 的 hasBottomBar 挂在壳上——只藏这两页，其余页面胶囊常驻 */
-  .fp-has-bottom-bar .fp-tabbar {
+     由 root.tsx 的 hasBottomBar 挂在壳上——只藏这两页，其余页面胶囊常驻。
+     ⚠️ 必须用同级组合器 ~：MobileTabBar 是 .fp-shell 之后的同级元素而非
+     后代，后代选择器匹配不到、tabbar 藏不住还反过来盖操作条（z-index
+     20 > 15）——初版就这么翻的车，CodeRabbit PR #92 抓的准 */
+  .fp-shell.fp-has-bottom-bar ~ .fp-tabbar {
     display: none;
   }
 

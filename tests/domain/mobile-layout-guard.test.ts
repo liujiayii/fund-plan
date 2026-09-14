@@ -20,11 +20,16 @@ const RESPONSIVE_CSS = readFileSync(path.join(APP_DIR, "styles/responsive.css"),
 const ROOT_TSX = readFileSync(path.join(APP_DIR, "root.tsx"), "utf8");
 
 describe("移动端任务页底部布局守卫", () => {
-  it("任务页窄屏藏 tabbar：.fp-has-bottom-bar .fp-tabbar display none", () => {
+  it("任务页窄屏藏 tabbar：fp-shell 后续同级的 .fp-tabbar display none", () => {
     // 藏 tabbar 的规则必须在 max-width: 767px 块里（桌面 .fp-mobile 本就隐藏，
-    // 这条只管窄屏）；作用域限定 .fp-has-bottom-bar——其余页面 tabbar 常驻
+    // 这条只管窄屏）；作用域限定 .fp-has-bottom-bar——其余页面 tabbar 常驻。
+    // ⚠️ 必须 ~ 同级组合器：MobileTabBar 是 .fp-shell 的后续同级而非后代
+    // （root.tsx 里 <MobileTabBar /> 在壳 div 之外），后代选择器匹配不到
+    // ——初版翻过的车，CodeRabbit PR #92 抓出，此处钉死不许退回
     expect(RESPONSIVE_CSS).toContain("@media (max-width: 767px)");
-    expect(RESPONSIVE_CSS).toMatch(/\.fp-has-bottom-bar \.fp-tabbar\s*\{\s*display:\s*none/);
+    expect(RESPONSIVE_CSS).toMatch(
+      /\.fp-shell\.fp-has-bottom-bar ~ \.fp-tabbar\s*\{\s*display:\s*none/,
+    );
   });
 
   it("操作条窄屏贴底含安全区（不再为 tabbar 上移 72px）", () => {
