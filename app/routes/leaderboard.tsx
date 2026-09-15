@@ -5,6 +5,7 @@ import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { splitPodium } from "~/domain/leaderboard";
 import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
@@ -150,26 +151,23 @@ function TopSpot({
  * 完全抛弃 2026-09-15 的奥林匹克三柱（高度水印 / 圆奖牌 / CSS order / scale）。
  * 那套的病根是「三列 flex + 视觉缩放」——并列第一会压叠，窄屏柱宽 ~90px
  * 数字折行。本版按 competition ranking 切两层：
- *   1. 领先档（rank === 第一名的 rank，含并列第一）全宽条带纵向堆
- *   2. 其余前三进 md 双列网格；< md 竖叠，永不并排挤
+ *   1. 领先档（含全部并列第一）全宽条带纵向堆
+ *   2. 其余 rank ≤ 3 进 md 双列网格；< md 竖叠，永不并排挤
  * 每条一口井（洗底，不是玻璃），外卡才是玻璃——宪法「一卡多格」。
  */
 function Podium({
-  entries,
+  leads,
+  rest,
   meId,
   metric,
 }: {
-  entries: LeaderboardEntry[];
+  leads: LeaderboardEntry[];
+  rest: LeaderboardEntry[];
   meId: number | null;
   metric: RankMetric;
 }) {
-  const top = entries.slice(0, 3);
-  if (top.length === 0)
+  if (leads.length === 0)
     return null;
-
-  const leadRank = top[0].rank;
-  const leads = top.filter(e => e.rank === leadRank);
-  const rest = top.filter(e => e.rank !== leadRank);
 
   return (
     <div className="mb-4 flex flex-col gap-2">
@@ -284,6 +282,11 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
   const mine
     = meId === null ? null : lb.byRate.find(e => e.userId === meId) ?? null;
 
+  // 两榜各自切一次：领先档完整吃进条带，名单带只拿剩下的。
+  // 切分必须在 Tabs 外做——items.children 里写 IIFE 是为了躲 lint 的副作用。
+  const rateBoard = splitPodium(lb.byRate);
+  const pnlBoard = splitPodium(lb.byPnl);
+
   return (
     <Space direction="vertical" size="large" className="w-full">
       <div>
@@ -315,8 +318,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                     label: "收益率榜",
                     children: (
                       <>
-                        <Podium entries={lb.byRate} meId={meId} metric="rate" />
-                        <ListTape entries={lb.byRate.slice(3)} meId={meId} />
+                        <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} metric="rate" />
+                        <ListTape entries={rateBoard.tape} meId={meId} />
                       </>
                     ),
                   },
@@ -325,8 +328,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                     label: "总收益榜",
                     children: (
                       <>
-                        <Podium entries={lb.byPnl} meId={meId} metric="pnl" />
-                        <ListTape entries={lb.byPnl.slice(3)} meId={meId} />
+                        <Podium leads={pnlBoard.leads} rest={pnlBoard.rest} meId={meId} metric="pnl" />
+                        <ListTape entries={pnlBoard.tape} meId={meId} />
                       </>
                     ),
                   },

@@ -101,3 +101,34 @@ export function rankLeaderboard(
   }
   return ranked;
 }
+
+/**
+ * 按 competition ranking 切「终榜条带」该吃的人。
+ *
+ * 完整领先档（四人并列第一则四条全进条带）+ 其余 rank ≤ 3 的条目。
+ * 绝不能 slice(0, 3) 再分组——那会把并列第一的第 4 人踢进名单带，
+ * 名次还写着 1（CodeRabbit PR #95）。
+ *
+ * 入参必须已经过 rankLeaderboard（按 rank 升序）。空榜三组全空。
+ */
+export function splitPodium(entries: LeaderboardEntry[]): {
+  leads: LeaderboardEntry[];
+  rest: LeaderboardEntry[];
+  tape: LeaderboardEntry[];
+} {
+  if (entries.length === 0)
+    return { leads: [], rest: [], tape: [] };
+  const leadRank = entries[0].rank;
+  let i = 0;
+  while (i < entries.length && entries[i].rank === leadRank)
+    i++;
+  const leads = entries.slice(0, i);
+  // 领先档已经覆盖「前三」时（三人及以上并列第一），后面不再补银铜
+  while (i < entries.length && entries[i].rank <= 3)
+    i++;
+  return {
+    leads,
+    rest: entries.slice(leads.length, i),
+    tape: entries.slice(i),
+  };
+}

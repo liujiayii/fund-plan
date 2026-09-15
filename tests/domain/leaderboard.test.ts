@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeLeaderboard,
   rankLeaderboard,
+  splitPodium,
 } from "~/domain/leaderboard";
 
 /**
@@ -158,5 +159,52 @@ describe("rankLeaderboard 排序", () => {
     const snapshot = structuredClone(entries);
     rankLeaderboard(entries, "rate");
     expect(entries).toEqual(snapshot);
+  });
+});
+
+describe("splitPodium 切终榜条带", () => {
+  it("四人并列第一全部进领先档，不漏进名单带", () => {
+    const ranked = rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 11_000_000 }),
+      mk({ userId: 2, cashCents: 11_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+      mk({ userId: 4, cashCents: 11_000_000 }),
+      mk({ userId: 5, cashCents: 10_000_000 }),
+    ]), "pnl");
+    const { leads, rest, tape } = splitPodium(ranked);
+    expect(leads.map(e => e.userId)).toEqual([1, 2, 3, 4]);
+    expect(leads.every(e => e.rank === 1)).toBe(true);
+    expect(rest).toHaveLength(0);
+    expect(tape.map(e => e.userId)).toEqual([5]);
+  });
+
+  it("两人并列第一 + 第三人：领先档两人，rest 一人，名单带从第 4 名起", () => {
+    const ranked = rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 12_000_000 }),
+      mk({ userId: 2, cashCents: 12_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+      mk({ userId: 4, cashCents: 10_500_000 }),
+    ]), "pnl");
+    const { leads, rest, tape } = splitPodium(ranked);
+    expect(leads.map(e => e.userId)).toEqual([1, 2]);
+    expect(rest.map(e => e.userId)).toEqual([3]);
+    expect(tape.map(e => e.userId)).toEqual([4]);
+  });
+
+  it("无并列：1/2/3 进条带，第 4 名起进名单带", () => {
+    const ranked = rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 13_000_000 }),
+      mk({ userId: 2, cashCents: 12_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+      mk({ userId: 4, cashCents: 10_500_000 }),
+    ]), "pnl");
+    const { leads, rest, tape } = splitPodium(ranked);
+    expect(leads.map(e => e.userId)).toEqual([1]);
+    expect(rest.map(e => e.userId)).toEqual([2, 3]);
+    expect(tape.map(e => e.userId)).toEqual([4]);
+  });
+
+  it("空榜三组全空", () => {
+    expect(splitPodium([])).toEqual({ leads: [], rest: [], tape: [] });
   });
 });
