@@ -1,5 +1,5 @@
 /**
- * 品牌视觉锤：上扬三折净值曲线。图形唯一出处收敛到 public/logo.svg
+ * 品牌视觉锤：上扬三折净值曲线。图形唯一出处收敛到 public/favicon.svg
  * （2026-09-14 拍板改外链引用）：favicon.ico / favicon.svg / 页内 Logo
  * 三处吃同一份资产，不再维护内联副本，也不会再撞「gradient stop 里的
  * var() 按 :root 注入时机静默不画」的 Chrome 坑。
