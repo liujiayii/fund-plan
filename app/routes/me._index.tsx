@@ -223,11 +223,18 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
         </Col>
       </Row>
 
-      {/* 仓：持仓紧跟钱（390 首屏必须露出至少一行，spec §5.1）。
+      {/* 账：收益明细 / 交易记录 / 定投计划 tabs。
+          2026-09-15 起排到持仓之前（原「钱→仓→账」，见 liquid-glass spec §5.1）。
+          ?tab= 深链与懒加载不变；旧 QuickEntries 跳页退役 */}
+      <SectionCard className="animate-fade-up animate-delay-[120ms]">
+        <MeTabs />
+      </SectionCard>
+
+      {/* 仓：持仓垫底（2026-09-15 起从「紧跟钱」下移到账之后）。
           标题带只数与合计市值，行内详情/卖出深链，底部批次说明 */}
       <SectionCard
         title={`我的持仓（${holdings.length} 只 · 市值 ${fmtYuan(summary.marketValueCents)} 元）`}
-        className="animate-fade-up animate-delay-[120ms]"
+        className="animate-fade-up animate-delay-[180ms]"
         extra={(
           <PeriodTabs
             options={[
@@ -282,12 +289,6 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
                 </Paragraph>
               </>
             )}
-      </SectionCard>
-
-      {/* 账：收益明细 / 交易记录 / 定投计划 tabs 垫底
-          （?tab= 深链与懒加载不变；旧 QuickEntries 跳页退役） */}
-      <SectionCard className="animate-fade-up animate-delay-[180ms]">
-        <MeTabs />
       </SectionCard>
 
       {/* 行内买入抽屉：提交到 /me/trade 资源路由（全站买入统一入口）。
