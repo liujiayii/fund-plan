@@ -211,6 +211,14 @@ dev SSR 里变成 undefined、每页 500**（真 Node / 生产 build / CI 全都
 className = "border-b border-line [border-bottom-style:solid]";
 ```
 
+同根的坑还有两个（2026-09-15 领奖台重做实测，Playwright 计算样式取证）：
+
+- **四边描边**用 `[border-style:solid]` 补 style（四边都有宽度时无 medium 副作用）——
+  Wind4 的 `border-2` 这类宽度类同样不出 style：style 走 `--un-border-style` 变量，
+  reset 关闭后变量未定义、回退 `none`，实测渲染 0px；
+- **`ring-*` 整个是死类**：box-shadow 依赖 reset 的 `--un-ring-*` 变量基础层，
+  计算值全零透明。要描边一律走 border 方案。范本见 `leaderboard.tsx` 奖牌徽章注释。
+
 `--fp-*` CSS 变量（`uno.config.ts` 的 preflight 从 theme.ts 全量输出）是手写 CSS
 （`app/styles/*.css`）共享 token 的唯一通道，别在 CSS 里写字面量色值。
 
