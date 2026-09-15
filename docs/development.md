@@ -334,3 +334,30 @@ function useIsClient() {
   不是本站 token，守卫只扫 `app/` 源码，不必追杀。
 - 导航壳：桌面 `AppSidebar`（220 / 平板 72 图标轨）+ 移动端 `MobileBrandBar`（顶胶囊）+
   `MobileTabBar`（底胶囊）。`/` 与 `/master` 两项仍是原生 `<a>`（边缘缓存纪律）。
+
+## ⚠️ SVG 渐变 stop 里不要吃 var()（2026-09-14）
+
+换新 logo 时踩的：内联 SVG 的 `<linearGradient><stop stop-color="var(--fp-*)">`
+在 dev 下折线**静默不画**（圆点正常——`fill` / `stroke` 属性上的 `var()`
+走逐帧级联没这个坑），favicon 用字面色值一直正常。
+
+四组像素实验（无头 Chrome 截图 + System.Drawing 采样）钉死机制：
+
+| 写法 | 结果 |
+| ---- | ---- |
+| stop 字面色值：同 svg / 跨 svg / 定义方 `display:none` | 全部正常 |
+| stop 吃 `var()`，`:root` 定义在 SVG **之前** | 正常 |
+| stop 吃 `var()`，`:root` 定义在 SVG **之后** | 不画 |
+
+即 Chrome 对 stop 里 `var()` 的解析与 `:root` 变量注入时机/文档顺序相关——
+dev 模式下 UnoCSS 的 `:root` 晚于组件 SVG 注入，正好落进坑里；旧 logo
+没暴露是因为渐变覆盖整个画布，stop 失效回落黑色也看不大出。
+
+**结论：页内要渐变的 SVG，stop 色值从 `theme.ts` 导入字面量，别用 CSS 变量。**
+（2026-09-14 当天进一步拍板：Logo 干脆改外链 `public/favicon.svg` 的 `<img>`，
+图形唯一出处收敛到资产文件，页内不再维护内联副本。）
+
+另记 favicon.ico 的再生成姿势（项目里无 sharp，用系统 Chrome）：
+无头 Chrome `--screenshot` 渲染 16/32 两档透明 PNG（HTML 里内联同款 SVG，
+配 `--default-background-color=00000000`），Node 脚本拼 PNG-in-ICO
+（ICONDIR + 2×ICONDIRENTRY + PNG blob），`file` 命令验结构。
