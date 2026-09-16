@@ -1,0 +1,179 @@
+/**
+ * 排行榜奥林匹克领奖台 —— 典礼聚光（B 方案定稿）。
+ *
+ * 为什么独立文件、不进 UnoCSS：clip-path / mix-blend-mode / 伪元素关键帧
+ * 工具类扛不住；也不进 liquid-glass.css——那是全站玻璃材料的唯一出处，
+ * 领奖台是页面局部装饰（金银铜任意值，CLAUDE.md 允许）。
+ *
+ * 铁律（2026-09-15 三柱踩坑 + 2026-09-16 demo 定稿）：
+ *   - 禁止 scale 改布局（并列第一曾视觉压叠 4.7px）
+ *   - 禁止 ring（preflight 关了是死类）
+ *   - 禁止在 tsx 写模糊材料（守卫测试钉死，只许 liquid-glass.css）
+ *   - 外卡玻璃、柱身 bg-well，不叠第二层模糊
+ *   - 四人及以上并列第一不走本文件，跌回终榜条带
+ *
+ * 动效三件只打 rank=1：体积光呼吸 / 冰面斜扫 / 珐琅高光慢漂。
+ * 减动效关闭在 responsive.css §7（本文件是全站唯一媒体查询出处的例外：
+ * 关键帧必须跟消费方在一起，关闭仍归 §7）。
+ */
+
+/* ══════════ 舞台光 ══════════ */
+
+/* 体积光：从灯具落下的椭球，screen 叠在冰海上才像光。不是 clip-path 三角形。 */
+.fp-podium-spot {
+  position: absolute;
+  left: 50%;
+  top: -56px;
+  z-index: 0;
+  width: 260px;
+  height: 280px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(ellipse 42% 58% at 50% 12%, rgba(255, 236, 190, 0.42), transparent 62%),
+    radial-gradient(ellipse 70% 90% at 50% 8%, rgba(245, 196, 84, 0.16), transparent 70%);
+  mix-blend-mode: screen;
+  animation: fp-podium-spot-breathe 6.4s ease-in-out infinite;
+}
+
+/* 并列第一：两根金柱，光铺满整台，别只打中间 */
+.fp-podium-spot--tied {
+  width: 100%;
+}
+
+/* 冠军柱井底：顶上那摊被灯打亮的金雾。不是第二层玻璃、没有描边框。 */
+.fp-podium-col--gold {
+  background: radial-gradient(120% 80% at 50% 0%, rgba(245, 196, 84, 0.22), transparent 58%), var(--fp-well);
+}
+
+/* 台面金属脊：银铜 1px 白、冠军 2px 金。静态——呼吸会变成霓虹灯管 */
+.fp-podium-ridge {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  pointer-events: none;
+}
+.fp-podium-col--gold .fp-podium-ridge {
+  height: 2px;
+  left: 8%;
+  right: 8%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 246, 208, 0.9),
+    #f5c454,
+    rgba(255, 246, 208, 0.9),
+    transparent
+  );
+}
+
+@keyframes fp-podium-spot-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 台身梯形：东京奥运领奖台正面直译。金银铜是冻在冰里的金属脈，不是平涂块。 */
+.fp-podium-ped {
+  position: relative;
+  overflow: hidden;
+  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 46%), rgba(255, 255, 255, 0.04);
+}
+.fp-podium-ped--gold {
+  background:
+    linear-gradient(180deg, rgba(245, 196, 84, 0.32), transparent 48%),
+    repeating-linear-gradient(115deg, transparent 0 8px, rgba(245, 196, 84, 0.1) 8px 9px), rgba(245, 196, 84, 0.08);
+}
+.fp-podium-ped--silver {
+  background: linear-gradient(180deg, rgba(201, 214, 226, 0.18), transparent 50%), rgba(201, 214, 226, 0.05);
+}
+.fp-podium-ped--bronze {
+  background: linear-gradient(180deg, rgba(205, 138, 84, 0.18), transparent 50%), rgba(205, 138, 84, 0.06);
+}
+
+/* 冠军冰面斜扫：跟 .fp-glass-specular 同物理——8s 一轮，55% 之后静止。
+   宽而柔，不是硬边扫码枪。只挂在 rank=1 的台身上。 */
+.fp-podium-ped--gold::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 28%,
+    rgba(255, 255, 255, 0.05) 42%,
+    rgba(255, 246, 208, 0.18) 50%,
+    rgba(255, 255, 255, 0.05) 58%,
+    transparent 72%
+  );
+  transform: translateX(-120%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: fp-podium-ice-sheen 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes fp-podium-ice-sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  55%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+/* 奖牌掉落：只位移、不 scale、不回弹。delay 按银→金→铜错开 */
+.fp-podium-drop {
+  animation: fp-podium-drop 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.fp-podium-drop--2 {
+  animation-delay: 0.05s;
+}
+.fp-podium-drop--1 {
+  animation-delay: 0.16s;
+}
+.fp-podium-drop--3 {
+  animation-delay: 0.26s;
+}
+@keyframes fp-podium-drop {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* 冠军奖牌：金底 + 左上珐琅高光慢漂。金属被灯扫过，章没转。宿主必须 overflow:hidden */
+.fp-podium-medal--gold {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at 32% 28%, rgba(255, 246, 208, 0.95) 0 8%, transparent 40%), #f5c454;
+}
+.fp-podium-medal--gold::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.55) 0 8%, transparent 32%);
+  pointer-events: none;
+  animation: fp-podium-enamel 7.2s ease-in-out infinite;
+}
+
+@keyframes fp-podium-enamel {
+  0%,
+  100% {
+    transform: translate(-6%, -4%);
+  }
+  50% {
+    transform: translate(10%, 8%);
+  }
+}

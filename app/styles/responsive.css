@@ -57,6 +57,13 @@
     padding: 16px !important;
   }
 
+  /* 领奖台体积光：窄屏缩一档，别把银铜也罩进金雾 */
+  .fp-podium-spot {
+    width: 220px;
+    height: 200px;
+    top: -36px;
+  }
+
   /* ══════════ 2. 显隐工具类（spec §7.1）══════════ */
 
   .fp-desktop {
@@ -413,6 +420,15 @@
      位移是装饰，阴影两端都留（宪法 §5）。色雾/高光的冻结在 liquid-glass.css §7 */
   .fp-glass {
     transform: none !important;
+  }
+
+  /* 领奖台三件克制动效 + 奖牌掉落：关掉不损失名次信息。
+     体积光椭球留下（静止在初始亮度），冰面斜扫 / 珐琅漂移停 */
+  .fp-podium-spot,
+  .fp-podium-ped--gold::after,
+  .fp-podium-medal--gold::after,
+  .fp-podium-drop {
+    animation: none;
   }
 }
 

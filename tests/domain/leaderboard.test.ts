@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeLeaderboard,
+  isOlympicPodium,
   rankLeaderboard,
   splitPodium,
 } from "~/domain/leaderboard";
@@ -206,5 +207,62 @@ describe("splitPodium 切终榜条带", () => {
 
   it("空榜三组全空", () => {
     expect(splitPodium([])).toEqual({ leads: [], rest: [], tape: [] });
+  });
+});
+
+/**
+ * 奥林匹克三柱装得下才走领奖台：领先档 + 其余前三合计 ≤ 3。
+ * 四人及以上并列第一三柱装不下，跌回终榜条带（splitPodium 的 leads 仍全吃，
+ * UI 用这个布尔决定渲染哪套，不改切分口径）。
+ */
+describe("isOlympicPodium 三柱门槛", () => {
+  it("无并列 1/2/3：走三柱", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 13_000_000 }),
+      mk({ userId: 2, cashCents: 12_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+      mk({ userId: 4, cashCents: 10_500_000 }),
+    ]), "pnl"));
+    expect(isOlympicPodium(leads, rest)).toBe(true);
+  });
+
+  it("两人并列第一 + 第三人：走三柱（两金一台）", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 12_000_000 }),
+      mk({ userId: 2, cashCents: 12_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(isOlympicPodium(leads, rest)).toBe(true);
+  });
+
+  it("三人并列第一：走三柱（三金）", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 11_000_000 }),
+      mk({ userId: 2, cashCents: 11_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(isOlympicPodium(leads, rest)).toBe(true);
+  });
+
+  it("四人并列第一：跌回终榜条带", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 11_000_000 }),
+      mk({ userId: 2, cashCents: 11_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+      mk({ userId: 4, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(leads).toHaveLength(4);
+    expect(isOlympicPodium(leads, rest)).toBe(false);
+  });
+
+  it("榜上只有一人：走三柱（单金）", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(isOlympicPodium(leads, rest)).toBe(true);
+  });
+
+  it("空榜：false", () => {
+    expect(isOlympicPodium([], [])).toBe(false);
   });
 });

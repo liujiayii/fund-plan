@@ -132,3 +132,18 @@ export function splitPodium(entries: LeaderboardEntry[]): {
     tape: entries.slice(i),
   };
 }
+
+/**
+ * 奥林匹克三柱装得下才走领奖台。
+ *
+ * 领先档 + 其余前三合计 ≤ 3：无并列 / 两人并列第一 / 三人并列第一都走三柱；
+ * 四人及以上并列第一三柱装不下，UI 跌回终榜条带。
+ * 空榜 false——没有人可站。不改 splitPodium 的切分口径。
+ */
+export function isOlympicPodium(
+  leads: LeaderboardEntry[],
+  rest: LeaderboardEntry[],
+): boolean {
+  const n = leads.length + rest.length;
+  return n > 0 && n <= 3;
+}

@@ -278,15 +278,16 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 
 ### 新增样式优先 UnoCSS 工具类（2026-09-08 起的规约）
 
-新增样式一律优先工具类，**不要再新增内联 `style={{}}`、不新建 CSS 文件**：
+新增样式一律优先工具类，**不要再新增内联 `style={{}}`**。手写 CSS 只留给工具类扛不住的场景（antd 内部类覆盖、媒体查询、clip-path / mix-blend / 伪元素关键帧），色值用 `var(--fp-*)`：
 
-| 场景                        | 写法                                          | 例                                                                                                                                     |
-| --------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 静态样式                    | 工具类                                        | `style={{ fontSize: 12, color: COLOR.textSecondary }}` → `className="text-xs text-muted"`                                              |
-| token 色                    | 主题类（uno.config 从 theme.ts 全量映射）     | `text-ink` `text-muted` `text-rise` `text-fall` `text-flat` `bg-card` `bg-page` `border-line` `bg-primary-bg` `font-num` `shadow-card` |
-| 有限值域动态                | 条件类（分支互斥，别让同类属性两分支同挂）    | `style={{ color: pnlColor(v) }}` → `className={v > 0 ? "text-rise" : v < 0 ? "text-fall" : "text-flat"}`                               |
-| 连续值动态                  | 仍允许内联（构建期系统数不出无限个值）        | `style={{ width: `${pct}%` }}`                                                                                                         |
-| 覆盖 antd 内部类 / 媒体查询 | 仍走 `app/styles/*.css`，色值用 `var(--fp-*)` | `.ant-card-body` 覆盖、responsive.css                                                                                                  |
+| 场景                         | 写法                                          | 例                                                                                                                                     |
+| ---------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 静态样式                     | 工具类                                        | `style={{ fontSize: 12, color: COLOR.textSecondary }}` → `className="text-xs text-muted"`                                              |
+| token 色                     | 主题类（uno.config 从 theme.ts 全量映射）     | `text-ink` `text-muted` `text-rise` `text-fall` `text-flat` `bg-card` `bg-page` `border-line` `bg-primary-bg` `font-num` `shadow-card` |
+| 有限值域动态                 | 条件类（分支互斥，别让同类属性两分支同挂）    | `style={{ color: pnlColor(v) }}` → `className={v > 0 ? "text-rise" : v < 0 ? "text-fall" : "text-flat"}`                               |
+| 连续值动态                   | 仍允许内联（构建期系统数不出无限个值）        | `style={{ width: `${pct}%` }}`                                                                                                         |
+| 覆盖 antd 内部类 / 媒体查询  | 仍走 `app/styles/*.css`，色值用 `var(--fp-*)` | `.ant-card-body` 覆盖、responsive.css                                                                                                  |
+| 领奖台 clip-path / mix-blend | `app/styles/podium.css`（UnoCSS 扛不住）      | `/leaderboard` 典礼聚光三柱；减动效归 responsive.css §7                                                                                |
 
 - 颜色不写裸值（`text-[#8a9099]` 禁用），一律主题类；页面局部装饰色（如排行榜金银铜）可用任意值
 - `theme.ts` 加新 token 时**必须同步** `uno.config.ts` 的 theme 映射

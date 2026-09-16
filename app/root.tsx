@@ -39,6 +39,10 @@ import "virtual:uno.css";
 // 液态玻璃材料层（色雾 / .fp-glass / 高光 / 降级）：全站唯一的模糊材料出处（守卫测试钉死），
 // 排在 virtual:uno.css 之后（材料压过工具类）、responsive.css 之前（壳的媒体查询最后说话）
 import "./styles/liquid-glass.css";
+// 排行榜奥林匹克领奖台（典礼聚光）：clip-path / mix-blend / 伪元素关键帧
+// 工具类扛不住，独立文件、不进玻璃材料层。排在 glass 之后、responsive 之前——
+// §7 减动效才能压过本文件的 animation
+import "./styles/podium.css";
 // 期五移动端适配：唯一的媒体查询出处，必须排在 UnoCSS 之后
 // 才能覆盖工具类与 antd 组件类（顺序理由见该文件头注释）
 import "./styles/responsive.css";
