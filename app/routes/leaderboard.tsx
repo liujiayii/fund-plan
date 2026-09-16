@@ -189,8 +189,9 @@ function TopSpot({
 /**
  * 前三名：典礼聚光奥林匹克三柱（2026-09-16 定稿）。
  *
- * 领先档 + 其余前三合计 ≤ 3 才走三柱；四人及以上并列第一跌回终榜条带
- * （isOlympicPodium）。splitPodium 的切分口径不动。
+ * 领先档 + 其余前三合计 ≤ 3 才走三柱（三柱最多站 3 人）。
+ * 四人并列第一 / 1/2/3/3 / 1/2/2/2 都跌回终榜条带（isOlympicPodium）。
+ * splitPodium 的切分口径不动。
  *
  * 三柱底对齐、桌面视觉序银-金-铜（CSS order），高度即名次。
  * 禁止 scale。每柱一口井，外卡才是玻璃——宪法「一卡多格」。
@@ -242,12 +243,16 @@ function Podium({
 
   const cols = [...leads, ...rest];
   const goldCount = leads.length;
-  // 窄屏：单冠军通栏 + 银铜并排；两金+铜则金|金、铜通栏；三金竖叠。
-  // 两人及以下直接 flex，别让第二根掉半宽空着。
-  const splitMobile = goldCount === 1 && cols.length > 1;
-  const tiedWithRest = goldCount > 1 && rest.length > 0;
-  const threeGolds = goldCount === 3;
-  // 1/2/2 时第二根银要 md:order-3，否则两银都 order-1、金被挤到最右
+  const n = cols.length;
+  // 窄屏：
+  //   经典三人（单金+银铜）→ 冠军通栏 + 银铜并排
+  //   两金+铜 / 三金 / 两金无铜 → 全竖叠（半宽并排会把 18px 英雄数字挤爆）
+  //   两人及以下（单金 / 金+银 / 金+铜）直接 flex，别让第二根掉半宽空着
+  const classicThree = goldCount === 1 && n === 3;
+  const stackMobile = goldCount > 1 && n >= 2;
+  // 1/2/2 时第二根银要 md:order-3，否则两银都 order-1、金被挤到最右。
+  // 只有恰好三人时才 reorder：两人台套 1/2/3 的 order 会把唯一冠军挤到最右。
+  const reorderDesktop = goldCount === 1 && n === 3;
   const firstSilver = cols.find(c => c.rank === 2);
 
   return (
@@ -259,9 +264,9 @@ function Podium({
         aria-hidden
       />
       <div className={`relative z-[1] gap-2 md:flex md:flex-row md:items-end md:gap-3 ${
-        threeGolds
+        stackMobile
           ? "flex flex-col"
-          : splitMobile || tiedWithRest
+          : classicThree
             ? "grid grid-cols-2 items-end"
             : "flex items-end"
       }`}
@@ -270,21 +275,19 @@ function Podium({
           const isMe = meId !== null && e.userId === meId;
           const m = MEDAL[e.rank] ?? MEDAL[3];
           const isGold = e.rank === 1;
-          // 桌面 order：
-          //   经典 1/2/3 → 金居中银左铜右（md:order 2/1/3）
-          //   1/2/2     → 第一根银左、金中、第二根银右（否则两银都 order-1，金被挤到最右）
-          //   并列第一   → 不 reorder，领先档按 DOM 相邻并排，别把两根金柱拆开
-          const order = goldCount !== 1
+          // 桌面 order 只在恰好三人、单冠军时把金居中：
+          //   1/2/3 → 银左金中铜右
+          //   1/2/2 → 第一根银左、金中、第二根银右
+          // 两人台 / 并列第一不 reorder（两人套 2/1 会把冠军挤到最右）
+          const order = !reorderDesktop
             ? ""
             : e.rank === 1
               ? "md:order-2"
               : e.rank === 2
                 ? (e === firstSilver ? "md:order-1" : "md:order-3")
                 : "md:order-3";
-          // 通栏：单冠军自己；或「只剩一根非金」——半宽空着难看
-          const fullMobile = (isGold && splitMobile)
-            || (!isGold && (tiedWithRest || (splitMobile && rest.length === 1)));
-          const mobileSpan = fullMobile ? "col-span-2 mb-2 last:mb-0 md:mb-0" : "";
+          // 经典三人窄屏：冠军通栏，银铜并排
+          const mobileSpan = classicThree && isGold ? "col-span-2 mb-2 md:mb-0" : "";
           const heroIsRate = metric === "rate";
           const hero = heroIsRate ? fmtRate(e.totalPnlRate) : fmtSignedYuan(e.totalPnlCents);
           const heroTone = pnlTone(heroIsRate ? e.totalPnlRate : e.totalPnlCents);

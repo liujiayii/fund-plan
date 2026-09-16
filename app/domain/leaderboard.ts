@@ -136,9 +136,10 @@ export function splitPodium(entries: LeaderboardEntry[]): {
 /**
  * 奥林匹克三柱装得下才走领奖台。
  *
- * 领先档 + 其余前三合计 ≤ 3：无并列 / 两人并列第一 / 三人并列第一都走三柱；
- * 四人及以上并列第一三柱装不下，UI 跌回终榜条带。
- * 空榜 false——没有人可站。不改 splitPodium 的切分口径。
+ * 门槛是 rank ≤ 3 合计 ≤ 3（三柱最多站 3 人），不是「只有四人并列第一才跌回」。
+ * 1/2/3、两人并列第一、三人并列第一都走三柱；
+ * 四人并列第一、1/2/3/3、1/2/2/2 都装不下——绝不能 slice(0,3)，
+ * 否则并列的人会从台上消失。空榜 false。不改 splitPodium 的切分口径。
  */
 export function isOlympicPodium(
   leads: LeaderboardEntry[],
