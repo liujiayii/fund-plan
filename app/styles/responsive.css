@@ -57,11 +57,16 @@
     padding: 16px !important;
   }
 
-  /* 领奖台体积光：窄屏缩一档，别把银铜也罩进金雾 */
+  /* 领奖台体积光：窄屏缩一档，别把银铜也罩进金雾。
+     并列第一必须再声明 width:100%——本规则排 podium.css 之后，
+     不加重申会把 .fp-podium-spot--tied 的全宽盖回 220px */
   .fp-podium-spot {
     width: 220px;
     height: 200px;
     top: -36px;
+  }
+  .fp-podium-spot.fp-podium-spot--tied {
+    width: 100%;
   }
 
   /* ══════════ 2. 显隐工具类（spec §7.1）══════════ */

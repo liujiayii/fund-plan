@@ -247,6 +247,8 @@ function Podium({
   const splitMobile = goldCount === 1 && cols.length > 1;
   const tiedWithRest = goldCount > 1 && rest.length > 0;
   const threeGolds = goldCount === 3;
+  // 1/2/2 时第二根银要 md:order-3，否则两银都 order-1、金被挤到最右
+  const firstSilver = cols.find(c => c.rank === 2);
 
   return (
     // pt-5：奖牌掉落 translateY(-20px) 的进场余量；overflow 裁体积光伸出的部分
@@ -268,13 +270,17 @@ function Podium({
           const isMe = meId !== null && e.userId === meId;
           const m = MEDAL[e.rank] ?? MEDAL[3];
           const isGold = e.rank === 1;
-          // 桌面 order 只在经典 1/2/3 时把金居中（银左铜右）。
-          // 并列第一按 DOM（领先档相邻）并排，别把两根金柱拆开。
+          // 桌面 order：
+          //   经典 1/2/3 → 金居中银左铜右（md:order 2/1/3）
+          //   1/2/2     → 第一根银左、金中、第二根银右（否则两银都 order-1，金被挤到最右）
+          //   并列第一   → 不 reorder，领先档按 DOM 相邻并排，别把两根金柱拆开
           const order = goldCount !== 1
             ? ""
             : e.rank === 1
               ? "md:order-2"
-              : e.rank === 2 ? "md:order-1" : "md:order-3";
+              : e.rank === 2
+                ? (e === firstSilver ? "md:order-1" : "md:order-3")
+                : "md:order-3";
           // 通栏：单冠军自己；或「只剩一根非金」——半宽空着难看
           const fullMobile = (isGold && splitMobile)
             || (!isGold && (tiedWithRest || (splitMobile && rest.length === 1)));
