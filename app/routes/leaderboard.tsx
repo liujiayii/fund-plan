@@ -311,18 +311,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
             )
           : (
               <Tabs
-                defaultActiveKey="rate"
+                defaultActiveKey="pnl"
                 items={[
-                  {
-                    key: "rate",
-                    label: "收益率榜",
-                    children: (
-                      <>
-                        <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} metric="rate" />
-                        <ListTape entries={rateBoard.tape} meId={meId} />
-                      </>
-                    ),
-                  },
                   {
                     key: "pnl",
                     label: "总收益榜",
@@ -330,6 +320,16 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                       <>
                         <Podium leads={pnlBoard.leads} rest={pnlBoard.rest} meId={meId} metric="pnl" />
                         <ListTape entries={pnlBoard.tape} meId={meId} />
+                      </>
+                    ),
+                  },
+                  {
+                    key: "rate",
+                    label: "收益率榜",
+                    children: (
+                      <>
+                        <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} metric="rate" />
+                        <ListTape entries={rateBoard.tape} meId={meId} />
                       </>
                     ),
                   },
