@@ -12,6 +12,8 @@ const COOKIE_NAME = "session";
 /** 会话有效期：30 天 */
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_TTL_SEC = SESSION_TTL_MS / 1000;
+/** 活跃时间节流：5 分钟内同一用户只落盘一次，避免每个 loader 都打 UPDATE */
+const LAST_ACTIVE_THROTTLE_MS = 5 * 60 * 1000;
 
 /** 创建会话，返回 token */
 export async function createSession(db: Db, userId: number): Promise<string> {
@@ -41,6 +43,7 @@ export async function readSession(
       expiresAt: session.expiresAt,
       username: user.username,
       role: user.role,
+      lastActiveAt: user.lastActiveAt,
     })
     .from(session)
     .innerJoin(user, eq(session.userId, user.id))
@@ -51,10 +54,20 @@ export async function readSession(
   if (!row)
     return null;
 
-  // 过期：清理并视为未登录
-  if (row.expiresAt <= Date.now()) {
+  const now = Date.now();
+  // 过期：清理并视为未登录——过期会话不算活跃，别刷 last_active_at
+  if (row.expiresAt <= now) {
     await db.delete(session).where(eq(session.token, token));
     return null;
+  }
+
+  // 从没记过、或距上次落盘已超过节流窗口，才写一次。
+  // 窗口内多一次 SELECT 零成本（原查询加一列），UPDATE 最多 5 分钟一次。
+  if (row.lastActiveAt === null || now - row.lastActiveAt > LAST_ACTIVE_THROTTLE_MS) {
+    await db
+      .update(user)
+      .set({ lastActiveAt: now })
+      .where(eq(user.id, row.userId));
   }
 
   return { userId: row.userId, username: row.username, role: row.role };

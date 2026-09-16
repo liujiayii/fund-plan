@@ -36,6 +36,8 @@ export interface UserOverview {
   orderCount: number;
   /** 注册时间戳（毫秒） */
   createdAt: number;
+  /** 最后活跃时间戳（毫秒）。从没带会话进过站的为 null */
+  lastActiveAt: number | null;
 }
 
 /** /admin 顶部全局统计卡 */
@@ -116,6 +118,7 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
       totalPnlCents: summary.totalPnlCents,
       orderCount: countMap.get(u.id) ?? 0,
       createdAt: u.createdAt,
+      lastActiveAt: u.lastActiveAt,
     };
   });
 }

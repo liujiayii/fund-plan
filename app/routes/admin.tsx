@@ -82,6 +82,16 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
       render: v => toBeijing(new Date(v)).format("YYYY-MM-DD"),
     },
     {
+      // 登录访问才记；存量 / 从没带会话进过站的为 null，跟注册来源同一套 —
+      title: "最后活跃",
+      dataIndex: "lastActiveAt",
+      width: 140,
+      render: (v: number | null) =>
+        v == null
+          ? <Typography.Text type="secondary">—</Typography.Text>
+          : toBeijing(new Date(v)).format("YYYY-MM-DD HH:mm"),
+    },
+    {
       // 注册来源：排查「这号是谁/是不是脚本」的第一手证据。
       // UA 全串太长，悬浮才展示；IP/地区常显。存量用户（加列之前注册）显示 —
       title: "注册来源",
@@ -135,7 +145,7 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
           dataSource={users}
           pagination={false}
           size="middle"
-          scroll={{ x: 880 }}
+          scroll={{ x: 1020 }}
         />
       </SectionCard>
     </Space>

@@ -193,6 +193,71 @@ describe("会话管理", () => {
     await destroySession(db, token);
     expect(await readSession(db, token)).toBeNull();
   });
+
+  it("注册后 lastActiveAt 仍为空——登录访问才记活跃", async () => {
+    const db = getDb(env.DB);
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const row = await db.query.user.findFirst({ where: eq(user.id, reg.id) });
+    expect(row!.lastActiveAt).toBeNull();
+  });
+
+  it("读有效会话时把 lastActiveAt 从空写成现在", async () => {
+    const db = getDb(env.DB);
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const token = await createSession(db, reg.id);
+
+    const before = Date.now();
+    await readSession(db, token);
+    const row = await db.query.user.findFirst({ where: eq(user.id, reg.id) });
+    expect(row!.lastActiveAt).not.toBeNull();
+    expect(row!.lastActiveAt!).toBeGreaterThanOrEqual(before);
+    expect(row!.lastActiveAt!).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("5 分钟内再读会话不刷新 lastActiveAt", async () => {
+    const db = getDb(env.DB);
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const token = await createSession(db, reg.id);
+
+    // 假装刚活跃过：距现在 1 分钟，还在节流窗口里
+    const stamped = Date.now() - 60_000;
+    await db.update(user).set({ lastActiveAt: stamped }).where(eq(user.id, reg.id));
+
+    await readSession(db, token);
+    const row = await db.query.user.findFirst({ where: eq(user.id, reg.id) });
+    expect(row!.lastActiveAt).toBe(stamped);
+  });
+
+  it("超过 5 分钟再读会话才刷新 lastActiveAt", async () => {
+    const db = getDb(env.DB);
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const token = await createSession(db, reg.id);
+
+    // 假装上次活跃是 6 分钟前，已出节流窗口
+    const stale = Date.now() - 6 * 60_000;
+    await db.update(user).set({ lastActiveAt: stale }).where(eq(user.id, reg.id));
+
+    const before = Date.now();
+    await readSession(db, token);
+    const row = await db.query.user.findFirst({ where: eq(user.id, reg.id) });
+    expect(row!.lastActiveAt!).toBeGreaterThanOrEqual(before);
+    expect(row!.lastActiveAt!).toBeGreaterThan(stale);
+  });
+
+  it("过期会话不刷 lastActiveAt", async () => {
+    const db = getDb(env.DB);
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const token = await createSession(db, reg.id);
+
+    await db
+      .update(session)
+      .set({ expiresAt: Date.now() - 1000 })
+      .where(eq(session.token, token));
+
+    expect(await readSession(db, token)).toBeNull();
+    const row = await db.query.user.findFirst({ where: eq(user.id, reg.id) });
+    expect(row!.lastActiveAt).toBeNull();
+  });
 });
 
 describe("Cookie 序列化", () => {

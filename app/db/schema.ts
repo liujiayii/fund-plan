@@ -86,6 +86,11 @@ export const user = sqliteTable("user", {
   registerCountry: text("register_country"),
   /** 注册地：城市（cf.city，如 "Guangzhou"） */
   registerCity: text("register_city"),
+  /**
+   * 最后活跃时间戳（毫秒）。登录访问才记，注册不写。
+   * 存量用户 / 从没带会话进过站的为 NULL。
+   */
+  lastActiveAt: integer("last_active_at"),
   createdAt: integer("created_at").notNull(),
 });
 
