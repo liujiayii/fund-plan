@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeLeaderboard,
+  isOlympicPodium,
   rankLeaderboard,
   splitPodium,
 } from "~/domain/leaderboard";
@@ -206,5 +207,87 @@ describe("splitPodium 切终榜条带", () => {
 
   it("空榜三组全空", () => {
     expect(splitPodium([])).toEqual({ leads: [], rest: [], tape: [] });
+  });
+});
+
+/**
+ * 奥林匹克三柱装得下才走领奖台：rank ≤ 3 合计 ≤ 3。
+ * 三柱最多站 3 人——四人并列第一、1/2/3/3、1/2/2/2 都装不下，
+ * 整台跌回终榜条带（不能 slice(0,3)，否则并列的人会从台上消失）。
+ * splitPodium 的切分口径不动，UI 只拿这个布尔决定渲染哪套。
+ */
+describe("isOlympicPodium 三柱门槛", () => {
+  it("无并列 1/2/3：走三柱", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 13_000_000 }),
+      mk({ userId: 2, cashCents: 12_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+      mk({ userId: 4, cashCents: 10_500_000 }),
+    ]), "pnl"));
+    expect(isOlympicPodium(leads, rest)).toBe(true);
+  });
+
+  it("两人并列第一 + 第三人：走三柱（两金一台）", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 12_000_000 }),
+      mk({ userId: 2, cashCents: 12_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(isOlympicPodium(leads, rest)).toBe(true);
+  });
+
+  it("三人并列第一：走三柱（三金）", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 11_000_000 }),
+      mk({ userId: 2, cashCents: 11_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(isOlympicPodium(leads, rest)).toBe(true);
+  });
+
+  it("四人并列第一：跌回终榜条带", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 11_000_000 }),
+      mk({ userId: 2, cashCents: 11_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+      mk({ userId: 4, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(leads).toHaveLength(4);
+    expect(isOlympicPodium(leads, rest)).toBe(false);
+  });
+
+  it("1/2/3/3 两人并列第三：合计 4 人装不下，跌回条带", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 13_000_000 }),
+      mk({ userId: 2, cashCents: 12_000_000 }),
+      mk({ userId: 3, cashCents: 11_000_000 }),
+      mk({ userId: 4, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(leads).toHaveLength(1);
+    expect(rest).toHaveLength(3);
+    expect(isOlympicPodium(leads, rest)).toBe(false);
+  });
+
+  it("1/2/2/2 三人并列第二：合计 4 人装不下，跌回条带", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 13_000_000 }),
+      mk({ userId: 2, cashCents: 12_000_000 }),
+      mk({ userId: 3, cashCents: 12_000_000 }),
+      mk({ userId: 4, cashCents: 12_000_000 }),
+    ]), "pnl"));
+    expect(leads).toHaveLength(1);
+    expect(rest).toHaveLength(3);
+    expect(isOlympicPodium(leads, rest)).toBe(false);
+  });
+
+  it("榜上只有一人：走三柱（单金）", () => {
+    const { leads, rest } = splitPodium(rankLeaderboard(computeLeaderboard([
+      mk({ userId: 1, cashCents: 11_000_000 }),
+    ]), "pnl"));
+    expect(isOlympicPodium(leads, rest)).toBe(true);
+  });
+
+  it("空榜：false", () => {
+    expect(isOlympicPodium([], [])).toBe(false);
   });
 });

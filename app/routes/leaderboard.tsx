@@ -5,7 +5,7 @@ import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
-import { splitPodium } from "~/domain/leaderboard";
+import { isOlympicPodium, splitPodium } from "~/domain/leaderboard";
 import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
@@ -35,9 +35,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 type RankMetric = "rate" | "pnl";
 
 /**
- * 名次色——页面局部装饰，不进 theme.ts。
- * 只当「赛道彩条」用：左边 4px 竖杠 + 浅洗底 + 号码布颜色。
- * 金偏暖、银贴冰川冰调、铜偏陶。禁止再做成实心圆奖牌。
+ * 终榜条带的名次色——四人及以上并列第一才走条带。
+ * 金偏暖、银贴冰川冰调、铜偏陶。页面局部装饰，不进 theme.ts。
  */
 const PLACE: Record<number, { bar: string; wash: string; bib: string }> = {
   1: {
@@ -54,6 +53,48 @@ const PLACE: Record<number, { bar: string; wash: string; bib: string }> = {
     bar: "border-l-[#CD8A54]",
     wash: "bg-[#CD8A54]/10",
     bib: "text-[#CD8A54]",
+  },
+};
+
+/**
+ * 奥林匹克三柱元数据：奖牌底 / 台身高度 / 水印字号按名次递减——
+ * 「高度即名次」是领奖台的全部形态语言。
+ * 金银铜是页面局部装饰色，不入 theme.ts。
+ * 水印用 text-[Npx] 而非 text-3xl——档位类会连 line-height 一起设。
+ *
+ * ⚠️ 描边用 border 而非 ring——本项目 uno 关了 preflights.reset，
+ * Wind4 的 ring 是死类（box-shadow 全零透明），border-* 也只出宽度、
+ * style 走未定义的 --un-border-style 回退 none。四边都有 2px 时
+ * [border-style:solid] 补上无 medium 副作用。禁止 md:scale-* 强调金牌——
+ * 原生 scale 不改布局，并列第一曾视觉压叠 4.7px。
+ */
+const MEDAL: Record<number, {
+  ped: string;
+  pedH: string;
+  watermark: string;
+  badge: string;
+  drop: string;
+}> = {
+  1: {
+    ped: "fp-podium-ped--gold",
+    pedH: "min-h-[56px] md:min-h-[96px]",
+    watermark: "text-[#F5C454] text-[32px] md:text-[56px]",
+    badge: "fp-podium-medal--gold",
+    drop: "fp-podium-drop--1",
+  },
+  2: {
+    ped: "fp-podium-ped--silver",
+    pedH: "min-h-[40px] md:min-h-[58px]",
+    watermark: "text-[#C9D6E2] text-[24px] md:text-[40px]",
+    badge: "bg-[#C9D6E2]",
+    drop: "fp-podium-drop--2",
+  },
+  3: {
+    ped: "fp-podium-ped--bronze",
+    pedH: "min-h-[28px] md:min-h-[40px]",
+    watermark: "text-[#CD8A54] text-[20px] md:text-[32px]",
+    badge: "bg-[#CD8A54]",
+    drop: "fp-podium-drop--3",
   },
 };
 
@@ -146,14 +187,16 @@ function TopSpot({
 }
 
 /**
- * 前三名：终榜条带。
+ * 前三名：典礼聚光奥林匹克三柱（2026-09-16 定稿）。
  *
- * 完全抛弃 2026-09-15 的奥林匹克三柱（高度水印 / 圆奖牌 / CSS order / scale）。
- * 那套的病根是「三列 flex + 视觉缩放」——并列第一会压叠，窄屏柱宽 ~90px
- * 数字折行。本版按 competition ranking 切两层：
- *   1. 领先档（含全部并列第一）全宽条带纵向堆
- *   2. 其余 rank ≤ 3 进 md 双列网格；< md 竖叠，永不并排挤
- * 每条一口井（洗底，不是玻璃），外卡才是玻璃——宪法「一卡多格」。
+ * 领先档 + 其余前三合计 ≤ 3 才走三柱（三柱最多站 3 人）。
+ * 四人并列第一 / 1/2/3/3 / 1/2/2/2 都跌回终榜条带（isOlympicPodium）。
+ * splitPodium 的切分口径不动。
+ *
+ * 三柱底对齐、桌面视觉序银-金-铜（CSS order），高度即名次。
+ * 禁止 scale。每柱一口井，外卡才是玻璃——宪法「一卡多格」。
+ * 戏全给 rank=1：软椭球体积光 + 金冰台身 + 金属脊 + 三件克制动效。
+ * 狭屏改「冠军通栏 + 银铜并排」，从根上折断 90px 挤爆。
  */
 function Podium({
   leads,
@@ -169,31 +212,137 @@ function Podium({
   if (leads.length === 0)
     return null;
 
+  if (!isOlympicPodium(leads, rest)) {
+    return (
+      <div className="mb-4 flex flex-col gap-2">
+        {leads.map(e => (
+          <TopSpot
+            key={e.userId}
+            entry={e}
+            meId={meId}
+            metric={metric}
+            featured
+          />
+        ))}
+        {rest.length > 0 && (
+          <div className={rest.length === 2 ? "grid grid-cols-1 gap-2 md:grid-cols-2" : "flex flex-col gap-2"}>
+            {rest.map(e => (
+              <TopSpot
+                key={e.userId}
+                entry={e}
+                meId={meId}
+                metric={metric}
+                featured={false}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const cols = [...leads, ...rest];
+  const goldCount = leads.length;
+  const n = cols.length;
+  // 窄屏：
+  //   经典三人（单金+银铜）→ 冠军通栏 + 银铜并排
+  //   两金+铜 / 三金 / 两金无铜 → 全竖叠（半宽并排会把 18px 英雄数字挤爆）
+  //   两人及以下（单金 / 金+银 / 金+铜）直接 flex，别让第二根掉半宽空着
+  const classicThree = goldCount === 1 && n === 3;
+  const stackMobile = goldCount > 1 && n >= 2;
+  // 1/2/2 时第二根银要 md:order-3，否则两银都 order-1、金被挤到最右。
+  // 只有恰好三人时才 reorder：两人台套 1/2/3 的 order 会把唯一冠军挤到最右。
+  const reorderDesktop = goldCount === 1 && n === 3;
+  const firstSilver = cols.find(c => c.rank === 2);
+
   return (
-    <div className="mb-4 flex flex-col gap-2">
-      {leads.map(e => (
-        <TopSpot
-          key={e.userId}
-          entry={e}
-          meId={meId}
-          metric={metric}
-          featured
-        />
-      ))}
-      {rest.length > 0 && (
-        // 两人并排才开双列；只剩一人（并列第一挤掉一格）别让它在桌面占半宽空着
-        <div className={rest.length === 2 ? "grid grid-cols-1 gap-2 md:grid-cols-2" : "flex flex-col gap-2"}>
-          {rest.map(e => (
-            <TopSpot
+    // pt-5：奖牌掉落 translateY(-20px) 的进场余量；overflow 裁体积光伸出的部分
+    <div className="relative mb-5 overflow-hidden pt-5">
+      {/* 体积光椭球：并列第一铺满整台，单冠军打中间 */}
+      <div
+        className={`fp-podium-spot ${goldCount > 1 ? "fp-podium-spot--tied" : ""}`}
+        aria-hidden
+      />
+      <div className={`relative z-[1] gap-2 md:flex md:flex-row md:items-end md:gap-3 ${
+        stackMobile
+          ? "flex flex-col"
+          : classicThree
+            ? "grid grid-cols-2 items-end"
+            : "flex items-end"
+      }`}
+      >
+        {cols.map((e) => {
+          const isMe = meId !== null && e.userId === meId;
+          const m = MEDAL[e.rank] ?? MEDAL[3];
+          const isGold = e.rank === 1;
+          // 桌面 order 只在恰好三人、单冠军时把金居中：
+          //   1/2/3 → 银左金中铜右
+          //   1/2/2 → 第一根银左、金中、第二根银右
+          // 两人台 / 并列第一不 reorder（两人套 2/1 会把冠军挤到最右）
+          const order = !reorderDesktop
+            ? ""
+            : e.rank === 1
+              ? "md:order-2"
+              : e.rank === 2
+                ? (e === firstSilver ? "md:order-1" : "md:order-3")
+                : "md:order-3";
+          // 经典三人窄屏：冠军通栏，银铜并排
+          const mobileSpan = classicThree && isGold ? "col-span-2 mb-2 md:mb-0" : "";
+          const heroIsRate = metric === "rate";
+          const hero = heroIsRate ? fmtRate(e.totalPnlRate) : fmtSignedYuan(e.totalPnlCents);
+          const heroTone = pnlTone(heroIsRate ? e.totalPnlRate : e.totalPnlCents);
+          const sub = heroIsRate ? fmtSignedYuan(e.totalPnlCents) : fmtRate(e.totalPnlRate);
+          const subTone = pnlTone(heroIsRate ? e.totalPnlCents : e.totalPnlRate);
+
+          return (
+            <article
               key={e.userId}
-              entry={e}
-              meId={meId}
-              metric={metric}
-              featured={false}
-            />
-          ))}
-        </div>
-      )}
+              className={`relative flex w-full min-w-0 flex-col items-center rounded-2xl md:flex-1 ${
+                isGold ? "fp-podium-col--gold" : isMe ? "bg-primary-bg" : "bg-well"
+              } ${order} ${mobileSpan}`}
+            >
+              <span className="fp-podium-ridge" aria-hidden />
+              {/* 奖牌：圆形实底 + 深海墨字（亮底深字）。
+                  描边用 border 而非 ring——ring 在本项目是死类，见 MEDAL 注释 */}
+              <span
+                className={`fp-podium-drop ${m.drop} mt-3 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 [border-style:solid] border-white/50 text-xs font-semibold font-num text-on-primary md:mt-5 md:h-11 md:w-11 md:text-lg ${m.badge}`}
+              >
+                {e.rank}
+              </span>
+              <div className="mt-1.5 w-full truncate px-2 text-center text-[13px] font-medium text-ink md:mt-2 md:text-[15px]">
+                {e.username}
+                {isMe && <Tag className="ml-1 md:ml-2">我</Tag>}
+              </div>
+              {/* 总资产仅桌面——移动端柱宽不够，信息让位数字 */}
+              <div className="mt-0.5 hidden text-xs text-muted md:block">
+                总资产
+                {" "}
+                {fmtYuan(e.totalAssetCents)}
+                {" "}
+                元
+              </div>
+              {/* 英雄数字跟当前 tab 口径；副值用另一口径。
+                  窄柱拆两行：PnlText 是 nowrap 倾向的 inline-flex，
+                  一行两段在 ~90px 里会把「元」挤到第二行 */}
+              <div className={`mt-2 font-num leading-none ${heroTone} ${
+                isGold ? "text-[18px] md:text-[22px]" : "text-[14px] md:text-[18px]"
+              }`}
+              >
+                {hero}
+              </div>
+              <div className={`mt-1 font-num text-[11px] leading-none md:text-[13px] ${subTone}`}>
+                {sub}
+              </div>
+              {/* 台身：名次水印沉底，高度即名次 */}
+              <div className={`fp-podium-ped ${m.ped} mt-3 flex w-full items-end justify-center pb-1.5 ${m.pedH}`}>
+                <span className={`font-num leading-none opacity-25 ${m.watermark}`}>
+                  {e.rank}
+                </span>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -339,7 +488,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
       </SectionCard>
 
       {/* 已登录且不在榜单前排（前三名）时：底部钉一行「我的排名」。
-          前三名本身已在终榜条带高亮，再渲染卡片会重复出现两次；
+          前三名本身已在领奖台/条带高亮，再渲染卡片会重复出现两次；
           未上榜（没成交过）时保留引导空态，形成引导闭环。
           交错进场：第 2 卡延迟 60ms（animate-delay 写法的坑见 uno.config.ts） */}
       {meId !== null && (mine === null || mine.rank > 3) && (
