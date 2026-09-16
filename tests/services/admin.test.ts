@@ -75,6 +75,21 @@ describe("listUsersOverview 用户列表", () => {
     expect(admin.orderCount).toBe(0);
   });
 
+  it("透出 lastActiveAt：从没访问过的是 null，写过的原样带回", async () => {
+    const db = getDb(env.DB);
+    await registerUser(db, env, "testadmin", "hunter2");
+    const alice = await registerUser(db, env, "alice", "hunter2");
+
+    const stamped = Date.now() - 90_000;
+    await db.update(user).set({ lastActiveAt: stamped }).where(eq(user.id, alice.id));
+
+    const rows = await listUsersOverview(db);
+    const a = rows.find(r => r.username === "alice")!;
+    const admin = rows.find(r => r.username === "testadmin")!;
+    expect(a.lastActiveAt).toBe(stamped);
+    expect(admin.lastActiveAt).toBeNull();
+  });
+
   it("按注册时间倒序（后注册的排前面）", async () => {
     const db = getDb(env.DB);
     await registerUser(db, env, "alice", "hunter2");
