@@ -163,8 +163,15 @@ CF 边缘**并非「任意 anycast IP 都伺候任意 zone」**：部分 IP 是�
 
 - **入口继续用老域名 `liujiayii.dpdns.org`**——两域名无实质差别，
   而既有用户的登录 cookie、访客 cookie、收藏都在它身上
-- **新域名留作备用入口**（零成本；anycast 会漂移，日后用 17ce 复测
-  两域名，谁分布好用谁）
+- ~~**新域名留作备用入口**（零成本；anycast 会漂移，日后用 17ce 复测
+  两域名，谁分布好用谁）~~ → **2026-09-17 已撤回**：本站从不使用它，
+  而对搜索引擎来说，一个内容逐字节相同的第二 host 就是「另一个站」
+  （百度对跨域 canonical 的支持远不如 Google，双 host 还可能被当镜像/采集），
+  收录排查时也得先排除它。已从 `wrangler.jsonc` 的 routes 移除该 custom
+  domain 绑定；**zone 保留**（日后要复测路由或上 B1 直接复用）。
+  ⚠️ 从配置里删 ≠ 线上立刻解绑：dashboard → Worker → Settings →
+  Domains & Routes 里确认绑定与 DNS 记录都已清掉（doc 明说删 Custom Domain
+  时 CNAME 记录与证书要手动清）
 - B1（SaaS 优选 IP）因需绑支付方式搁置。104.18.32.115（SIN 段）实测
   命中 TTFB 0.42~0.87s 的潜力留档——哪天绑了卡，照下文步骤半小时落地
 - 继续摇号（注册更多免费域名抽 IP 对）期望值低：两个样本的电信分布
