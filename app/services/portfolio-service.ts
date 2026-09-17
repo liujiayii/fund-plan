@@ -3,6 +3,7 @@ import type { FundRow } from "~/db/schema";
 import type { HoldingValuation, PortfolioValuation } from "~/domain/portfolio";
 import type { RedeemTier, ShareLotInput } from "~/domain/redeem";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { runBatch } from "~/db/client";
 import {
   account,
   dcaPlan,
@@ -20,6 +21,7 @@ import {
   valuatePortfolio,
 } from "~/domain/portfolio";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
+import { fetchNavHistory } from "./fund-data";
 
 /**
  * 组合读取与估值编排。把 D1 数据喂给领域层的纯函数，产出页面要的视图模型。
@@ -298,6 +300,15 @@ export interface EquityPoint {
   totalAsset: number;
 }
 
+/** 净值序列的一行（getNavSeries 的输出、ensureNavHistory 的输入输出） */
+export interface NavSeriesRow {
+  navDate: string;
+  unitNav: number;
+  /** 累计净值（复权）×10000；老数据可能为 0 */
+  accNav: number;
+  growthRate: number;
+}
+
 /**
  * 取某只基金的净值序列，供详情页画图。
  * @param db Drizzle 实例
@@ -308,7 +319,7 @@ export async function getNavSeries(
   db: Db,
   fundCode: string,
   days?: number,
-): Promise<{ navDate: string; unitNav: number; accNav: number; growthRate: number }[]> {
+): Promise<NavSeriesRow[]> {
   const rows = await db
     .select({
       navDate: fundNav.navDate,
@@ -325,6 +336,58 @@ export async function getNavSeries(
 
   // 画图要正序
   return rows.reverse();
+}
+
+/**
+ * 净值历史「够用就好」的保障：不足 minRows 条就回填 maxRows 条（默认 400，
+ * 约 400 个交易日）。供需要长历史的页面用（定投回测要足够多的月数）。
+ *
+ * 为什么条件不是「库里为空」：settle 的 cron 每天只拉最近 30 条做滑动窗口同步，
+ * 任何基金只要有持仓/待确认单，在被人类访问之前就已有数据——写成 length === 0
+ * 的话回填永远不触发，库里永远只有薄薄一层滑动窗口（实测 14 只基金全是
+ * 20~23 条，图表与近 1 年阶段涨幅全都残缺）。60 ≈ 一个季度交易日，低于它
+ * 必是残缺历史；回填一次后库里就有完整历史，条件自然不再命中（每基金一次性）。
+ *
+ * 依赖方向：本文件 → fund-data（fetchNavHistory）。**不能反过来**——
+ * fund-data 不 import 本模块，否则成环。
+ * ⚠️ 基金页 loader 里还有一份内联的同款逻辑（那一页本次未动），改口径时两处同改。
+ */
+export async function ensureNavHistory(
+  db: Db,
+  env: Env,
+  fundCode: string,
+  minRows = 60,
+  maxRows = 400,
+): Promise<NavSeriesRow[]> {
+  const series = await getNavSeries(db, fundCode);
+  if (series.length >= minRows) {
+    return series;
+  }
+  const rows = await fetchNavHistory(env, fundCode, maxRows);
+  if (rows.length === 0) {
+    // 东财拉不到（节假日抖动/接口挂了）就把现有的还给调用方，别把页面打成 500
+    return series;
+  }
+  // 400 行走 batch 一次提交：逐条 await 是 400 次 D1 往返（约 1.2s），
+  // 会把触发回填的那次页面访问拖到超时边缘。onConflictDoNothing 保持
+  // 「已存在的日期不动」语义（与 cron 的 upsert 覆盖策略不同——回填只补洞，
+  // 不覆盖 cron 已写的当日新值）
+  await runBatch(
+    db,
+    rows.map(r =>
+      db
+        .insert(fundNav)
+        .values({
+          fundCode,
+          navDate: r.navDate,
+          unitNav: r.unitNav,
+          accNav: r.accNav,
+          growthRate: r.growthRate,
+        })
+        .onConflictDoNothing(),
+    ),
+  );
+  return getNavSeries(db, fundCode);
 }
 
 /**

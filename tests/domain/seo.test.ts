@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDcaBacktestMeta,
   buildFundBreadcrumbJsonLd,
   buildFundMeta,
   buildJsonLd,
@@ -52,7 +53,7 @@ describe("buildSitemapXml", () => {
     const xml = buildSitemapXml([]);
     expect(xml.startsWith("<?xml")).toBe(true);
     expect(xml).toContain("<urlset");
-    for (const path of ["/", "/master", "/leaderboard", "/funds", "/tools/fee-calculator", "/login", "/register"]) {
+    for (const path of ["/", "/master", "/leaderboard", "/funds", "/tools/fee-calculator", "/tools/dca-backtest", "/login", "/register"]) {
       expect(xml).toContain(`<loc>https://liujiayii.dpdns.org${path === "/" ? "/" : path}</loc>`);
     }
     // 首页 loc 必须是 origin + "/"，不能丢斜杠也不能写成双斜杠
@@ -179,6 +180,65 @@ describe("pageMeta", () => {
     });
     const canonical = tags.find(t => "rel" in t && t.rel === "canonical");
     expect(canonical).toMatchObject({ href: "https://liujiayii.dpdns.org/funds" });
+  });
+});
+
+describe("buildDcaBacktestMeta", () => {
+  /** 与 buildFundMeta 用例同一份手算事实：12000 投入 → 13560.35 市值 */
+  const facts = {
+    name: "华夏成长混合",
+    code: "000001",
+    amountCents: 100_000,
+    backtest: {
+      periods: 12,
+      investedCents: 1_200_000,
+      finalValueCents: 1_356_035,
+      returnRate: 1300,
+      maxDrawdown: 820,
+    },
+  };
+
+  it("没选标的（工具页首屏）时是通用文案，标题落在「定投回测」这个词上", () => {
+    const { title, description } = buildDcaBacktestMeta({
+      name: "",
+      code: "",
+      amountCents: 100_000,
+    });
+    expect(title).toBe("基金定投回测");
+    expect(description).toContain("定投回测");
+    expect(description).toContain("最大回撤");
+    expect(description).toContain("内扣法");
+  });
+
+  it("频率会写进描述（每日/每周/每月），词不一样、长尾词也不一样", () => {
+    const weekly = buildDcaBacktestMeta({ ...facts, frequency: "week" });
+    expect(weekly.description).toContain("每周 1000 元 × 12 期");
+    const daily = buildDcaBacktestMeta({ ...facts, frequency: "day" });
+    expect(daily.description).toContain("每日 1000 元 × 12 期");
+  });
+
+  it("描述里的净值口径必须是实际用的那个（unit 时不能还写累计净值）", () => {
+    expect(buildDcaBacktestMeta({ ...facts, adjust: "acc" }).description)
+      .toContain("净值口径：累计净值（分红再投）");
+    expect(buildDcaBacktestMeta({ ...facts, adjust: "unit" }).description)
+      .toContain("净值口径：单位净值（分红不参与再投）");
+  });
+
+  it("有标的且有回测：标题带基金名与代码，描述全是真数字", () => {
+    const { title, description } = buildDcaBacktestMeta(facts);
+    expect(title).toBe("华夏成长混合（000001）定投回测");
+    expect(description).toContain("每月 1000 元 × 12 期");
+    expect(description).toContain("累计投入 12000 元");
+    expect(description).toContain("期末市值 13560.35 元");
+    expect(description).toContain("收益率 +13.00%");
+    expect(description).toContain("最大回撤 8.20%");
+  });
+
+  it("净值历史不足（backtest 为 null）时不装作有回测，改为引导换一只", () => {
+    const { title, description } = buildDcaBacktestMeta({ ...facts, backtest: null });
+    expect(title).toBe("华夏成长混合（000001）定投回测");
+    expect(description).toContain("不足 3 期");
+    expect(description).not.toContain("期末市值");
   });
 });
 

@@ -10,7 +10,9 @@
  * （全站只服务这一个域名，别处挂第二个 host 会让搜索引擎当两站）。
  */
 
+import type { DcaAdjustMode, DcaFrequency } from "./dca-backtest";
 import dayjs from "dayjs";
+import { DCA_FREQUENCY_LABELS } from "./dca-backtest";
 import { centsToYuan, rateToPercent } from "./money";
 
 /** 主站 origin，无尾斜杠。所有绝对 URL 都从这里拼 */
@@ -33,6 +35,7 @@ export const SITEMAP_STATIC_PATHS = [
   "/leaderboard",
   "/funds",
   "/tools/fee-calculator",
+  "/tools/dca-backtest",
   "/login",
   "/register",
 ] as const;
@@ -275,6 +278,63 @@ export function buildFundMeta(input: FundMetaInput): { title: string; descriptio
       + `累计投入 ${yuanText(backtest.investedCents)} 元、期末市值 ${yuanText(backtest.finalValueCents)} 元、`
       + `收益率 ${signedPercent(backtest.returnRate)}、最大回撤 ${rateToPercent(backtest.maxDrawdown)}`
       + `（含真实申购费，净值口径为累计净值）`,
+  };
+}
+
+/** buildDcaBacktestMeta 入参 */
+export interface DcaBacktestMetaInput {
+  /** 基金名，如「华夏成长混合」 */
+  name: string;
+  /** 基金代码；空串 = 还没选基金（工具页首屏） */
+  code: string;
+  /** 每期投入（分），必须与回测用的金额一致——文案里的数字不能与算的对不上 */
+  amountCents: number;
+  /** 定投频率，默认按月；「每月/每周/每日」这个说法由 DCA_FREQUENCY_LABELS 统一给 */
+  frequency?: DcaFrequency;
+  /** 净值口径，默认 acc（累计净值）；描述里必须与页面实际用的口径一致 */
+  adjust?: DcaAdjustMode;
+  /** 回测结果；净值历史不足时传 null，文案回落到通用版（不装作有回测） */
+  backtest?: FundBacktestFacts | null;
+}
+
+/**
+ * `/tools/dca-backtest` 的 title / description。
+ *
+ * 与基金页的 buildFundMeta 分开写：那一页的标题是「净值与定投回测」，
+ * 这一页是**工具页**，关键词落在「定投回测」本身（页面能被分享、被收藏，
+ * 还带 ?code= 指向别的基金），所以有标的时标题用「<基金名>（代码）定投回测」，
+ * 描述带上算出来的真数字；没选标的时回落成工具页的通用文案。
+ */
+export function buildDcaBacktestMeta(input: DcaBacktestMetaInput): { title: string; description: string } {
+  const { name, code, amountCents, frequency = "month", adjust = "acc", backtest } = input;
+  if (!code || !name) {
+    return {
+      title: "基金定投回测",
+      description: "按真实历史净值算基金定投回测：累计投入、期末市值、年化收益、最大回撤与逐期明细，"
+        + "每期金额、频率（按月/按周/按天）与期数都可调，申购费按站内真实撮合的内扣法计，"
+        + "并与同期一次性买入对照",
+    };
+  }
+
+  const prefix = `${name}（${code}）`;
+  if (!backtest) {
+    // 净值历史不足 3 期：不装作有回测，改为引导换一只（空数字比没有更糟）
+    return {
+      title: `${prefix}定投回测`,
+      description: `${prefix}的净值历史还不足 3 期，暂时算不出定投回测。可换一只成立更久的基金，`
+        + "或用真实费率试算申购与赎回费用",
+    };
+  }
+
+  // 口径必须与页面实际算的一致：?adjust=unit 时还写「累计净值」就是给搜索引擎
+  // 喂错的口径（CodeRabbit 评审 #3）
+  const navLabel = adjust === "unit" ? "单位净值（分红不参与再投）" : "累计净值（分红再投）";
+  return {
+    title: `${prefix}定投回测`,
+    description: `${prefix}定投回测：${DCA_FREQUENCY_LABELS[frequency]} ${yuanText(amountCents)} 元 × ${backtest.periods} 期，`
+      + `累计投入 ${yuanText(backtest.investedCents)} 元、期末市值 ${yuanText(backtest.finalValueCents)} 元、`
+      + `收益率 ${signedPercent(backtest.returnRate)}、最大回撤 ${rateToPercent(backtest.maxDrawdown)}`
+      + `（含真实申购费，净值口径：${navLabel}）`,
   };
 }
 

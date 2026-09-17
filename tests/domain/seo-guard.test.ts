@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { NAV_ITEMS } from "~/domain/nav";
 
 /**
  * SEO 结构守卫：私页必须 noindex、公开页必须走 pageMeta、
@@ -50,6 +51,19 @@ describe("SEO 路由守卫", () => {
     expect(src).toMatch(/<h1[\s>]/);
   });
 
+  it("导航项都登记了图标（漏登记会退回「我的」图标——新增定投回测时踩过）", () => {
+    // NavLinks 里是 `NAV_ICON[item.key] ?? <UserOutlined />`：漏登记不报错，
+    // 只是悄悄显示成「我的」的图标，人眼不走查就发现不了
+    const src = readFileSync(
+      path.resolve(import.meta.dirname, "../../app/components/NavLinks.tsx"),
+      "utf8",
+    );
+    // /admin 是 root.tsx 运行时按角色追加的项，不在 NAV_ITEMS 里，同样要登记
+    const keys = [...NAV_ITEMS.map(i => i.key), "/admin"];
+    const missing = keys.filter(k => !src.includes(`"${k}":`));
+    expect(missing).toEqual([]);
+  });
+
   it("公开页 meta 走 pageMeta，且不带 noindex", () => {
     const publicFiles = [
       "_index.tsx",
@@ -58,6 +72,7 @@ describe("SEO 路由守卫", () => {
       "funds._index.tsx",
       "funds.$code.tsx",
       "tools.fee-calculator.tsx",
+      "tools.dca-backtest.tsx",
       "login.tsx",
       "register.tsx",
     ];
