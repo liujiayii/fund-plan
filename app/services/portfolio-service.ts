@@ -308,11 +308,14 @@ export async function getNavSeries(
   db: Db,
   fundCode: string,
   days?: number,
-): Promise<{ navDate: string; unitNav: number; growthRate: number }[]> {
+): Promise<{ navDate: string; unitNav: number; accNav: number; growthRate: number }[]> {
   const rows = await db
     .select({
       navDate: fundNav.navDate,
       unitNav: fundNav.unitNav,
+      // 复权净值（累计净值）：定投回测用「分红再投」口径算收益，
+      // 图表只取 unitNav/growthRate，多带一列不额外花查询
+      accNav: fundNav.accNav,
       growthRate: fundNav.growthRate,
     })
     .from(fundNav)

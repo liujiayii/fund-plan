@@ -6,9 +6,11 @@
  *   2. sitemap.xml 给出公开页清单（绝对 URL）
  *   3. 每页的 title / description / canonical / OG；私页加 noindex
  *
- * 域名钉死主站 `liujiayii.dpdns.org`。备用域 `liujiayi.dpdns.org` 不进
- * canonical / sitemap / robots——双域名互抢权重，搜索引擎会把它们当两站。
+ * 域名钉死主站 `liujiayii.dpdns.org`：canonical / sitemap / robots 只出这一个 host
+ * （全站只服务这一个域名，别处挂第二个 host 会让搜索引擎当两站）。
  */
+
+import { centsToYuan, rateToPercent } from "./money";
 
 /** 主站 origin，无尾斜杠。所有绝对 URL 都从这里拼 */
 export const CANONICAL_ORIGIN = "https://liujiayii.dpdns.org";
@@ -78,22 +80,48 @@ function xmlEscape(s: string): string {
 }
 
 /**
- * 生成 sitemap.xml。
- * `fundCodes` 是库里已落档的基金代码；非法（非 6 位数字）一律丢弃。
+ * sitemap 里的一条基金页。
+ * 非法（非 6 位数字）代码整条丢弃；lastmod 缺失或格式不对就不输出那行。
  */
-export function buildSitemapXml(fundCodes: readonly string[]): string {
-  const urls: string[] = SITEMAP_STATIC_PATHS.map(p => canonicalUrl(p));
-  for (const code of fundCodes) {
-    if (FUND_CODE_RE.test(code))
-      urls.push(canonicalUrl(`/funds/${code}`));
+export interface SitemapFund {
+  /** 6 位基金代码 */
+  code: string;
+  /** 该基金最新净值日期 YYYY-MM-DD（库里 max(nav_date)）；没有净值行时传 null */
+  lastmod?: string | null;
+}
+
+/** lastmod 必须是 YYYY-MM-DD——脏数据宁可丢掉，也别把 XML 弄废 */
+const LASTMOD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 单条 <url>。有 lastmod 才输出那一行：空标签会被爬虫当脏数据 */
+function urlTag(loc: string, lastmod: string | null): string {
+  const lines = [`    <loc>${xmlEscape(loc)}</loc>`];
+  if (lastmod) {
+    lines.push(`    <lastmod>${lastmod}</lastmod>`);
   }
-  const urlTags = urls.map(loc =>
-    `  <url>\n    <loc>${xmlEscape(loc)}</loc>\n  </url>`,
-  ).join("\n");
+  return `  <url>\n${lines.join("\n")}\n  </url>`;
+}
+
+/**
+ * 生成 sitemap.xml。
+ *
+ * lastmod 只给**基金详情页**，取各自的 max(nav_date)——那是页面内容真正变动的
+ * 时间（每晚净值同步就变）。静态页刻意不猜 lastmod：Google 明确说 lastmod
+ * 不准确会被忽略，一致性正确比"看起来新鲜"重要。
+ */
+export function buildSitemapXml(funds: readonly SitemapFund[]): string {
+  const urlTags: string[] = SITEMAP_STATIC_PATHS.map(p => urlTag(canonicalUrl(p), null));
+  for (const f of funds) {
+    if (!FUND_CODE_RE.test(f.code)) {
+      continue;
+    }
+    const lastmod = f.lastmod && LASTMOD_RE.test(f.lastmod) ? f.lastmod : null;
+    urlTags.push(urlTag(canonicalUrl(`/funds/${f.code}`), lastmod));
+  }
   return [
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
     "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
-    urlTags,
+    urlTags.join("\n"),
     "</urlset>",
     "",
   ].join("\n");
@@ -160,6 +188,118 @@ export function pageMeta(input: PageMetaInput): PageMetaTag[] {
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
   ];
+}
+
+/** 基金页 meta 要用到的回测事实（结构类型：不让 seo 依赖回测模块的类型） */
+export interface FundBacktestFacts {
+  /** 期数 */
+  periods: number;
+  /** 累计投入（分） */
+  investedCents: number;
+  /** 期末市值（分） */
+  finalValueCents: number;
+  /** 累计收益率 ×10000（万分之，可负） */
+  returnRate: number;
+  /** 最大回撤 ×10000（万分之，正数） */
+  maxDrawdown: number;
+}
+
+/** buildFundMeta 入参 */
+export interface FundMetaInput {
+  /** 基金名，如「华夏成长混合」 */
+  name: string;
+  /** 基金代码，如「000001」；空串（404 兜底）时退化为只用名字 */
+  code: string;
+  /** 每期投入（分），与回测口径一致——文案里的金额必须与算的一致 */
+  amountCents: number;
+  /** 回测结果；期数不足时传 null，文案回落到通用版（不装作有回测） */
+  backtest?: FundBacktestFacts | null;
+}
+
+/**
+ * 金额（分）→ 文案里的「元」：整元不带小数（12000 元），有零头保留两位（13560.35 元）。
+ * 刻意不加千分位——description 里逗号是噪音。
+ */
+function yuanText(cents: number): string {
+  return cents % 100 === 0 ? String(cents / 100) : centsToYuan(cents);
+}
+
+/** 百分比：正数补 +，负数用 rateToPercent 自带的 -（0 不带符号） */
+function signedPercent(rate: number): string {
+  return `${rate > 0 ? "+" : ""}${rateToPercent(rate)}`;
+}
+
+/**
+ * 基金详情页的 title / description。
+ *
+ * 为什么单独一个构造器：这一页是全站唯一能靠长尾词（「<基金名> 定投回测」
+ * 「<代码> 定投收益」）拿曝光的地方，描述里必须带上算出来的真数字——
+ * 每只基金的期数/市值/收益率都不同，才算「值得被收录的独有内容」
+ * （2026-09-17 关键词方向的结论）。数字来自 runDcaBacktest，别手改文案里的口径。
+ */
+export function buildFundMeta(input: FundMetaInput): { title: string; description: string } {
+  const { name, code, amountCents, backtest } = input;
+  if (!code) {
+    // 404 兜底：拿不到代码，拼不出与代码相关的文案
+    return { title: name, description: DEFAULT_DESCRIPTION };
+  }
+
+  const prefix = `${name}（${code}）`;
+  if (!backtest) {
+    return {
+      title: `${prefix}净值与费率`,
+      description: `${prefix}的模拟盘档案：真实净值、费率与风险等级，可练申购与定投`,
+    };
+  }
+
+  return {
+    title: `${prefix}净值与定投回测`,
+    description: `${prefix}定投回测：每月 ${yuanText(amountCents)} 元 × ${backtest.periods} 期，`
+      + `累计投入 ${yuanText(backtest.investedCents)} 元、期末市值 ${yuanText(backtest.finalValueCents)} 元、`
+      + `收益率 ${signedPercent(backtest.returnRate)}、最大回撤 ${rateToPercent(backtest.maxDrawdown)}`
+      + `（含真实申购费，净值口径为累计净值）`,
+  };
+}
+
+/**
+ * JSON-LD 值类型（与 React Router 的 LdJsonValue 同形）。
+ * 刻意在 domain 里自己定义一份：domain 层不依赖框架类型。
+ */
+export type LdJsonValue
+  = | string
+    | number
+    | boolean
+    | null
+    | LdJsonValue[]
+    | { [key: string]: LdJsonValue };
+
+/**
+ * 基金详情页的面包屑结构化数据（BreadcrumbList）。
+ *
+ * 价值不在"多一个富结果"，而在让搜索引擎明确这一页的层级
+ * （首页 › 基金 › 该基金）——搜索结果里 URL 那一行会显示层级路径，
+ * 比裸 URL 更容易被点。层级用的是真实存在的页（`/`、`/funds`），
+ * 别造中间层，不然结构化数据与站内结构对不上。
+ */
+export function buildFundBreadcrumbJsonLd(input: {
+  name: string;
+  code: string;
+}): { [key: string]: LdJsonValue } {
+  const items = [
+    { name: "首页", path: "/" },
+    { name: "基金", path: "/funds" },
+    { name: `${input.name}（${input.code}）`, path: `/funds/${input.code}` },
+  ];
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": items.map((it, i) => ({
+      "@type": "ListItem",
+      "position": i + 1,
+      "name": it.name,
+      "item": canonicalUrl(it.path),
+    })),
+  };
 }
 
 /**
