@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DCA_BACKTEST_AMOUNT_CENTS,
-  DCA_BACKTEST_MAX_PERIODS,
+  DCA_BACKTEST_DEFAULT_PERIODS,
   DCA_BACKTEST_MIN_PERIODS,
   runDcaBacktest,
   toBacktestSeries,
@@ -92,10 +92,46 @@ describe("runDcaBacktest", () => {
 
     const r = runDcaBacktest(series, { amountCents: 100_000, purchaseRate: 0 });
     expect(r).not.toBeNull();
-    expect(r!.periods).toBe(DCA_BACKTEST_MAX_PERIODS);
+    expect(r!.periods).toBe(DCA_BACKTEST_DEFAULT_PERIODS.month);
     // 起点从第 3 个月开始（14 - 12 + 1）
     expect(r!.from).toBe("2026-03-02");
-    expect(r!.investedCents).toBe(DCA_BACKTEST_MAX_PERIODS * 100_000);
+    expect(r!.investedCents).toBe(DCA_BACKTEST_DEFAULT_PERIODS.month * 100_000);
+  });
+
+  it("periods 指定期数时取最近 N 期（页面用它做「最近 3/6/12 期」切换）", () => {
+    const series = Array.from({ length: 14 }, (_, i) => {
+      const month = String(i + 1).padStart(2, "0");
+      return p(`2026-${month}-02`, 1);
+    });
+
+    const r = runDcaBacktest(series, { amountCents: 100_000, purchaseRate: 0, periods: 6 });
+    expect(r).not.toBeNull();
+    expect(r!.periods).toBe(6);
+    // 14 个月里取最近 6 期 → 从第 9 个月开始
+    expect(r!.from).toBe("2026-09-02");
+    expect(r!.investedCents).toBe(600_000);
+  });
+
+  it("periods 低于下限或非整数返回 null，不产出一两期的假回测", () => {
+    const series = Array.from({ length: 4 }, (_, i) => {
+      const month = String(i + 1).padStart(2, "0");
+      return p(`2026-${month}-02`, 1);
+    });
+    const input = { amountCents: 100_000, purchaseRate: 0 };
+    expect(runDcaBacktest(series, { ...input, periods: 2 })).toBeNull();
+    // 非整数同样拒——别让「6.5 期」静默变成 6 期（页面上还显示着 6.5）
+    expect(runDcaBacktest(series, { ...input, periods: 3.5 })).toBeNull();
+  });
+
+  it("periods 超过可用月数时按可用月数算，不假装有更长的历史", () => {
+    const series = [
+      p("2026-01-02", 1),
+      p("2026-02-02", 1),
+      p("2026-03-02", 1),
+      p("2026-04-02", 1),
+    ];
+    const r = runDcaBacktest(series, { amountCents: 100_000, purchaseRate: 0, periods: 12 });
+    expect(r!.periods).toBe(4);
   });
 
   it("期数不足下限返回 null（页面据此不渲染该卡）", () => {
@@ -173,5 +209,128 @@ describe("toBacktestSeries", () => {
   it("累计净值缺失（0）时回落单位净值", () => {
     const rows = [{ navDate: "2026-01-02", unitNav: 12345, accNav: 0 }];
     expect(toBacktestSeries(rows)).toEqual([{ navDate: "2026-01-02", nav: 12345 }]);
+  });
+
+  it("口径可选：unit 用单位净值（不把分红当收益），acc 是默认", () => {
+    // 单位净值 1.0、累计净值 1.5 的一行：那 0.5 元是分红，acc 口径把它当「再投」
+    const rows = [{ navDate: "2026-01-02", unitNav: 10000, accNav: 15000 }];
+    expect(toBacktestSeries(rows, "unit")).toEqual([{ navDate: "2026-01-02", nav: 10000 }]);
+    expect(toBacktestSeries(rows, "acc")).toEqual([{ navDate: "2026-01-02", nav: 15000 }]);
+    expect(toBacktestSeries(rows)).toEqual([{ navDate: "2026-01-02", nav: 15000 }]);
+    // unit 口径下单位净值本身缺失（脏数据）时该点没有可用净值，
+    // 原样给 0，由 runDcaBacktest 整点丢弃（不在这里静默顶替）
+    const dirty = [{ navDate: "2026-01-03", unitNav: 0, accNav: 15000 }];
+    expect(toBacktestSeries(dirty, "unit")).toEqual([{ navDate: "2026-01-03", nav: 0 }]);
+  });
+});
+
+describe("逐期明细（schedule）", () => {
+  it("每期给出买入日、买入净值、本期份额、累计投入、当期市值与累计收益率", () => {
+    // 净值 1.0 → 0.5 → 2.0，每月首个交易日各买 1000 元（费率 0），末日回 1.0 估值：
+    //   第 1 期：1000 份；累计投入 1000 元；当期市值 1000 元；累计 +0%
+    //   第 2 期：再买 2000 份（1000 ÷ 0.5）→ 共 3000 份；市值 3000 × 0.5 = 1500 元；
+    //            (1500 − 2000) ÷ 2000 = −25%
+    //   第 3 期：再买 500 份（1000 ÷ 2.0）→ 共 3500 份；市值 3500 × 2 = 7000 元；
+    //            (7000 − 3000) ÷ 3000 = +133.33% → 万分之取整 13333
+    const series = [
+      p("2026-01-02", 1),
+      p("2026-02-02", 0.5),
+      p("2026-03-02", 2),
+      p("2026-03-31", 1),
+    ];
+
+    const r = runDcaBacktest(series, { amountCents: 100_000, purchaseRate: 0 });
+    expect(r).not.toBeNull();
+    expect(r!.schedule).toEqual([
+      {
+        navDate: "2026-01-02",
+        nav: 10000,
+        sharesScaled: 10_000_000,
+        investedCents: 100_000,
+        valueCents: 100_000,
+        returnRate: 0,
+      },
+      {
+        navDate: "2026-02-02",
+        nav: 5000,
+        sharesScaled: 20_000_000,
+        investedCents: 200_000,
+        valueCents: 150_000,
+        returnRate: -2500,
+      },
+      {
+        navDate: "2026-03-02",
+        nav: 20000,
+        sharesScaled: 5_000_000,
+        investedCents: 300_000,
+        valueCents: 700_000,
+        returnRate: 13333,
+      },
+    ]);
+    // 期末（末日净值 1.0）：3500 份 × 1.0 = 3500 元，与明细最后一期口径一致
+    expect(r!.finalValueCents).toBe(350_000);
+  });
+
+  it("期数被截断时明细长度与 periods 一致（明细不会多出一期）", () => {
+    const series = Array.from({ length: 5 }, (_, i) => {
+      const month = String(i + 1).padStart(2, "0");
+      return p(`2026-${month}-02`, 1);
+    });
+    const r = runDcaBacktest(series, { amountCents: 100_000, purchaseRate: 0, periods: 3 });
+    expect(r!.schedule).toHaveLength(3);
+    expect(r!.schedule.map(s => s.navDate)).toEqual([
+      "2026-03-02",
+      "2026-04-02",
+      "2026-05-02",
+    ]);
+    // 明细最后一期的累计投入 = 总投入（页面表格最后一行要与概览对得上）
+    expect(r!.schedule.at(-1)!.investedCents).toBe(r!.investedCents);
+  });
+});
+
+describe("年化收益率（资金加权 XIRR）", () => {
+  /**
+   * 12 期、每月 1 号各买 1000 元、买入净值恒为 1.0（共 12000 份），
+   * 末日按 lastNav 估值——区间 363 天，够半年门槛。
+   */
+  function twelvePeriods(lastNav: number) {
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const month = String(i + 1).padStart(2, "0");
+      return p(`2026-${month}-02`, 1);
+    });
+    return [...months, p("2026-12-31", lastNav)];
+  }
+
+  it("按现金流日期折算年化（金标准由独立牛顿法算出，不是从实现里抄的）", () => {
+    // 现金流：2026-01-02 ~ 12-02 十二笔 −1000 元，2026-12-31（第 363 天）+13200 元
+    // （12000 份 × 1.1）。解 Σ cf ÷ (1+r)^(天数÷365) = 0 → r ≈ 19.0882% → 1909
+    const r = runDcaBacktest(twelvePeriods(1.1), { amountCents: 100_000, purchaseRate: 0 });
+    expect(r).not.toBeNull();
+    expect(r!.returnRate).toBe(1000);
+    expect(r!.annualizedRate).toBe(1909);
+  });
+
+  it("亏损为负、赚得越多年化越高（方向与刻度都对）", () => {
+    const input = { amountCents: 100_000, purchaseRate: 0 };
+    expect(runDcaBacktest(twelvePeriods(0.9), input)!.annualizedRate).toBe(-1802);
+    expect(runDcaBacktest(twelvePeriods(1.5), input)!.annualizedRate).toBe(10424);
+  });
+
+  it("净值恒定不涨不跌时年化是 0（不是 -0）", () => {
+    const r = runDcaBacktest(twelvePeriods(1), { amountCents: 100_000, purchaseRate: 0 });
+    expect(r!.returnRate).toBe(0);
+    expect(r!.annualizedRate).toBe(0);
+  });
+
+  it("区间不足半年不给年化：3 期 88 天的 +50% 折出来是 1079%/年，会误导人", () => {
+    const series = [
+      p("2026-01-02", 1),
+      p("2026-02-02", 1),
+      p("2026-03-02", 1),
+      p("2026-03-31", 1.5),
+    ];
+    const r = runDcaBacktest(series, { amountCents: 100_000, purchaseRate: 0 });
+    expect(r!.returnRate).toBe(5000);
+    expect(r!.annualizedRate).toBeNull();
   });
 });
