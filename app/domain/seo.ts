@@ -31,6 +31,7 @@ export const SITEMAP_STATIC_PATHS = [
   "/master",
   "/leaderboard",
   "/funds",
+  "/tools/fee-calculator",
   "/login",
   "/register",
 ] as const;

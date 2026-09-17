@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { NavItem } from "~/domain/nav";
 import {
+  CalculatorOutlined,
   CrownOutlined,
   DashboardOutlined,
   FundOutlined,
@@ -17,6 +18,7 @@ const NAV_ICON: Record<string, ReactNode> = {
   "/master": <CrownOutlined />,
   "/leaderboard": <TrophyOutlined />,
   "/funds": <FundOutlined />,
+  "/tools/fee-calculator": <CalculatorOutlined />,
   "/me/watchlist": <StarOutlined />,
   "/me": <UserOutlined />,
   "/admin": <DashboardOutlined />,

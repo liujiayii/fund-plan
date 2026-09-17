@@ -313,6 +313,14 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           className="mt-4"
           items={RULES.map(r => ({ key: r.key, label: r.label, children: <Paragraph type="secondary" className="mb-0 text-sm leading-6">{r.children}</Paragraph> }))}
         />
+        {/* 内链到费用计算器：规则类长尾词的落地页。首页是全站被抓最勤的一页，
+            从这儿给一条内链，比只靠 sitemap 发现更实在 */}
+        <div className="mt-3">
+          <NavButton to="/tools/fee-calculator">基金费用计算器：申购费与赎回费试算</NavButton>
+        </div>
+        <Paragraph type="secondary" className="mb-0 mt-2 text-xs">
+          内扣申购费与阶梯赎回费按站内真实口径算，和下单后的账本对得上。
+        </Paragraph>
       </SectionCard>
 
       {/* 底 CTA（游客） */}

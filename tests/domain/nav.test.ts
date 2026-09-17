@@ -47,6 +47,13 @@ describe("resolveSelectedKey", () => {
     expect(resolveSelectedKey("/register", NAV_ITEMS)).toBe("");
     expect(resolveSelectedKey("/logout", NAV_ITEMS)).toBe("");
   });
+
+  it("费用计算器在导航里有入口，且本页高亮它", () => {
+    // 侧栏在**每个页面**都渲染：给它一个导航项等于给工具页全站内链
+    // （SEO 上比只挂 sitemap 实在得多），顺带让用户找得到
+    expect(NAV_ITEMS.some(i => i.key === "/tools/fee-calculator")).toBe(true);
+    expect(resolveSelectedKey("/tools/fee-calculator", NAV_ITEMS)).toBe("/tools/fee-calculator");
+  });
 });
 
 describe("MOBILE_TAB_KEYS", () => {

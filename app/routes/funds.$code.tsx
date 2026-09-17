@@ -490,6 +490,13 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           逐批计费，每批按各自的持有天数查下表档位。
           所以一笔赎回可能同时按多个费率计费。
         </Paragraph>
+        {/* 内链到费用计算器：把这页的费率带过去预填（万分之 / ×10000，与库里口径一致） */}
+        <Paragraph type="secondary" className="mb-3">
+          想先算算这一笔？
+          <Link to={`/tools/fee-calculator?rate=${f.purchaseRate}&nav=${latest?.unitNav ?? 0}`}>
+            用费用计算器试算 →
+          </Link>
+        </Paragraph>
         {f.redeemTiers.map((t, i) => (
           // key 用 minDays 而非数组索引：档位查找是 `holdDays >= t.minDays`，
           // 重复的 minDays 会让查找产生歧义，所以「minDays 唯一」是这个

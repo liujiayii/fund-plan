@@ -23,6 +23,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "/master", label: "主理人的盘" },
   { key: "/leaderboard", label: "排行榜" },
   { key: "/funds", label: "基金" },
+  // 工具页也进侧栏：侧栏在每个页面都渲染，给它一个导航项等于给这一页全站内链
+  // （SEO 上比只挂 sitemap 实在），顺带让用户找得到。底栏（MOBILE_TAB_KEYS）
+  // 不放它——底栏只留四个高频入口
+  { key: "/tools/fee-calculator", label: "费用计算器" },
   { key: "/me/watchlist", label: "自选" },
   { key: "/me", label: "我的" },
 ];

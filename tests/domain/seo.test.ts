@@ -52,7 +52,7 @@ describe("buildSitemapXml", () => {
     const xml = buildSitemapXml([]);
     expect(xml.startsWith("<?xml")).toBe(true);
     expect(xml).toContain("<urlset");
-    for (const path of ["/", "/master", "/leaderboard", "/funds", "/login", "/register"]) {
+    for (const path of ["/", "/master", "/leaderboard", "/funds", "/tools/fee-calculator", "/login", "/register"]) {
       expect(xml).toContain(`<loc>https://liujiayii.dpdns.org${path === "/" ? "/" : path}</loc>`);
     }
     // 首页 loc 必须是 origin + "/"，不能丢斜杠也不能写成双斜杠
