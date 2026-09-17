@@ -56,7 +56,9 @@ describe("parseDcaBacktestQuery", () => {
     expect(high.amountCents).toBe(DCA_PAGE_DEFAULT_AMOUNT_CENTS);
     expect(high.notices.join()).toContain("1000000");
 
-    for (const bad of ["abc", "", "-1", "1.2.3"]) {
+    // "NaN" / "Infinity" 是 decimal.js 会接受、但不抛的一段（CodeRabbit 评审 #1）：
+    // 只判 null 挡不住，会带着非有限金额传进 calcPurchase 把公开页打成 500
+    for (const bad of ["abc", "", "-1", "1.2.3", "NaN", "Infinity"]) {
       const r = parseDcaBacktestQuery(q({ amount: bad }));
       expect(r.amountCents, bad).toBe(DCA_PAGE_DEFAULT_AMOUNT_CENTS);
       expect(r.notices, bad).toHaveLength(1);

@@ -105,7 +105,9 @@ export function parseDcaBacktestQuery(params: QueryGetter): DcaBacktestQuery {
     catch {
       parsed = null;
     }
-    if (parsed === null) {
+    // decimal.js 会接受 "NaN" / "Infinity"（返回非有限值，不抛），只判 null 挡不住：
+    // 它一路传进 calcPurchase 会抛，把公开页打成 500（CodeRabbit 评审 #1）
+    if (parsed === null || !Number.isFinite(parsed)) {
       notices.push(`每期金额请填数字，已按 ${yuan(DCA_PAGE_DEFAULT_AMOUNT_CENTS)} 元试算`);
     }
     else if (parsed < DCA_PAGE_AMOUNT_MIN_CENTS || parsed > DCA_PAGE_AMOUNT_MAX_CENTS) {

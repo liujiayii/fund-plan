@@ -217,6 +217,13 @@ describe("buildDcaBacktestMeta", () => {
     expect(daily.description).toContain("每日 1000 元 × 12 期");
   });
 
+  it("描述里的净值口径必须是实际用的那个（unit 时不能还写累计净值）", () => {
+    expect(buildDcaBacktestMeta({ ...facts, adjust: "acc" }).description)
+      .toContain("净值口径：累计净值（分红再投）");
+    expect(buildDcaBacktestMeta({ ...facts, adjust: "unit" }).description)
+      .toContain("净值口径：单位净值（分红不参与再投）");
+  });
+
   it("有标的且有回测：标题带基金名与代码，描述全是真数字", () => {
     const { title, description } = buildDcaBacktestMeta(facts);
     expect(title).toBe("华夏成长混合（000001）定投回测");

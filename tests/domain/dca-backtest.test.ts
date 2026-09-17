@@ -3,6 +3,7 @@ import {
   DCA_BACKTEST_AMOUNT_CENTS,
   DCA_BACKTEST_DEFAULT_PERIODS,
   DCA_BACKTEST_MIN_PERIODS,
+  dcaCurvePoints,
   runDcaBacktest,
   toBacktestSeries,
 } from "~/domain/dca-backtest";
@@ -285,6 +286,44 @@ describe("逐期明细（schedule）", () => {
     ]);
     // 明细最后一期的累计投入 = 总投入（页面表格最后一行要与概览对得上）
     expect(r!.schedule.at(-1)!.investedCents).toBe(r!.investedCents);
+  });
+});
+
+describe("dcaCurvePoints（图表数据）", () => {
+  it("逐期点 + 期末估值点：图的终点就是概览里的期末市值", () => {
+    // 1/2 月各买一次、3/2 再买一次（净值都是 1.0，共 3000 份），3/31 回 1.5 估值
+    const series = [
+      p("2026-01-02", 1),
+      p("2026-02-02", 1),
+      p("2026-03-02", 1),
+      p("2026-03-31", 1.5),
+    ];
+    const r = runDcaBacktest(series, { amountCents: 100_000, purchaseRate: 0 })!;
+
+    const curve = dcaCurvePoints(r);
+    // 3 期 + 期末（03-31 晚于最后一个买入日 03-02）
+    expect(curve).toHaveLength(4);
+    // 期末点：市值 = 概览的期末市值（3000 份 × 1.5 = 4500 元），投入保持最后一期的值
+    expect(curve.at(-1)).toEqual({
+      navDate: "2026-03-31",
+      investedCents: 300_000,
+      valueCents: r.finalValueCents,
+    });
+    expect(curve.at(-1)!.valueCents).toBe(450_000);
+    expect(curve.at(-1)!.investedCents).toBe(curve.at(-2)!.investedCents);
+  });
+
+  it("末日与最后一个买入日同一天就不重复补点（按天定投常见）", () => {
+    const series = [p("2026-01-05", 1), p("2026-01-06", 1), p("2026-01-07", 1)];
+    const r = runDcaBacktest(series, {
+      amountCents: 100_000,
+      purchaseRate: 0,
+      frequency: "day",
+    })!;
+
+    const curve = dcaCurvePoints(r);
+    expect(curve).toHaveLength(3);
+    expect(curve.at(-1)!.navDate).toBe("2026-01-07");
   });
 });
 

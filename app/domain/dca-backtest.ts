@@ -173,6 +173,40 @@ export function toBacktestSeries(
   });
 }
 
+/** 曲线上的一个点：该时点的累计投入与持仓市值（分） */
+export interface DcaCurvePoint {
+  navDate: string;
+  /** 截至该点的累计投入（分） */
+  investedCents: number;
+  /** 该点的持仓市值（分） */
+  valueCents: number;
+}
+
+/**
+ * 画图用的曲线：逐期（每期买入后）+ 期末估值点。
+ *
+ * 为什么要补期末那个点：`schedule` 只在买入日记录，而 `finalValueCents` 是**最后
+ * 一个净值日**估的值——按周/按天定投时两者常常不是同一天，只画 schedule 会让图上
+ * 终点与概览的「期末市值」对不上（CodeRabbit 评审 #2）。补点后两条线的终点就是
+ * 概览里的数字；累计投入线在期末保持最后一期的值（不再有新钱进来）。
+ */
+export function dcaCurvePoints(result: DcaBacktestResult): DcaCurvePoint[] {
+  const points: DcaCurvePoint[] = result.schedule.map(p => ({
+    navDate: p.navDate,
+    investedCents: p.investedCents,
+    valueCents: p.valueCents,
+  }));
+  const last = points.at(-1);
+  if (last && result.to > last.navDate) {
+    points.push({
+      navDate: result.to,
+      investedCents: result.investedCents,
+      valueCents: result.finalValueCents,
+    });
+  }
+  return points;
+}
+
 /**
  * 该日期属于哪一期（同期只买一次，取该期**首个**有净值的交易日）。
  * 按月用 YYYY-MM；按天用日期本身；按周用**该自然周的周一**——

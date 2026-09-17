@@ -10,7 +10,7 @@
  * （全站只服务这一个域名，别处挂第二个 host 会让搜索引擎当两站）。
  */
 
-import type { DcaFrequency } from "./dca-backtest";
+import type { DcaAdjustMode, DcaFrequency } from "./dca-backtest";
 import dayjs from "dayjs";
 import { DCA_FREQUENCY_LABELS } from "./dca-backtest";
 import { centsToYuan, rateToPercent } from "./money";
@@ -291,6 +291,8 @@ export interface DcaBacktestMetaInput {
   amountCents: number;
   /** 定投频率，默认按月；「每月/每周/每日」这个说法由 DCA_FREQUENCY_LABELS 统一给 */
   frequency?: DcaFrequency;
+  /** 净值口径，默认 acc（累计净值）；描述里必须与页面实际用的口径一致 */
+  adjust?: DcaAdjustMode;
   /** 回测结果；净值历史不足时传 null，文案回落到通用版（不装作有回测） */
   backtest?: FundBacktestFacts | null;
 }
@@ -304,7 +306,7 @@ export interface DcaBacktestMetaInput {
  * 描述带上算出来的真数字；没选标的时回落成工具页的通用文案。
  */
 export function buildDcaBacktestMeta(input: DcaBacktestMetaInput): { title: string; description: string } {
-  const { name, code, amountCents, frequency = "month", backtest } = input;
+  const { name, code, amountCents, frequency = "month", adjust = "acc", backtest } = input;
   if (!code || !name) {
     return {
       title: "基金定投回测",
@@ -324,12 +326,15 @@ export function buildDcaBacktestMeta(input: DcaBacktestMetaInput): { title: stri
     };
   }
 
+  // 口径必须与页面实际算的一致：?adjust=unit 时还写「累计净值」就是给搜索引擎
+  // 喂错的口径（CodeRabbit 评审 #3）
+  const navLabel = adjust === "unit" ? "单位净值（分红不参与再投）" : "累计净值（分红再投）";
   return {
     title: `${prefix}定投回测`,
     description: `${prefix}定投回测：${DCA_FREQUENCY_LABELS[frequency]} ${yuanText(amountCents)} 元 × ${backtest.periods} 期，`
       + `累计投入 ${yuanText(backtest.investedCents)} 元、期末市值 ${yuanText(backtest.finalValueCents)} 元、`
       + `收益率 ${signedPercent(backtest.returnRate)}、最大回撤 ${rateToPercent(backtest.maxDrawdown)}`
-      + `（含真实申购费，净值口径为累计净值）`,
+      + `（含真实申购费，净值口径：${navLabel}）`,
   };
 }
 

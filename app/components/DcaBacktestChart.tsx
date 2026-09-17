@@ -1,5 +1,5 @@
 import type { LineConfig } from "@ant-design/charts";
-import type { DcaBacktestPeriod } from "~/domain/dca-backtest";
+import type { DcaCurvePoint } from "~/domain/dca-backtest";
 import { lazy, Suspense, useMemo } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
 import { FP_CHART_THEME } from "~/components/ui/chart-theme";
@@ -21,27 +21,28 @@ const Line = lazy(async () => {
 /**
  * 定投回测的「累计投入 vs 持仓市值」双线图。
  *
- * 为什么画**逐期**（每月一个点）而不是逐日：定投的现金本来就是每月进一次，
+ * 为什么画**逐期**（每期一个点）而不是逐日：定投的现金本来就是每期进一次，
  * 逐期图恰好画出「成本台阶 vs 市值曲线」——市值线在成本线之上就是赚、之下就是亏，
- * 一眼能读；而逐日图要多传 400 个点、多一份领域计算，回撤与年化在概览里已经给了。
+ * 一眼能读；而逐日图要多传几百个点、多一份领域计算，回撤与年化在概览里已经给了。
  *
- * 数据直接取 `schedule`（逐期明细），与页面表格、概览是同一份计算，
- * 不存在「图上一个数、表格另一个数」的可能。
+ * 数据取 `dcaCurvePoints(result)`：逐期点 + 期末估值点。补期末那一点是为了让
+ * 两条线的终点就是概览里的「期末市值」——只画买入日的话，按周/按天定投的图上终点
+ * 会与那个数字对不上（CodeRabbit 评审 #2）。
  */
-export function DcaBacktestChart({ schedule }: { schedule: DcaBacktestPeriod[] }) {
+export function DcaBacktestChart({ curve }: { curve: DcaCurvePoint[] }) {
   const mounted = useIsClient();
 
   const chartData = useMemo(
     () =>
-      schedule.flatMap(p => [
+      curve.flatMap(p => [
         // 金额（分）→ 元：Number(centsToYuan(...)) 与 FundPnlChart 同款换算
         { date: p.navDate, type: "累计投入", value: Number(centsToYuan(p.investedCents)) },
         { date: p.navDate, type: "持仓市值", value: Number(centsToYuan(p.valueCents)) },
       ]),
-    [schedule],
+    [curve],
   );
 
-  if (schedule.length === 0) {
+  if (curve.length === 0) {
     // 走 EmptyState 而不是裸 Empty：全站空态的留白由它统一
     return <EmptyState description="暂无可画的定投曲线" hint="净值历史够 3 期才会出现" />;
   }
