@@ -160,8 +160,10 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             <Logo size={22} />
             模拟基金
           </div>
-          {/* 主标：文案结构（真实感 + 零风险）沿用 visual-refresh */}
-          <h2 className="m-0 text-3xl leading-tight font-bold text-ink">用真数据，练真盘感</h2>
+          {/* 主标：文案结构（真实感 + 零风险）沿用 visual-refresh。
+              标签是 h1——全站唯一给爬虫的页面主题信号（样式全在工具类里，
+              换标签不改像素，见 tests/domain/seo-guard.test.ts 的守卫） */}
+          <h1 className="m-0 text-3xl leading-tight font-bold text-ink">用真数据，练真盘感</h1>
           <p className="mt-3 mb-0 max-w-xl text-sm leading-6 text-muted">
             东方财富净值每晚同步 · 真实 T+1 撮合 · 零风险练手。注册即送
             {" "}
