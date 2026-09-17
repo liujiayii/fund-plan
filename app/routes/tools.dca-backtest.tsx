@@ -1,11 +1,16 @@
 import type { TableProps } from "antd";
 import type { Route } from "./+types/tools.dca-backtest";
 import type { Db } from "~/db/client";
-import type { DcaBacktestPeriod, DcaBacktestResult, DcaFrequency } from "~/domain/dca-backtest";
+import type {
+  DcaAdjustMode,
+  DcaBacktestPeriod,
+  DcaBacktestResult,
+  DcaFrequency,
+} from "~/domain/dca-backtest";
 import type { FundSearchItem } from "~/services/fund-data";
 import { Alert, Button, Input, InputNumber, Segmented, Space, Table, Typography } from "antd";
 import { desc } from "drizzle-orm";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link, Form as RouterForm, useNavigation } from "react-router";
 import { DcaBacktestChart } from "~/components/DcaBacktestChart";
 import { DataRow } from "~/components/ui/DataRow";
@@ -20,6 +25,7 @@ import {
   countDcaPeriods,
   DCA_BACKTEST_MIN_PERIODS,
   DCA_FREQUENCY_LABELS,
+  dcaCurvePoints,
   runDcaBacktest,
   toBacktestSeries,
 } from "~/domain/dca-backtest";
@@ -61,6 +67,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
     code: loaderData?.code ?? "",
     amountCents: loaderData?.amountCents ?? DCA_PAGE_DEFAULT_AMOUNT_CENTS,
     frequency: loaderData?.frequency ?? "month",
+    adjust: loaderData?.adjust ?? "acc",
     backtest: loaderData?.backtest ?? null,
   });
   return pageMeta({ title, description, path: "/tools/dca-backtest" });
@@ -115,8 +122,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     throw new Response(`没找到基金 ${code}`, { status: 404 });
   }
 
-  // 净值历史不足就回填（规则见 ensureNavHistory 注释）
-  const series = await ensureNavHistory(db, env, code);
+  // 净值历史不足就回填（规则见 ensureNavHistory 注释）。
+  // 阈值给 250 而不是默认的 60：本页按天定投的默认期数就是 250 期，库里只有
+  // 60~249 条时会静默算成短窗口——而 settle 每晚只同步最近 30 条，不会替我们补齐
+  // 更早的历史，光靠默认阈值补不上（CodeRabbit 评审 #7）
+  const series = await ensureNavHistory(db, env, code, 250);
   const points = toBacktestSeries(series, parsed.adjust);
   const backtest = runDcaBacktest(points, {
     amountCents: parsed.amountCents,
@@ -144,9 +154,215 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
-/** 逐期明细表的一行（key 用买入日：一个月只有一期） */
+/** 逐期明细表的一行（key 用买入日：同一期只会买一次） */
 interface ScheduleRow extends DcaBacktestPeriod {
   key: string;
+}
+
+/** 「回测设置」卡的入参：全部来自 loader（表单状态在卡内，卡按参数重挂载） */
+interface ParamsCardProps {
+  code: string;
+  fundName: string;
+  isDefault: boolean;
+  availablePeriods: number;
+  q: string;
+  results: FundSearchItem[];
+  notices: string[];
+  initial: {
+    amountCents: number;
+    frequency: DcaFrequency;
+    periods: number;
+    adjust: DcaAdjustMode;
+  };
+}
+
+/**
+ * 回测设置卡：搜基金 / 看当前标的 / 调参数。
+ *
+ * ⚠️ 表单状态刻意放在**这一层**，由页面用本轮参数当 key 渲染它——参数一变整卡
+ * 重挂载，受控控件与提交用的 hidden 字段都从 loaderData 重新初始化。状态若留在
+ * 页面组件里，key 换的是卡、不是状态：服务端回落了参数（或 browser back/forward
+ * 换了参数）时控件会停在上一轮的值上，页面显示 50 元、算的却是 1000 元
+ * （CodeRabbit 评审 #4）。用 useEffect 同步是另一条路，但会多一次渲染，还踩本仓库
+ * 明确避免的 react/set-state-in-effect 告警（见 components/ui/chart 的 useIsClient 顶注）。
+ */
+function ParamsCard({
+  code,
+  fundName,
+  isDefault,
+  availablePeriods,
+  q,
+  results,
+  notices,
+  initial,
+}: ParamsCardProps) {
+  const nav = useNavigation();
+  const computing = nav.state === "loading";
+
+  // 受控的金额输入：搜索表单的 hidden 也要带上「用户刚敲进去的那个数」，
+  // 不受控的话两处会各自为政（一个显示 2000、另一个提交 1000）
+  const [amountText, setAmountText] = useState(() => amountDisplay(initial.amountCents));
+  const [freqValue, setFreqValue] = useState<string>(initial.frequency);
+  // 期数可被清空（InputNumber 清空时给 null），提交后由服务端回落默认值 + 提示
+  const [periodsValue, setPeriodsValue] = useState<number | null>(initial.periods);
+  const [adjustValue, setAdjustValue] = useState<string>(initial.adjust);
+
+  // 控件的可访问名称：相邻 <span> 不构成程序化标签关联，屏幕阅读器读不出控件用途
+  // （CodeRabbit 评审 #5），所以用 aria-labelledby 指过去；useId 保证 SSR 前后一致
+  const freqLabelId = useId();
+  const adjustLabelId = useId();
+  const periodsLabelId = useId();
+
+  /**
+   * 切频率时把期数换成该频率的默认值（都是「一年」的量）。
+   * 沿用原数字没意义：12 期按月是一年，按天只有 12 天。
+   */
+  const onFrequencyChange = (v: string) => {
+    setFreqValue(v);
+    setPeriodsValue(DCA_PAGE_DEFAULT_PERIODS[v as DcaFrequency]);
+  };
+
+  /** 搜索结果换标的时把当前参数一起带过去（换基金不该重置金额/频率/期数） */
+  const linkFor = (fundCode: string) =>
+    `/tools/dca-backtest?code=${fundCode}`
+    + `&amount=${encodeURIComponent(amountText)}`
+    + `&freq=${freqValue}&periods=${periodsValue ?? ""}&adjust=${adjustValue}`;
+
+  return (
+    <SectionCard title="回测设置" className="animate-fade-up">
+      {/* 基金选择：搜索走 GET 的 q 参数，与回测口径互不干扰 */}
+      <RouterForm method="get">
+        {code ? <input type="hidden" name="code" value={code} /> : null}
+        <input type="hidden" name="amount" value={amountText} />
+        <input type="hidden" name="freq" value={freqValue} />
+        <input type="hidden" name="periods" value={periodsValue ?? ""} />
+        <input type="hidden" name="adjust" value={adjustValue} />
+        <Space.Compact style={{ width: "100%", maxWidth: 520 }}>
+          <Input
+            name="q"
+            size="large"
+            defaultValue={q}
+            placeholder="搜基金：如 000001 或 华夏成长"
+            allowClear
+          />
+          <Button size="large" htmlType="submit" loading={computing}>搜基金</Button>
+        </Space.Compact>
+      </RouterForm>
+
+      {q
+        ? (
+            <div className="mt-3">
+              {results.length === 0
+                ? <EmptyState description="没搜到，换个关键词试试" />
+                : results.map((r, i) => (
+                    <FundListItem
+                      key={r.code}
+                      fundCode={r.code}
+                      fundName={r.name}
+                      fundType={r.type || undefined}
+                      last={i === results.length - 1}
+                      actions={(
+                        <NavButton size="small" type="link" to={linkFor(r.code)}>
+                          用它回测
+                        </NavButton>
+                      )}
+                    />
+                  ))}
+            </div>
+          )
+        : null}
+
+      {code
+        ? (
+            <Paragraph type="secondary" className="mt-3 mb-0 text-[13px]">
+              当前标的：
+              <Text strong>{`${fundName}（${code}）`}</Text>
+              {isDefault
+                ? " —— 库里最近有数据的基金，可在上方换成任意基金"
+                : null}
+              {" "}
+              <Link to={`/funds/${code}`}>看它的净值与费率</Link>
+            </Paragraph>
+          )
+        : null}
+
+      {/* 参数区：频率 + 口径 + 金额 + 期数 */}
+      <div className="mt-4 grid gap-4">
+        <RouterForm method="get">
+          {code ? <input type="hidden" name="code" value={code} /> : null}
+          {q ? <input type="hidden" name="q" value={q} /> : null}
+          <input type="hidden" name="freq" value={freqValue} />
+          <input type="hidden" name="periods" value={periodsValue ?? ""} />
+          <input type="hidden" name="adjust" value={adjustValue} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="block">
+              <span id={freqLabelId} className="mb-1 block text-[13px] text-muted">定投频率</span>
+              <Segmented
+                block
+                aria-labelledby={freqLabelId}
+                value={freqValue}
+                onChange={v => onFrequencyChange(String(v))}
+                options={DCA_PAGE_FREQUENCY_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+              />
+            </div>
+            <div className="block">
+              <span id={adjustLabelId} className="mb-1 block text-[13px] text-muted">净值口径</span>
+              <Segmented
+                block
+                aria-labelledby={adjustLabelId}
+                value={adjustValue}
+                onChange={v => setAdjustValue(String(v))}
+                options={[
+                  { label: "累计净值", value: "acc" },
+                  { label: "单位净值", value: "unit" },
+                ]}
+              />
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-[13px] text-muted">每期金额</span>
+              <Input
+                name="amount"
+                value={amountText}
+                onChange={e => setAmountText(e.target.value)}
+                inputMode="decimal"
+                suffix={<span className="text-[12px] text-placeholder">元</span>}
+              />
+            </label>
+            <div className="block">
+              <span id={periodsLabelId} className="mb-1 block text-[13px] text-muted">回测期数（可自定义）</span>
+              <InputNumber
+                aria-labelledby={periodsLabelId}
+                value={periodsValue}
+                onChange={v => setPeriodsValue(typeof v === "number" ? v : null)}
+                min={DCA_BACKTEST_MIN_PERIODS}
+                max={DCA_PAGE_PERIOD_HARD_MAX}
+                step={1}
+                precision={0}
+                style={{ width: "100%" }}
+                addonAfter="期"
+              />
+              <span className="mt-1 block text-[12px] text-placeholder">
+                {availablePeriods > 0
+                  ? `当前频率库里最多 ${availablePeriods} 期，填多了按最多算`
+                  : "库里还没有这只基金的净值"}
+              </span>
+            </div>
+          </div>
+          <div className="mt-3">
+            <Button type="primary" htmlType="submit" loading={computing}>
+              开始回测
+            </Button>
+          </div>
+        </RouterForm>
+      </div>
+
+      {notices.map(n => (
+        <Alert key={n} type="info" showIcon className="mt-3" message={n} />
+      ))}
+    </SectionCard>
+  );
 }
 
 export default function DcaBacktestPage({ loaderData }: Route.ComponentProps) {
@@ -166,38 +382,12 @@ export default function DcaBacktestPage({ loaderData }: Route.ComponentProps) {
     results,
   } = loaderData;
 
-  const nav = useNavigation();
-  const computing = nav.state === "loading";
-
-  // 受控的金额输入：搜索表单的 hidden 也要带上「用户刚敲进去的那个数」，
-  // 不受控的话两处会各自为政（一个显示 2000、另一个提交 1000）
-  const [amountText, setAmountText] = useState(() => amountDisplay(amountCents));
-  const [freqValue, setFreqValue] = useState<string>(frequency);
-  // 期数可被清空（InputNumber 清空时给 null），提交后由服务端回落默认值 + 提示
-  const [periodsValue, setPeriodsValue] = useState<number | null>(periods);
-  const [adjustValue, setAdjustValue] = useState<string>(adjust);
-
-  // ⚠️ Segmented 是受控的、Input 的初值只取一次：换了标的或服务端回落了参数时，
-  // 不重新挂载这一卡就会停在上一轮的值上（页面上写着 50 元、算的却是 1000 元）。
-  // key 里带上本轮的口径，参数一变就重挂载，状态从 loaderData 重新初始化
-  const paramsKey = `${code}-${amountCents}-${frequency}-${periods}-${adjust}`;
-
   const signed = (rate: number) => `${rate > 0 ? "+" : ""}${rateToPercent(rate)}`;
 
-  /**
-   * 切频率时把期数换成该频率的默认值（都是「一年」的量）。
-   * 沿用原数字没意义：12 期按月是一年，按天只有 12 天。
-   */
-  const onFrequencyChange = (v: string) => {
-    setFreqValue(v);
-    setPeriodsValue(DCA_PAGE_DEFAULT_PERIODS[v as DcaFrequency]);
-  };
-
-  /** 搜索结果换标的时把当前参数一起带过去（换基金不该重置金额/频率/期数） */
-  const linkFor = (fundCode: string) =>
-    `/tools/dca-backtest?code=${fundCode}`
-    + `&amount=${encodeURIComponent(amountText)}`
-    + `&freq=${freqValue}&periods=${periodsValue ?? ""}&adjust=${adjustValue}`;
+  // 参数与表单状态都在 ParamsCard 里（见那个组件的顶注），这里按本轮参数当 key
+  // 让它整卡重挂载：受控控件与提交用的 hidden 字段因此每轮都从 loaderData 重新
+  // 初始化，不会出现「页面显示 50 元、算的却是 1000 元」（CodeRabbit 评审 #4）
+  const paramsKey = `${code}-${amountCents}-${frequency}-${periods}-${adjust}`;
 
   const columns: TableProps<ScheduleRow>["columns"] = [
     { title: "买入日", dataIndex: "navDate", width: 112 },
@@ -247,136 +437,17 @@ export default function DcaBacktestPage({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
-      <SectionCard title="回测设置" className="animate-fade-up" key={paramsKey}>
-        {/* 基金选择：搜索走 GET 的 q 参数，与回测口径互不干扰 */}
-        <RouterForm method="get">
-          {code ? <input type="hidden" name="code" value={code} /> : null}
-          <input type="hidden" name="amount" value={amountText} />
-          <input type="hidden" name="freq" value={freqValue} />
-          <input type="hidden" name="periods" value={periodsValue ?? ""} />
-          <input type="hidden" name="adjust" value={adjustValue} />
-          <Space.Compact style={{ width: "100%", maxWidth: 520 }}>
-            <Input
-              name="q"
-              size="large"
-              defaultValue={q}
-              placeholder="搜基金：如 000001 或 华夏成长"
-              allowClear
-            />
-            <Button size="large" htmlType="submit" loading={computing}>搜基金</Button>
-          </Space.Compact>
-        </RouterForm>
-
-        {q
-          ? (
-              <div className="mt-3">
-                {results.length === 0
-                  ? <EmptyState description="没搜到，换个关键词试试" />
-                  : results.map((r, i) => (
-                      <FundListItem
-                        key={r.code}
-                        fundCode={r.code}
-                        fundName={r.name}
-                        fundType={r.type || undefined}
-                        last={i === results.length - 1}
-                        actions={(
-                          <NavButton size="small" type="link" to={linkFor(r.code)}>
-                            用它回测
-                          </NavButton>
-                        )}
-                      />
-                    ))}
-              </div>
-            )
-          : null}
-
-        {code
-          ? (
-              <Paragraph type="secondary" className="mt-3 mb-0 text-[13px]">
-                当前标的：
-                <Text strong>{`${fundName}（${code}）`}</Text>
-                {isDefault
-                  ? " —— 库里最近有数据的基金，可在上方换成任意基金"
-                  : null}
-                {" "}
-                <Link to={`/funds/${code}`}>看它的净值与费率</Link>
-              </Paragraph>
-            )
-          : null}
-
-        {/* 参数区：金额 + 期数 + 净值口径 */}
-        <div className="mt-4 grid gap-4">
-          <RouterForm method="get">
-            {code ? <input type="hidden" name="code" value={code} /> : null}
-            {q ? <input type="hidden" name="q" value={q} /> : null}
-            <input type="hidden" name="freq" value={freqValue} />
-            <input type="hidden" name="periods" value={periodsValue ?? ""} />
-            <input type="hidden" name="adjust" value={adjustValue} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="block">
-                <span className="mb-1 block text-[13px] text-muted">定投频率</span>
-                <Segmented
-                  block
-                  value={freqValue}
-                  onChange={v => onFrequencyChange(String(v))}
-                  options={DCA_PAGE_FREQUENCY_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-                />
-              </div>
-              <div className="block">
-                <span className="mb-1 block text-[13px] text-muted">净值口径</span>
-                <Segmented
-                  block
-                  value={adjustValue}
-                  onChange={v => setAdjustValue(String(v))}
-                  options={[
-                    { label: "累计净值", value: "acc" },
-                    { label: "单位净值", value: "unit" },
-                  ]}
-                />
-              </div>
-            </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-[13px] text-muted">每期金额</span>
-                <Input
-                  name="amount"
-                  value={amountText}
-                  onChange={e => setAmountText(e.target.value)}
-                  inputMode="decimal"
-                  suffix={<span className="text-[12px] text-placeholder">元</span>}
-                />
-              </label>
-              <div className="block">
-                <span className="mb-1 block text-[13px] text-muted">回测期数（可自定义）</span>
-                <InputNumber
-                  value={periodsValue}
-                  onChange={v => setPeriodsValue(typeof v === "number" ? v : null)}
-                  min={DCA_BACKTEST_MIN_PERIODS}
-                  max={DCA_PAGE_PERIOD_HARD_MAX}
-                  step={1}
-                  precision={0}
-                  style={{ width: "100%" }}
-                  addonAfter="期"
-                />
-                <span className="mt-1 block text-[12px] text-placeholder">
-                  {availablePeriods > 0
-                    ? `当前频率库里最多 ${availablePeriods} 期，填多了按最多算`
-                    : "库里还没有这只基金的净值"}
-                </span>
-              </div>
-            </div>
-            <div className="mt-3">
-              <Button type="primary" htmlType="submit" loading={computing}>
-                开始回测
-              </Button>
-            </div>
-          </RouterForm>
-        </div>
-
-        {notices.map(n => (
-          <Alert key={n} type="info" showIcon className="mt-3" message={n} />
-        ))}
-      </SectionCard>
+      <ParamsCard
+        key={paramsKey}
+        code={code}
+        fundName={fundName}
+        isDefault={isDefault}
+        availablePeriods={availablePeriods}
+        q={q}
+        results={results}
+        notices={notices}
+        initial={{ amountCents, frequency, periods, adjust }}
+      />
 
       {truncated
         ? (
@@ -457,10 +528,11 @@ export default function DcaBacktestPage({ loaderData }: Route.ComponentProps) {
               </SectionCard>
 
               <SectionCard title="累计投入与持仓市值" className="animate-fade-up animate-delay-[180ms]">
-                <DcaBacktestChart schedule={backtest.schedule} />
+                <DcaBacktestChart curve={dcaCurvePoints(backtest)} />
                 <Paragraph type="secondary" className="mt-3 mb-0 text-[12px]">
-                  市值线跑到成本线之上就是赚、之下就是亏。两条线只画到买入日——
-                  定投的现金本来就是每月进一次，逐日曲线不会多出决策信息。
+                  市值线跑到成本线之上就是赚、之下就是亏。每期一个点，再加期末那次估值——
+                  两条线的终点与概览里的「期末市值」同源；定投的现金本来就是每期进一次，
+                  逐日曲线不会多出决策信息。
                 </Paragraph>
               </SectionCard>
             </>
@@ -470,7 +542,7 @@ export default function DcaBacktestPage({ loaderData }: Route.ComponentProps) {
               <EmptyState
                 description={code ? "这只基金的净值历史还不够算回测" : "先选一只基金"}
                 hint={code
-                  ? "回测至少要 3 期（3 个月）净值；换一只成立更久、或本站已同步过净值的基金试试"
+                  ? `回测至少要 ${DCA_BACKTEST_MIN_PERIODS} 期净值（当前频率：${DCA_FREQUENCY_LABELS[frequency]}）；换一只成立更久、或本站已同步过净值的基金试试`
                   : "在上方搜索基金代码或名称，选中后立刻出结果"}
               />
             </SectionCard>
