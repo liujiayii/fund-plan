@@ -10,6 +10,7 @@
  * （全站只服务这一个域名，别处挂第二个 host 会让搜索引擎当两站）。
  */
 
+import dayjs from "dayjs";
 import { centsToYuan, rateToPercent } from "./money";
 
 /** 主站 origin，无尾斜杠。所有绝对 URL 都从这里拼 */
@@ -94,6 +95,21 @@ export interface SitemapFund {
 /** lastmod 必须是 YYYY-MM-DD——脏数据宁可丢掉，也别把 XML 弄废 */
 const LASTMOD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * lastmod 必须是**真实存在**的日期。
+ * nav_date 落库前只校验了非空（schema 只有 notNull），东财字段脏了会给到
+ * 2026-13-40 / 2026-02-30 这种「格式对但不存在」的值，一路经 max(nav_date)
+ * 传到这里——真发出去就是个无效的 lastmod（CodeRabbit 评审 #2）。
+ */
+function isValidLastmod(value: string): boolean {
+  if (!LASTMOD_RE.test(value)) {
+    return false;
+  }
+  const d = dayjs(value);
+  // 回写比对：dayjs 对越界日期可能顺延（2026-02-30 → 03-02），顺延过就不是同一个日期
+  return d.isValid() && d.format("YYYY-MM-DD") === value;
+}
+
 /** 单条 <url>。有 lastmod 才输出那一行：空标签会被爬虫当脏数据 */
 function urlTag(loc: string, lastmod: string | null): string {
   const lines = [`    <loc>${xmlEscape(loc)}</loc>`];
@@ -116,7 +132,7 @@ export function buildSitemapXml(funds: readonly SitemapFund[]): string {
     if (!FUND_CODE_RE.test(f.code)) {
       continue;
     }
-    const lastmod = f.lastmod && LASTMOD_RE.test(f.lastmod) ? f.lastmod : null;
+    const lastmod = f.lastmod && isValidLastmod(f.lastmod) ? f.lastmod : null;
     urlTags.push(urlTag(canonicalUrl(`/funds/${f.code}`), lastmod));
   }
   return [

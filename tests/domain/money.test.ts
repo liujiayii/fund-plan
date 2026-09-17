@@ -3,7 +3,9 @@ import {
   centsToYuan,
   multiplyCents,
   NAV_SCALE,
+  navFromText,
   navToDisplay,
+  percentToRate,
   RATE_SCALE,
   rateToPercent,
   roundInt,
@@ -112,6 +114,25 @@ describe("money 精度换算", () => {
       expect(roundInt("2.5")).toBe(3); // 若用银行家舍入会得 2，这里必须是 3
       expect(roundInt("1.4")).toBe(1);
       expect(roundInt("-1.5")).toBe(-2);
+    });
+  });
+
+  describe("percentToRate / navFromText 把用户输入的文本缩放成整数", () => {
+    it("百分比文本 ×100 取整：1.005% → 101 万分之（Number() 会错算成 100）", () => {
+      expect(percentToRate("1.005")).toBe(101);
+      expect(percentToRate("1.50")).toBe(150);
+      expect(percentToRate("0")).toBe(0);
+      expect(percentToRate(" 2.5 ")).toBe(250);
+    });
+
+    it("净值文本 ×10000 取整：1.2345 → 12345", () => {
+      expect(navFromText("1.2345")).toBe(12345);
+      expect(navFromText("1.0")).toBe(10000);
+    });
+
+    it("非法文本直接抛，由调用方兜住（页面给提示，而不是静默出 0）", () => {
+      expect(() => percentToRate("abc")).toThrow();
+      expect(() => navFromText("")).toThrow();
     });
   });
 });

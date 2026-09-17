@@ -26,7 +26,7 @@
 curl -sI https://liujiayii.dpdns.org/robots.txt    # 200，text/plain
 curl -s  https://liujiayii.dpdns.org/robots.txt    # 含 Sitemap: …/sitemap.xml
 curl -sI https://liujiayii.dpdns.org/sitemap.xml   # 200，application/xml
-curl -s  https://liujiayii.dpdns.org/sitemap.xml | grep -c '<lastmod>'            # = 已落档基金数
+curl -s  https://liujiayii.dpdns.org/sitemap.xml | grep -c '<lastmod>'            # = 有净值日期的基金数（没净值行的只出 loc）
 curl -s  https://liujiayii.dpdns.org/tools/fee-calculator | grep -o '净申购金额'   # 正文 SSR
 curl -s  https://liujiayii.dpdns.org/funds/000001 | grep -o '"@type":"BreadcrumbList"'
 ```

@@ -98,6 +98,18 @@ describe("buildSitemapXml", () => {
     expect(xml).toContain("<loc>https://liujiayii.dpdns.org/funds/000001</loc>");
   });
 
+  it("lastmod 是「格式对但日期不存在」也丢掉（东财字段脏了会这样），闰年 2-29 保留", () => {
+    // nav_date 落库前只检查了非空（schema 只 notNull），2026-13-40 这种能一路传到 sitemap
+    const xml = buildSitemapXml([
+      { code: "000001", lastmod: "2026-13-40" },
+      { code: "110022", lastmod: "2026-02-30" },
+      { code: "161725", lastmod: "2024-02-29" },
+    ]);
+    expect(xml).not.toContain("2026-13-40");
+    expect(xml).not.toContain("2026-02-30");
+    expect(xml).toContain("<lastmod>2024-02-29</lastmod>");
+  });
+
   it("私页路径绝不能出现在 sitemap 里", () => {
     const xml = buildSitemapXml([{ code: "000001" }]);
     expect(xml).not.toContain("/me");

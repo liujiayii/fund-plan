@@ -42,6 +42,22 @@ export function centsToYuan(cents: number): string {
   return new Decimal(cents).div(YUAN).toFixed(2);
 }
 
+/**
+ * 百分比文本 → 万分之整数（如 "1.50" → 150、"1.005" → 101）。
+ *
+ * 必须走 Decimal：`Number("1.005") * 100` 是 100.49999999999999，Math.round
+ * 会把它错算成 100——费率凭空少一个万分点（CodeRabbit 评审 #3）。
+ * 非法文本由 Decimal 直接抛，调用方兜住并给用户提示。
+ */
+export function percentToRate(text: string): number {
+  return roundInt(new Decimal(text.trim()).mul(100));
+}
+
+/** 净值文本 → ×10000 整数（如 "1.2345" → 12345）。与 percentToRate 同理，走 Decimal */
+export function navFromText(text: string): number {
+  return roundInt(new Decimal(text.trim()).mul(NAV_SCALE));
+}
+
 /** 份额 → 展示字符串，默认两位小数（存储是 4 位精度） */
 export function sharesToDisplay(shares: number, fractionDigits = 2): string {
   return new Decimal(shares).div(SHARE_SCALE).toFixed(fractionDigits);

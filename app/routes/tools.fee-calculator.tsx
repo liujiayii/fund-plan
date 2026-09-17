@@ -6,7 +6,7 @@ import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
-import { navToDisplay, rateToPercent, sharesToDisplay, yuanToCents } from "~/domain/money";
+import { navFromText, navToDisplay, percentToRate, rateToPercent, sharesToDisplay, yuanToCents } from "~/domain/money";
 import { calcPurchase } from "~/domain/purchase";
 import { DEFAULT_REDEEM_TIERS, quoteRedeemByHoldDays } from "~/domain/redeem";
 import { pageMeta } from "~/domain/seo";
@@ -121,21 +121,33 @@ export default function FeeCalculator({ loaderData }: Route.ComponentProps) {
   const result = (() => {
     try {
       const amountCents = yuanToCents(amountYuan.trim());
-      const purchaseRate = Math.round(Number(ratePercent) * 100); // % → 万分之
-      const buyNavScaled = Math.round(Number(buyNav) * 10000);
-      const days = Math.floor(Number(holdDays));
-      const sellNavScaled = Math.round(Number(sellNav) * 10000);
+      // 费率与净值都从**原始文本**走 Decimal 缩放：Number("1.005") * 100
+      // 会得到 100.49999999999999，Math.round 错算成 100（CodeRabbit 评审 #3）
+      const purchaseRate = percentToRate(ratePercent);
+      const buyNavScaled = navFromText(buyNav);
+      const sellNavScaled = navFromText(sellNav);
+      // 持有天数是「按天查费率档」的输入，非整数必须拒：Math.floor 会把 6.9 静默
+      // 变成 6，而页面还显示着 6.9 天——第 7 天边界附近费率与到账金额全错（评审 #4）
+      const days = Number(holdDays.trim());
+      if (holdDays.trim() === "" || !Number.isInteger(days)) {
+        throw new Error("持有天数请填整数天（如 30）");
+      }
 
-      if (!Number.isFinite(amountCents) || amountCents <= 0)
+      if (amountCents <= 0) {
         throw new Error("申购金额要大于 0");
-      if (!Number.isFinite(purchaseRate) || purchaseRate < 0 || purchaseRate > 500)
+      }
+      if (purchaseRate < 0 || purchaseRate > 500) {
         throw new Error("申购费率请在 0% ~ 5% 之间");
-      if (!Number.isFinite(buyNavScaled) || buyNavScaled <= 0)
+      }
+      if (buyNavScaled <= 0) {
         throw new Error("买入净值要大于 0");
-      if (!Number.isFinite(days) || days < 0)
+      }
+      if (days < 0) {
         throw new Error("持有天数不能为负");
-      if (!Number.isFinite(sellNavScaled) || sellNavScaled <= 0)
+      }
+      if (sellNavScaled <= 0) {
         throw new Error("赎回净值要大于 0");
+      }
 
       const buy = calcPurchase({ amountCents, navScaled: buyNavScaled, purchaseRate });
       const sell = quoteRedeemByHoldDays({

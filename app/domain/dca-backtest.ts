@@ -163,6 +163,15 @@ export function runDcaBacktest(
 
   const finalValueCents = valueCents(shares, last.nav);
 
+  // 对照组的「同期一次性买入」是同一笔钱（investedCents）一次买入，所以同样要扣申购费：
+  // 只比首末净值会把对照值算高（费率 1.5%、净值 1.0 → 1.3 时是 30% vs 真实 28.08%）
+  const lumpShares = calcPurchase({
+    amountCents: investedCents,
+    navScaled: first.nav,
+    purchaseRate: input.purchaseRate,
+  }).sharesScaled;
+  const lumpFinalCents = valueCents(lumpShares, last.nav);
+
   return {
     periods: buys.length,
     investedCents,
@@ -173,7 +182,7 @@ export function runDcaBacktest(
     maxDrawdown: roundInt(maxDrawdown.mul(RATE_SCALE)),
     avgCostNav: roundInt(new Decimal(investedCents).mul(1_000_000).div(shares)),
     lumpSumRate: roundInt(
-      new Decimal(last.nav).minus(first.nav).div(first.nav).mul(RATE_SCALE),
+      new Decimal(lumpFinalCents).minus(investedCents).div(investedCents).mul(RATE_SCALE),
     ),
     from: first.navDate,
     to: last.navDate,
