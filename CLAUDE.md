@@ -85,7 +85,7 @@ workers/app.ts   Worker 入口：export default { fetch, scheduled }
 - `me.holdings.$code.tsx` → `/me/holdings/:code`（点号串联即层级）
 
 鉴权不在路由表里，而在各自 loader：公开页（`/` `/master` `/leaderboard`
-`/funds*` `/login` `/register`）游客可见；`/me` 系列用 `requireUser` 把门；
+`/funds*` `/tools*` `/login` `/register`）游客可见；`/me` 系列用 `requireUser` 把门；
 `/admin` 系列用 `requireAdmin` 把门（非 admin 一律 403）。
 
 ### loader/action 里取 env 的标准姿势
@@ -341,6 +341,8 @@ CodeRabbit 评审处理方式、合并即自动部署的完整规约都在里面
 - 国内访问优化 `docs/china-access.md`（诊断证据、SaaS 优选 IP 施工图；`/` 与
   `/master` 的游客视图走 `workers/app.ts` 的边缘缓存，排障看 `x-fp-cache` 头）
 - 开发指南 `docs/development.md`（踩坑记录的完整版）
+- 搜索引擎收录与曝光 `docs/seo.md`（域名纪律、爬虫基建自检、站长平台提交、
+  收录排查清单、关键词落地页与口径；**SEO 相关的新内容写这里，别往部署指南里塞**）
 
 **设计文档 `.superpowers/specs/`（记录「为什么这样设计」，git diff 答不出的那部分）：**
 

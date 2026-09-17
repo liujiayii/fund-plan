@@ -6,6 +6,7 @@ import {
   anonCacheFreshness,
   isAnonCacheablePage,
 } from "../app/domain/anon-page-cache";
+import { pageCacheControl } from "../app/domain/page-cache-header";
 import { isPageVisit, parseVisitorId, visitorCookie } from "../app/domain/visit";
 import { scanDcaPlans } from "../app/services/dca-service";
 import { purgeExpiredSessions, readTokenFromRequest } from "../app/services/session";
@@ -52,7 +53,9 @@ const CACHED_AT_HEADER = "x-fp-cached-at";
 
 /**
  * 页面请求出站收尾：
- *  - 对浏览器永远 no-store——登录后立刻回首页不能看到游客版残影；
+ *  - Cache-Control 交给 pageCacheControl：匿名（游客与爬虫同一份内容）给
+ *    「可存但每次须回源校验」，登录态给 no-store——登录后立刻回首页
+ *    不能看到游客版残影；
  *  - x-fp-cache 标注本请求走了哪条缓存路径，线上排障用。
  * SSR 返回的 Response headers 可能不可变，复制一份再追加；
  * body 是流，用 new Response(body, init) 原样转交不缓冲。
@@ -60,9 +63,10 @@ const CACHED_AT_HEADER = "x-fp-cached-at";
 function finalizePageResponse(
   response: Response,
   cacheState: "hit" | "stale" | "miss" | "bypass",
+  hasSessionCookie: boolean,
 ): Response {
   const headers = new Headers(response.headers);
-  headers.set("Cache-Control", "private, no-store");
+  headers.set("Cache-Control", pageCacheControl(hasSessionCookie));
   // 时间戳是缓存内部记账用的，不外泄给浏览器
   headers.delete(CACHED_AT_HEADER);
   headers.set("x-fp-cache", cacheState);
@@ -146,11 +150,13 @@ async function serveAnonCached(
   ctx: ExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
+  // 登录态既决定能否命中匿名缓存，也决定出站 Cache-Control 档位（见 pageCacheControl）
+  const hasSessionCookie = readTokenFromRequest(request) !== "";
   const cacheable = isAnonCacheablePage({
     method: request.method,
     pathname: url.pathname,
     search: url.search,
-    hasSessionCookie: readTokenFromRequest(request) !== "",
+    hasSessionCookie,
   });
   // caches.default 是 Cloudflare 扩展（Workers 运行时存在），但生成的
   // worker-configuration.d.ts 里 CacheStorage 是标准接口、没有这个属性，需断言
@@ -168,7 +174,7 @@ async function serveAnonCached(
       const freshness = anonCacheFreshness(ageSec);
 
       if (freshness === "fresh") {
-        return finalizePageResponse(cached, "hit");
+        return finalizePageResponse(cached, "hit", hasSessionCookie);
       }
       if (freshness === "stale") {
         // 先给旧页，再后台刷新；刷新失败缓存继续 stale，下个请求再试——自愈
@@ -176,7 +182,7 @@ async function serveAnonCached(
           refreshAnonCache(request, env, ctx, cache, cacheKey).catch(err =>
             console.error("[cache] 匿名页后台刷新失败：", err)),
         );
-        return finalizePageResponse(cached, "stale");
+        return finalizePageResponse(cached, "stale", hasSessionCookie);
       }
       // expired：太老，落到下面按 miss 重新 SSR
     }
@@ -188,7 +194,7 @@ async function serveAnonCached(
 
   // 非 200（重定向/错误页）或不可缓存的请求：不写缓存，直接收尾
   if (!cacheable || response.status !== 200 || !response.body) {
-    return finalizePageResponse(response, "bypass");
+    return finalizePageResponse(response, "bypass", hasSessionCookie);
   }
 
   // 流式响应 tee 一支给缓存（cache.put 需要完整 body），一支照常还给客户端；
@@ -206,6 +212,7 @@ async function serveAnonCached(
       headers: response.headers,
     }),
     "miss",
+    hasSessionCookie,
   );
 }
 

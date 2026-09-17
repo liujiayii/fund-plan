@@ -41,6 +41,15 @@ describe("SEO 路由守卫", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("首页 hero 主标是真 h1（页面主题的第一信号）", () => {
+    // 2026-09-17 实测：全站唯一 h1 只在错误边界里，首页主标是 h2、其余页是 h3。
+    // 首页是全站唯一有机会排「模拟基金定投系统」这类品牌词的页，先给它真 h1。
+    // 其余公开页仍是 antd Title level={3}（字号即 level，component 被内部覆盖，
+    // 改成 h1 会连带字号漂移），属已知技术债，见 docs/seo.md。
+    const src = readRoute("_index.tsx");
+    expect(src).toMatch(/<h1[\s>]/);
+  });
+
   it("公开页 meta 走 pageMeta，且不带 noindex", () => {
     const publicFiles = [
       "_index.tsx",
@@ -48,6 +57,7 @@ describe("SEO 路由守卫", () => {
       "leaderboard.tsx",
       "funds._index.tsx",
       "funds.$code.tsx",
+      "tools.fee-calculator.tsx",
       "login.tsx",
       "register.tsx",
     ];

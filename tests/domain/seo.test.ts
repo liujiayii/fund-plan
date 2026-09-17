@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildFundBreadcrumbJsonLd,
+  buildFundMeta,
   buildJsonLd,
   buildRobotsTxt,
   buildSitemapXml,
@@ -15,10 +17,9 @@ import {
  */
 
 describe("SEO 常量", () => {
-  it("canonical 钉死主站，不含尾斜杠、不含备用域名", () => {
+  it("canonical 钉死主站，不含尾斜杠", () => {
     expect(CANONICAL_ORIGIN).toBe("https://liujiayii.dpdns.org");
     expect(CANONICAL_ORIGIN.endsWith("/")).toBe(false);
-    expect(CANONICAL_ORIGIN).not.toContain("liujiayi.dpdns.org");
   });
 
   it("站点名与默认 OG 图走主站绝对地址", () => {
@@ -40,8 +41,9 @@ describe("buildRobotsTxt", () => {
     expect(txt).toContain("Disallow: /me/trade");
   });
 
-  it("不把备用域名写进 robots", () => {
-    expect(buildRobotsTxt()).not.toContain("liujiayi.dpdns.org");
+  it("robots 里出现的 URL 只有主站域名", () => {
+    const hosts = [...buildRobotsTxt().matchAll(/https?:\/\/([^\s/]+)/g)].map(m => m[1]);
+    expect(hosts).toEqual(["liujiayii.dpdns.org"]);
   });
 });
 
@@ -50,7 +52,7 @@ describe("buildSitemapXml", () => {
     const xml = buildSitemapXml([]);
     expect(xml.startsWith("<?xml")).toBe(true);
     expect(xml).toContain("<urlset");
-    for (const path of ["/", "/master", "/leaderboard", "/funds", "/login", "/register"]) {
+    for (const path of ["/", "/master", "/leaderboard", "/funds", "/tools/fee-calculator", "/login", "/register"]) {
       expect(xml).toContain(`<loc>https://liujiayii.dpdns.org${path === "/" ? "/" : path}</loc>`);
     }
     // 首页 loc 必须是 origin + "/"，不能丢斜杠也不能写成双斜杠
@@ -58,15 +60,58 @@ describe("buildSitemapXml", () => {
   });
 
   it("基金详情按代码追加，非法代码丢弃", () => {
-    const xml = buildSitemapXml(["000001", "bad", "110022", ""]);
+    const xml = buildSitemapXml([
+      { code: "000001" },
+      { code: "bad" },
+      { code: "110022" },
+      { code: "" },
+    ]);
     expect(xml).toContain("<loc>https://liujiayii.dpdns.org/funds/000001</loc>");
     expect(xml).toContain("<loc>https://liujiayii.dpdns.org/funds/110022</loc>");
     expect(xml).not.toContain("/funds/bad");
     expect(xml).not.toContain("/funds/<loc>");
   });
 
+  it("基金页带 lastmod（自己的最新净值日期），静态页不带", () => {
+    const xml = buildSitemapXml([
+      { code: "000001", lastmod: "2026-09-16" },
+      { code: "110022" },
+    ]);
+    // 基金页：loc 后紧跟 lastmod，成对出现
+    expect(xml).toContain(
+      "<loc>https://liujiayii.dpdns.org/funds/000001</loc>\n    <lastmod>2026-09-16</lastmod>",
+    );
+    // 没有净值行（lastmod 为 null/缺省）的基金只出 loc，绝不出空 lastmod
+    expect(xml).not.toMatch(/<lastmod>\s*<\/lastmod>/);
+    // 静态页不猜 lastmod：Google 明确表示不准确的 lastmod 会被忽略甚至反噬
+    const staticBlock = xml.split("<loc>https://liujiayii.dpdns.org/</loc>")[1] ?? "";
+    expect(staticBlock.slice(0, 40)).not.toContain("<lastmod>");
+  });
+
+  it("lastmod 格式不合法（脏数据）一律丢掉，不把 XML 弄废", () => {
+    const xml = buildSitemapXml([
+      { code: "000001", lastmod: "2026/09/16" },
+      { code: "110022", lastmod: "</lastmod><script>" },
+    ]);
+    expect(xml).not.toContain("2026/09/16");
+    expect(xml).not.toContain("<script>");
+    expect(xml).toContain("<loc>https://liujiayii.dpdns.org/funds/000001</loc>");
+  });
+
+  it("lastmod 是「格式对但日期不存在」也丢掉（东财字段脏了会这样），闰年 2-29 保留", () => {
+    // nav_date 落库前只检查了非空（schema 只 notNull），2026-13-40 这种能一路传到 sitemap
+    const xml = buildSitemapXml([
+      { code: "000001", lastmod: "2026-13-40" },
+      { code: "110022", lastmod: "2026-02-30" },
+      { code: "161725", lastmod: "2024-02-29" },
+    ]);
+    expect(xml).not.toContain("2026-13-40");
+    expect(xml).not.toContain("2026-02-30");
+    expect(xml).toContain("<lastmod>2024-02-29</lastmod>");
+  });
+
   it("私页路径绝不能出现在 sitemap 里", () => {
-    const xml = buildSitemapXml(["000001"]);
+    const xml = buildSitemapXml([{ code: "000001" }]);
     expect(xml).not.toContain("/me");
     expect(xml).not.toContain("/admin");
     expect(xml).not.toContain("/logout");
@@ -137,6 +182,31 @@ describe("pageMeta", () => {
   });
 });
 
+describe("buildFundBreadcrumbJsonLd", () => {
+  it("三级面包屑：首页 › 基金 › 该基金，item 全是主站绝对 URL", () => {
+    const ld = buildFundBreadcrumbJsonLd({ name: "华夏成长混合", code: "000001" });
+    expect(ld["@context"]).toBe("https://schema.org");
+    expect(ld["@type"]).toBe("BreadcrumbList");
+    expect(ld.itemListElement).toEqual([
+      { "@type": "ListItem", "position": 1, "name": "首页", "item": "https://liujiayii.dpdns.org/" },
+      { "@type": "ListItem", "position": 2, "name": "基金", "item": "https://liujiayii.dpdns.org/funds" },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": "华夏成长混合（000001）",
+        "item": "https://liujiayii.dpdns.org/funds/000001",
+      },
+    ]);
+  });
+
+  it("能直接 JSON.stringify 塞进 <script type=application/ld+json>", () => {
+    const json = buildFundBreadcrumbJsonLd({ name: "易方达消费", code: "110022" });
+    const parsed = JSON.parse(JSON.stringify(json));
+    expect(parsed["@type"]).toBe("BreadcrumbList");
+    expect(parsed.itemListElement).toHaveLength(3);
+  });
+});
+
 describe("buildJsonLd", () => {
   it("首页 WebApplication JSON-LD 钉死主站 URL 与中文描述", () => {
     const json = JSON.parse(buildJsonLd());
@@ -149,5 +219,63 @@ describe("buildJsonLd", () => {
     expect(typeof json.description).toBe("string");
     expect(json.description.length).toBeGreaterThan(10);
     expect(json.offers).toMatchObject({ "@type": "Offer", "price": "0", "priceCurrency": "CNY" });
+  });
+});
+
+describe("buildFundMeta", () => {
+  /** 一份手算过的回测事实：12000 投入 → 13560.35 市值、+13.00%、回撤 8.20% */
+  const facts = {
+    name: "华夏成长混合",
+    code: "000001",
+    amountCents: 100_000,
+    backtest: {
+      periods: 12,
+      investedCents: 1_200_000,
+      finalValueCents: 1_356_035,
+      returnRate: 1300,
+      maxDrawdown: 820,
+    },
+  };
+
+  it("有回测时，title 带代码与「定投回测」，description 全是真数字", () => {
+    const { title, description } = buildFundMeta(facts);
+    expect(title).toBe("华夏成长混合（000001）净值与定投回测");
+    // 关键词与数字都要在：这是基金页唯一的「独家内容」入口
+    expect(description).toContain("华夏成长混合（000001）");
+    expect(description).toContain("每月 1000 元 × 12 期");
+    expect(description).toContain("累计投入 12000 元");
+    expect(description).toContain("期末市值 13560.35 元");
+    expect(description).toContain("收益率 +13.00%");
+    expect(description).toContain("最大回撤 8.20%");
+  });
+
+  it("收益率为负时带负号（不带多余正号）", () => {
+    const { description } = buildFundMeta({
+      ...facts,
+      backtest: { ...facts.backtest, returnRate: -432 },
+    });
+    expect(description).toContain("收益率 -4.32%");
+  });
+
+  it("期数不足（backtest 为 null）回落通用文案，且不提「定投回测」", () => {
+    const { title, description } = buildFundMeta({ ...facts, backtest: null });
+    expect(title).toBe("华夏成长混合（000001）净值与费率");
+    expect(description).not.toContain("定投回测");
+    expect(description).toContain("真实净值");
+  });
+
+  it("没有基金代码（404 兜底）时 title 退化为名字本身", () => {
+    const { title } = buildFundMeta({ name: "基金详情", code: "", amountCents: 100_000 });
+    expect(title).toBe("基金详情");
+  });
+
+  it("金额非整元时保留两位小数，不出现多余逗号", () => {
+    const { description } = buildFundMeta({
+      ...facts,
+      amountCents: 100_050,
+      backtest: { ...facts.backtest, investedCents: 1_200_600 },
+    });
+    expect(description).toContain("每月 1000.50 元");
+    expect(description).toContain("累计投入 12006 元");
   });
 });

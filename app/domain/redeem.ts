@@ -89,6 +89,52 @@ export function findRedeemRate(tiers: RedeemTier[], holdDays: number): number {
   return Math.max(...tiers.map(t => t.rate));
 }
 
+/** 单批赎回试算结果（费用计算器用） */
+export interface RedeemQuote {
+  /** 赎回金额（分，未扣费） */
+  grossCents: number;
+  /** 适用费率（万分之） */
+  rate: number;
+  /** 赎回费（分） */
+  feeCents: number;
+  /** 到账金额（分） */
+  netCents: number;
+}
+
+/**
+ * 按「持有天数」直接查档的单批赎回试算。
+ *
+ * 与 calcRedeem 的分工：calcRedeem 是多批次 FIFO 的真账本（赎回抽屉与撮合走它），
+ * 本函数只回答"这一笔持有 N 天、赎回扣多少"，供 /tools/fee-calculator 试算。
+ * 取整口径与 calcRedeem 的单批分支逐字一致（金额四舍五入到分、费用按费率乘、
+ * 到账用减法反推），所以试算出的数字与站内下单后的账本对得上。
+ */
+export function quoteRedeemByHoldDays(input: {
+  /** 赎回份额 ×10000 */
+  sharesScaled: number;
+  /** 赎回确认日净值 ×10000 */
+  navScaled: number;
+  /** 持有天数（自然日） */
+  holdDays: number;
+  /** 费率阶梯（一般传 DEFAULT_REDEEM_TIERS 或该基金覆盖的档位） */
+  tiers: RedeemTier[];
+}): RedeemQuote {
+  const { sharesScaled, navScaled, holdDays, tiers } = input;
+  if (!Number.isFinite(sharesScaled) || sharesScaled <= 0) {
+    throw new Error(`赎回份额必须为正数，收到 ${sharesScaled}`);
+  }
+  if (!Number.isFinite(navScaled) || navScaled <= 0) {
+    throw new Error(`赎回净值必须为正数，收到 ${navScaled}`);
+  }
+
+  const grossCents = roundInt(
+    sharesToDecimal(sharesScaled).mul(navToDecimal(navScaled)).mul(YUAN),
+  );
+  const rate = findRedeemRate(tiers, holdDays);
+  const feeCents = roundInt(new Decimal(grossCents).mul(rateToRatio(rate)));
+  return { grossCents, rate, feeCents, netCents: grossCents - feeCents };
+}
+
 /**
  * FIFO 逐批计算赎回。
  *

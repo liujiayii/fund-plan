@@ -3,6 +3,7 @@ import {
   calcRedeem,
   DEFAULT_REDEEM_TIERS,
   findRedeemRate,
+  quoteRedeemByHoldDays,
 } from "~/domain/redeem";
 
 /**
@@ -267,5 +268,38 @@ describe("redeem FIFO 阶梯赎回费", () => {
       // 成本也应全部摊完
       expect(r.totalCostCents).toBe(150000);
     });
+  });
+});
+
+describe("quoteRedeemByHoldDays（费用计算器用的单批试算）", () => {
+  /** 1000 份、净值 1.2 → 赎回金额 1200 元 = 120000 分 */
+  const base = { sharesScaled: 10_000_000, navScaled: 12000, tiers: DEFAULT_REDEEM_TIERS };
+
+  it("按持有天数直接查档：30 天走 0.5%", () => {
+    const q = quoteRedeemByHoldDays({ ...base, holdDays: 30 });
+    expect(q.grossCents).toBe(120_000);
+    expect(q.rate).toBe(50);
+    expect(q.feeCents).toBe(600);
+    expect(q.netCents).toBe(119_400);
+  });
+
+  it("档位左闭右开：第 6 天 1.5%、第 7 天 0.5%、第 365 天 0.25%、第 730 天免费", () => {
+    expect(quoteRedeemByHoldDays({ ...base, holdDays: 6 }).rate).toBe(150);
+    expect(quoteRedeemByHoldDays({ ...base, holdDays: 7 }).rate).toBe(50);
+    expect(quoteRedeemByHoldDays({ ...base, holdDays: 364 }).rate).toBe(50);
+    expect(quoteRedeemByHoldDays({ ...base, holdDays: 365 }).rate).toBe(25);
+    expect(quoteRedeemByHoldDays({ ...base, holdDays: 729 }).rate).toBe(25);
+    expect(quoteRedeemByHoldDays({ ...base, holdDays: 730 }).rate).toBe(0);
+  });
+
+  it("到账金额 = 赎回金额 − 赎回费，一分不差", () => {
+    const q = quoteRedeemByHoldDays({ ...base, holdDays: 6 });
+    expect(q.feeCents).toBe(1800); // 120000 × 1.5%
+    expect(q.netCents).toBe(q.grossCents - q.feeCents);
+  });
+
+  it("入参非法直接抛（页面侧 try/catch 兜住，不静默出 0）", () => {
+    expect(() => quoteRedeemByHoldDays({ ...base, sharesScaled: 0, holdDays: 30 })).toThrow();
+    expect(() => quoteRedeemByHoldDays({ ...base, navScaled: 0, holdDays: 30 })).toThrow();
   });
 });

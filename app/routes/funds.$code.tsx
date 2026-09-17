@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { AssetAllocationChart } from "~/components/AssetAllocationChart";
 import { BuyDrawer } from "~/components/BuyDrawer";
+import { DcaBacktestCard } from "~/components/DcaBacktestCard";
 import { DcaDrawer } from "~/components/DcaDrawer";
 import { NavChart } from "~/components/NavChart";
 import { PeriodReturnGrid } from "~/components/PeriodReturnGrid";
@@ -19,10 +20,11 @@ import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
 import { runBatch } from "~/db/client";
 import { account, fundNav } from "~/db/schema";
+import { DCA_BACKTEST_AMOUNT_CENTS, runDcaBacktest, toBacktestSeries } from "~/domain/dca-backtest";
 import { navToDisplay, rateToPercent } from "~/domain/money";
 import { calcPeriodReturns } from "~/domain/performance";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
-import { pageMeta } from "~/domain/seo";
+import { buildFundBreadcrumbJsonLd, buildFundMeta, pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
 import {
   ensureFund,
@@ -37,6 +39,7 @@ import {
 } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
 import { getDcaPlans, getHoldingBrief, getNavSeries } from "~/services/portfolio-service";
+import { listSiblingFunds } from "~/services/seo-service";
 import { isWatched } from "~/services/watchlist-service";
 import { pnlColor } from "~/theme";
 
@@ -45,11 +48,20 @@ const { Title, Paragraph, Text } = Typography;
 export function meta({ loaderData, params }: Route.MetaArgs) {
   const name = loaderData?.fund?.name ?? "基金详情";
   const code = params.code ?? "";
-  return pageMeta({
-    title: name,
-    description: `${name}${code ? `（${code}）` : ""}的模拟盘档案：真实净值、费率与风险等级，可练申购与定投`,
-    path: code ? `/funds/${code}` : "/funds",
+  // title / description 由 builder 拼：有回测就把真数字写进描述
+  // （长尾词「<基金名> 定投回测」「<代码> 定投收益」靠它吃饭）
+  const { title, description } = buildFundMeta({
+    name,
+    code,
+    amountCents: DCA_BACKTEST_AMOUNT_CENTS,
+    backtest: loaderData?.backtest ?? null,
   });
+  const tags = pageMeta({ title, description, path: code ? `/funds/${code}` : "/funds" });
+  // 面包屑结构化数据（首页 › 基金 › 该基金）：RR8 的 meta 原生支持 script:ld+json，
+  // 渲染进 <head>。404 兜底（拿不到 code）时不输出——层级不完整反而误导
+  return code
+    ? [...tags, { "script:ld+json": buildFundBreadcrumbJsonLd({ name, code }) }]
+    : tags;
 }
 
 /**
@@ -129,11 +141,19 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // 阶段涨幅：本地 fund_nav 计算（不新增接口依赖）
   const periodReturns = calcPeriodReturns(series);
 
+  // 定投回测：全站唯一由「我们的净值数据」算出的独有内容，
+  // 喂给页面与 meta 描述（口径见 domain/dca-backtest 文件头）。
+  // 纯内存计算，不额外查库；期数不足返回 null，卡片与文案各自回落
+  const backtest = runDcaBacktest(toBacktestSeries(series), {
+    amountCents: DCA_BACKTEST_AMOUNT_CENTS,
+    purchaseRate: f.purchaseRate,
+  });
+
   // 基金概况与投资组合：东财接口，拉不到为 null/空（不渲染对应卡片）
   // 沪深300 基准线：拉不到返回空数组，组件内传 undefined 即不画基准线（彩蛋，可砍）
   // 稳健档新增：资产配置 / 历史分红 / 基金经理详情 / 投资风格
   // （fund-data.ts 里有各接口字段名的实测注记）
-  const [detail, position, indexNav, allocation, bonus, manager, investStyle] = await Promise.all([
+  const [detail, position, indexNav, allocation, bonus, manager, investStyle, siblings] = await Promise.all([
     fetchFundDetail(env, code),
     fetchFundPosition(env, code),
     fetchIndexNav(env, "1.000300", 400),
@@ -141,6 +161,9 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     fetchBonusHistory(env, code),
     fetchManagerInfo(env, code),
     fetchInvestStyle(env, code),
+    // 同类基金内链：爬虫顺着它走到其它基金页，也给用户"接着看"的出口。
+    // 与东财那批并行（一条 D1 查询，不额外占关键路径）
+    listSiblingFunds(db, { code, type: f.type, limit: 6 }),
   ]);
 
   return {
@@ -162,6 +185,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     brief,
     dcaPlans,
     periodReturns,
+    backtest,
     detail,
     position,
     indexNav,
@@ -169,6 +193,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     bonus,
     manager,
     investStyle,
+    siblings,
   };
 }
 
@@ -309,11 +334,22 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </SectionCard>
 
+      {/* 定投回测：期数不足（新基金、净值历史太薄）时整卡不渲染——
+          宁可没有这块，也不给爬虫一页「回测」标题却没有数字的坏内容 */}
+      {loaderData.backtest && (
+        <DcaBacktestCard
+          result={loaderData.backtest}
+          amountCents={DCA_BACKTEST_AMOUNT_CENTS}
+          purchaseRate={f.purchaseRate}
+          className="animate-fade-up animate-delay-[180ms]"
+        />
+      )}
+
       {/* 基金经理：经理详情接口拉到就富展示，拉不到退化为只有名字的简卡。
           两个分支是同一视觉槽位（第 4 卡），共用 180ms 延迟 */}
       {(loaderData.manager?.length ?? 0) > 0
         ? (
-            <SectionCard title="基金经理" className="animate-fade-up animate-delay-[180ms]">
+            <SectionCard title="基金经理" className="animate-fade-up animate-delay-[240ms]">
               {loaderData.manager!.map((m, i) => (
                 <div
                   key={`${m.name}-${m.workTime}`}
@@ -337,13 +373,13 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
             </SectionCard>
           )
         : loaderData.detail?.manager && (
-          <SectionCard title="基金经理" className="animate-fade-up animate-delay-[180ms]">
+          <SectionCard title="基金经理" className="animate-fade-up animate-delay-[240ms]">
             <DataRow label="姓名" value={loaderData.detail.manager} last />
           </SectionCard>
         )}
 
       {loaderData.detail && (
-        <SectionCard title="基金概况" className="animate-fade-up animate-delay-[240ms]">
+        <SectionCard title="基金概况" className="animate-fade-up animate-delay-[300ms]">
           {/* 基金评级：星级比数字快读；0/缺省显示 — */}
           <DataRow
             label="基金评级"
@@ -375,7 +411,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
       {/* 资产配置：股票/债券/现金占净值比环形图 */}
       {loaderData.allocation && (
-        <SectionCard title="资产配置" className="animate-fade-up animate-delay-[300ms]">
+        <SectionCard title="资产配置" className="animate-fade-up animate-delay-[360ms]">
           <AssetAllocationChart
             stocks={loaderData.allocation.stocks}
             bonds={loaderData.allocation.bonds}
@@ -389,7 +425,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
       {/* 投资组合：股票/债券/行业三视图，数据哪个空藏哪个；三块全空整卡不渲染 */}
       {posOptions.length > 0 && (
-        <SectionCard title="投资组合" className="animate-fade-up animate-delay-[360ms]">
+        <SectionCard title="投资组合" className="animate-fade-up animate-delay-[420ms]">
           {posOptions.length > 1 && (
             <div className="fp-h-scroll" style={{ marginBottom: 16 }}>
               <Segmented
@@ -434,7 +470,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
 
       {/* 历史分红：无记录整卡不渲染 */}
       {(loaderData.bonus?.length ?? 0) > 0 && (
-        <SectionCard title="历史分红" className="animate-fade-up animate-delay-[420ms]">
+        <SectionCard title="历史分红" className="animate-fade-up animate-delay-[480ms]">
           {bonusRows.map((b, i) => (
             <DataRow
               key={b.label}
@@ -447,12 +483,19 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
         </SectionCard>
       )}
 
-      <SectionCard title="赎回费率阶梯" className="animate-fade-up animate-delay-[480ms]">
+      <SectionCard title="赎回费率阶梯" className="animate-fade-up animate-delay-[540ms]">
         <Paragraph type="secondary">
           赎回按
           <Text strong>份额批次先进先出</Text>
           逐批计费，每批按各自的持有天数查下表档位。
           所以一笔赎回可能同时按多个费率计费。
+        </Paragraph>
+        {/* 内链到费用计算器：把这页的费率带过去预填（万分之 / ×10000，与库里口径一致） */}
+        <Paragraph type="secondary" className="mb-3">
+          想先算算这一笔？
+          <Link to={`/tools/fee-calculator?rate=${f.purchaseRate}&nav=${latest?.unitNav ?? 0}`}>
+            用费用计算器试算 →
+          </Link>
         </Paragraph>
         {f.redeemTiers.map((t, i) => (
           // key 用 minDays 而非数组索引：档位查找是 `holdDays >= t.minDays`，
@@ -471,6 +514,33 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           />
         ))}
       </SectionCard>
+
+      {/* 同类基金：同类型最多 6 条内链。同类为空（type 为空串、或库里只有它一只）
+          整卡不渲染——空卡既是坏内容，也没有内链价值 */}
+      {loaderData.siblings.length > 0 && (
+        <SectionCard
+          title="同类基金"
+          extra={<Link to="/funds">全部基金</Link>}
+          className="animate-fade-up animate-delay-[600ms]"
+        >
+          <Space size={[8, 8]} wrap>
+            {loaderData.siblings.map(s => (
+              <Link key={s.code} to={`/funds/${s.code}`} className="no-underline">
+                <Tag className="cursor-pointer">
+                  {s.name}
+                  {" "}
+                  {s.code}
+                </Tag>
+              </Link>
+            ))}
+          </Space>
+          <Paragraph type="secondary" className="mt-3 mb-0 text-[12px]">
+            同为
+            {f.type}
+            ，已收录的其它基金——各页的净值、费率与定投回测都是同一套真实数据。
+          </Paragraph>
+        </SectionCard>
+      )}
 
       {!latest && (
         <Alert

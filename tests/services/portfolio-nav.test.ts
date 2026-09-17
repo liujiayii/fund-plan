@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "~/db/client";
 import { fundNav } from "~/db/schema";
-import { latestNavMap } from "~/services/portfolio-service";
+import { getNavSeries, latestNavMap } from "~/services/portfolio-service";
 
 /**
  * latestNavMap 行为钉子：它被 /me、/master、自选列表、首页共用，
@@ -62,5 +62,33 @@ describe("latestNavMap", () => {
   it("空列表返回空 Map，不发查询", async () => {
     const map = await latestNavMap(getDb(env.DB), []);
     expect(map.size).toBe(0);
+  });
+});
+
+describe("getNavSeries", () => {
+  it("按日期升序返回，且必须带上累计净值（定投回测的复权口径靠它）", async () => {
+    const db = getDb(env.DB);
+    // 单位净值与累计净值刻意给不同值：只 select unitNav 时这条会红
+    await db.insert(fundNav).values([
+      { fundCode: "000001", navDate: "2026-08-10", unitNav: 11000, accNav: 13000, growthRate: 22 },
+      { fundCode: "000001", navDate: "2026-08-01", unitNav: 10000, accNav: 12000, growthRate: 11 },
+    ]);
+
+    expect(await getNavSeries(db, "000001")).toEqual([
+      { navDate: "2026-08-01", unitNav: 10000, accNav: 12000, growthRate: 11 },
+      { navDate: "2026-08-10", unitNav: 11000, accNav: 13000, growthRate: 22 },
+    ]);
+  });
+
+  it("传 days 时取最近 N 条（升序输出）", async () => {
+    const db = getDb(env.DB);
+    await db.insert(fundNav).values([
+      { fundCode: "000001", navDate: "2026-08-01", unitNav: 10000, accNav: 10000, growthRate: 0 },
+      { fundCode: "000001", navDate: "2026-08-02", unitNav: 10100, accNav: 10100, growthRate: 100 },
+      { fundCode: "000001", navDate: "2026-08-03", unitNav: 10200, accNav: 10200, growthRate: 99 },
+    ]);
+
+    const series = await getNavSeries(db, "000001", 2);
+    expect(series.map(p => p.navDate)).toEqual(["2026-08-02", "2026-08-03"]);
   });
 });
