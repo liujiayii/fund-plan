@@ -54,6 +54,14 @@ describe("resolveSelectedKey", () => {
     expect(NAV_ITEMS.some(i => i.key === "/tools/fee-calculator")).toBe(true);
     expect(resolveSelectedKey("/tools/fee-calculator", NAV_ITEMS)).toBe("/tools/fee-calculator");
   });
+
+  it("定投回测页同样挂进导航，且两个工具页的高亮互不吞", () => {
+    expect(NAV_ITEMS.some(i => i.key === "/tools/dca-backtest")).toBe(true);
+    expect(resolveSelectedKey("/tools/dca-backtest", NAV_ITEMS)).toBe("/tools/dca-backtest");
+    // /tools/fee-calculator 不是 /tools/dca-backtest 的前缀，反之亦然——
+    // 两个 key 都以 /tools/ 开头，写错成父级前缀会让另一页高亮错项
+    expect(resolveSelectedKey("/tools/fee-calculator", NAV_ITEMS)).toBe("/tools/fee-calculator");
+  });
 });
 
 describe("MOBILE_TAB_KEYS", () => {

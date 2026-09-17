@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { NavItem } from "~/domain/nav";
 import {
+  AreaChartOutlined,
   CalculatorOutlined,
   CrownOutlined,
   DashboardOutlined,
@@ -19,6 +20,10 @@ const NAV_ICON: Record<string, ReactNode> = {
   "/leaderboard": <TrophyOutlined />,
   "/funds": <FundOutlined />,
   "/tools/fee-calculator": <CalculatorOutlined />,
+  // 定投回测：曲线图（与费用计算器的计算器图标区分开）。⚠️ 漏登记会静默
+  // 退回下面的 UserOutlined，看起来就像「我的」——tests/domain/seo-guard.test.ts
+  // 钉着「每个 NAV_ITEMS 的 key 都必须登记」
+  "/tools/dca-backtest": <AreaChartOutlined />,
   "/me/watchlist": <StarOutlined />,
   "/me": <UserOutlined />,
   "/admin": <DashboardOutlined />,
