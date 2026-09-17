@@ -165,3 +165,4 @@ docs/           部署与开发指南（设计文档与实施计划为本地工�
 
 - [部署指南](docs/deployment.md)
 - [开发指南](docs/development.md)
+- [搜索引擎收录（SEO）](docs/seo.md)
