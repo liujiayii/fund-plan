@@ -10,6 +10,7 @@ import {
   bucketDailyPnl,
   bucketKeyOfDate,
   pageOfDate,
+  pageOfKey,
   shiftPage,
 } from "~/domain/pnl-buckets";
 import { COLOR, pnlColor } from "~/theme";
@@ -308,8 +309,18 @@ function ProfitCalendarInner({
   const firstPage = pageOfDate(firstDate, dimension);
   const lastPage = pageOfDate(lastDate, dimension);
 
-  // currentPage 状态：初始值从 data 派生（数据末页，用户进来看到的就是最新一段）
-  const [currentPage, setCurrentPage] = useState(lastPage);
+  // currentPage 状态：初始值从 data 派生（数据末页，用户进来看到的就是最新一段）。
+  // 有选中桶时以选中桶所在页开局——数据末页若整页零收益，默认选中桶会落到更早的
+  // 页上，从末页开局会让明细区指向一段日历上根本看不见的区间（CodeRabbit PR #100）
+  const [currentPage, setCurrentPage] = useState(() =>
+    selectedKey ? pageOfKey(selectedKey, dimension) : lastPage);
+
+  // 同粒度下重新加载（admin 换用户、重新校验）会让数据范围变化，旧的 currentPage
+  // 可能越界：渲染时夹回有效区间（CodeRabbit PR #100）。用派生值而不是 effect 回写
+  // state——少一次多余渲染，也避免 pageKeys 与 bucketMap 对不上时闪出一屏空格子
+  const page = currentPage < firstPage
+    ? firstPage
+    : currentPage > lastPage ? lastPage : currentPage;
 
   // 逐日 → 粒度桶（金额求和 + 收益率复利连乘，见 domain/pnl-buckets）
   const buckets = useMemo(() => bucketDailyPnl(data, dimension), [data, dimension]);
@@ -331,28 +342,28 @@ function ProfitCalendarInner({
     }
     switch (dimension) {
       case "day": {
-        const days = dayjs(`${currentPage}-01`).daysInMonth();
+        const days = dayjs(`${page}-01`).daysInMonth();
         return Array.from(
           { length: days },
-          (_, i) => `${currentPage}-${String(i + 1).padStart(2, "0")}`,
+          (_, i) => `${page}-${String(i + 1).padStart(2, "0")}`,
         );
       }
       case "week":
-        return weekKeysOfYear(currentPage);
+        return weekKeysOfYear(page);
       case "month":
         return Array.from(
           { length: 12 },
-          (_, i) => `${currentPage}-${String(i + 1).padStart(2, "0")}`,
+          (_, i) => `${page}-${String(i + 1).padStart(2, "0")}`,
         );
     }
-  }, [currentPage, dimension, allYears]);
+  }, [page, dimension, allYears]);
 
   // 页导航：日粒度按月、周/月粒度按年；年粒度只有一页，不渲染翻页按钮
-  const hasNav = currentPage !== ALL_PAGES;
-  const prevPage = shiftPage(currentPage, dimension, -1);
-  const nextPage = shiftPage(currentPage, dimension, 1);
-  const prevDisabled = currentPage <= firstPage;
-  const nextDisabled = currentPage >= lastPage;
+  const hasNav = page !== ALL_PAGES;
+  const prevPage = shiftPage(page, dimension, -1);
+  const nextPage = shiftPage(page, dimension, 1);
+  const prevDisabled = page <= firstPage;
+  const nextDisabled = page >= lastPage;
 
   // 分档阈值随粒度放大（日粒度 scale=1，原样返回，外观零回归）
   const tiers = useMemo(
@@ -362,7 +373,7 @@ function ProfitCalendarInner({
 
   // dayjs .day()：0=周日 1=周一 … 6=周六 —— 周日始的网格里这恰好就是
   // 月初空位数（周日落在第 0 列），无需再换算
-  const startOffset = dimension === "day" ? dayjs(`${currentPage}-01`).day() : 0;
+  const startOffset = dimension === "day" ? dayjs(`${page}-01`).day() : 0;
 
   return (
     <div>
@@ -393,7 +404,7 @@ function ProfitCalendarInner({
           </Button>
         )}
         <span style={{ fontWeight: 600, fontSize: 15 }}>
-          {pageLabel(currentPage, dimension)}
+          {pageLabel(page, dimension)}
         </span>
         {hasNav && (
           <Button size="small" disabled={nextDisabled} onClick={() => setCurrentPage(nextPage)}>
