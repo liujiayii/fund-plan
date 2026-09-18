@@ -16,6 +16,7 @@ import {
   transactions,
   user,
 } from "~/db/schema";
+import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { registerUser } from "~/services/auth";
 import { getLeaderboard } from "~/services/leaderboard-service";
@@ -107,35 +108,35 @@ describe("getLeaderboard", () => {
     await seedFund();
     await seedNav("2026-08-25", 15_000); // 净值 1.5
 
-    // alice：10 万入金，花 2000 元买 2000 份（份额 ×10000 存 20_000_000），
-    // 成本 200_000 分；现金 9.8 万。净值 1.5 → 市值 300_000 分，
-    // 总资产 10_100_000，收益 +100_000（+1%）
+    // alice：初始本金里花 10 万元买 10 万份（份额 ×10000 存 1_000_000_000），
+    // 成本 10_000_000 分；净值 1.5 → 市值 15_000_000 分，
+    // 总资产 = 初始本金 + 5_000_000，收益 +1%
     const alice = await seedUser("alice");
     await seedConfirmedOrder(alice);
     await db.insert(holding).values({
       userId: alice,
       fundCode: "000001",
-      totalShares: 20_000_000,
-      totalCost: 200_000,
+      totalShares: 1_000_000_000,
+      totalCost: 10_000_000,
     });
     await db
       .update(account)
-      .set({ cash: 9_800_000 })
+      .set({ cash: INITIAL_CASH_CENTS - 10_000_000 })
       .where(eq(account.userId, alice));
 
     // bob：纯签到 1000 元、无成交 → 不上榜
     const bob = await seedUser("bob");
     await db
       .update(account)
-      .set({ cash: 10_010_000, totalCheckin: 10_000 })
+      .set({ cash: INITIAL_CASH_CENTS + 10_000, totalCheckin: 10_000 })
       .where(eq(account.userId, bob));
 
-    // carol：10 万入金，空仓现金 10.5 万 → 收益 +5%
+    // carol：空仓，现金多出 25 万 → 收益 +5%
     const carol = await seedUser("carol");
     await seedConfirmedOrder(carol);
     await db
       .update(account)
-      .set({ cash: 10_500_000 })
+      .set({ cash: INITIAL_CASH_CENTS + 25_000_000 })
       .where(eq(account.userId, carol));
 
     const lb = await getLeaderboard(db);
@@ -143,11 +144,11 @@ describe("getLeaderboard", () => {
     // bob 被门槛过滤；carol(+5%) 压过 alice(+1%)
     expect(lb.byRate.map(e => e.username)).toEqual(["carol", "alice"]);
     expect(lb.byRate[0].totalPnlRate).toBeCloseTo(0.05, 10);
-    // alice：市值 = 2000 份 × 1.5 × 100 = 300_000 分
-    expect(lb.byRate[1].marketValueCents).toBe(300_000);
-    expect(lb.byRate[1].totalAssetCents).toBe(10_100_000);
-    expect(lb.byRate[1].totalPnlCents).toBe(100_000);
-    // 总收益榜同序（+500_000 > +100_000）
+    // alice：市值 = 10 万份 × 1.5 元 = 15_000_000 分
+    expect(lb.byRate[1].marketValueCents).toBe(15_000_000);
+    expect(lb.byRate[1].totalAssetCents).toBe(INITIAL_CASH_CENTS + 5_000_000);
+    expect(lb.byRate[1].totalPnlCents).toBe(5_000_000);
+    // 总收益榜同序（+25 万 > +5 万）
     expect(lb.byPnl.map(e => e.username)).toEqual(["carol", "alice"]);
   });
 
@@ -156,8 +157,8 @@ describe("getLeaderboard", () => {
     await seedFund();
     await seedNav("2026-08-25", 15_000); // 净值 1.5（与订单成交价一致 → 持仓浮盈 0）
 
-    // alice：10 万入金里只掏了 1000 元买基金（成交净额 985.22 元 + 14.78 元申购费），
-    // 现金剩 9.9 万。持仓浮盈 0，唯一的亏损就是那笔申购费
+    // alice：初始本金里只掏了 1000 元买基金（成交净额 985.22 元 + 14.78 元申购费），
+    // 其余现金原封不动。持仓浮盈 0，唯一的亏损就是那笔申购费
     const alice = await seedUser("alice");
     await seedConfirmedOrder(alice); // amount 100_000 / dealAmount 98_522 / fee 1_478
     await db.insert(holding).values({
@@ -168,15 +169,15 @@ describe("getLeaderboard", () => {
     });
     await db
       .update(account)
-      .set({ cash: 9_900_000 })
+      .set({ cash: INITIAL_CASH_CENTS - 100_000 })
       .where(eq(account.userId, alice));
 
     const lb = await getLeaderboard(db);
     const e = lb.byRate[0];
-    // 总收益 = 9_900_000 + 98_522 − 10_000_000 = −1_478（正好是申购费）
+    // 总收益 = (初始本金 − 100_000) + 98_522 − 初始本金 = −1_478（正好是申购费）
     expect(e.totalPnlCents).toBe(-1_478);
-    // 账户口径：−1478 / 10_000_000 = −0.01478%——几乎被 9.9 万闲钱稀释没了
-    expect(e.totalPnlRate).toBeCloseTo(-0.0001478, 10);
+    // 账户口径：−1478 / 500_000_000 ≈ −0.0003%——被 500 万闲钱稀释到几乎看不见
+    expect(e.totalPnlRate).toBeCloseTo(-1_478 / INITIAL_CASH_CENTS, 10);
     // 投入口径：−1478 / 100_000（累计买入）= −1.478%——这才是真实代价
     expect(e.investedPnlRate).toBeCloseTo(-0.01478, 10);
     // 两个率的分母确实不同——这是本口径存在的全部理由
@@ -231,11 +232,11 @@ describe("getLeaderboard", () => {
     });
     await db
       .update(account)
-      .set({ cash: 9_800_000 })
+      .set({ cash: INITIAL_CASH_CENTS - 200_000 })
       .where(eq(account.userId, alice));
 
     const lb = await getLeaderboard(db);
-    // 无净值 → 市值按成本 200_000 兜底 → 总资产 10 万，收益 0
+    // 无净值 → 市值按成本 200_000 兜底 → 总资产 = 初始本金，收益 0
     expect(lb.byRate[0].marketValueCents).toBe(200_000);
     expect(lb.byRate[0].totalPnlCents).toBe(0);
   });
@@ -263,7 +264,7 @@ describe("getLeaderboard", () => {
     const db = getDb(env.DB);
     await seedFund();
 
-    // alice 有历史成交（过门槛），现金 10 万；再造一笔 pending 买单 1000 元
+    // alice 有历史成交（过门槛），现金仍是初始本金；再造一笔 pending 买单 1000 元
     // ——现金虽未实际扣（造数直插），但口径上应把在途金额加进总资产
     const alice = await seedUser("alice");
     await seedConfirmedOrder(alice);
@@ -281,8 +282,8 @@ describe("getLeaderboard", () => {
 
     const lb = await getLeaderboard(db);
     expect(lb.byRate).toHaveLength(1);
-    // 不含在途是 10_000_000，含在途应为 10_100_000（多出 100_000 分买单金额）
-    expect(lb.byRate[0].totalAssetCents).toBe(10_100_000);
+    // 不含在途是初始本金，含在途应多出 100_000 分（买单金额）
+    expect(lb.byRate[0].totalAssetCents).toBe(INITIAL_CASH_CENTS + 100_000);
     expect(lb.byRate[0].totalPnlCents).toBe(100_000);
   });
 });

@@ -15,6 +15,7 @@ import {
   transactions,
   user,
 } from "~/db/schema";
+import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { calcPurchase } from "~/domain/purchase";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { registerUser } from "~/services/auth";
@@ -113,7 +114,7 @@ describe("cancelOrder 撤单", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
 
     // 账本只增不改：原 buy 流水保留，追加一条 cancel 冲正（正金额入账）
     const txs = await db
@@ -123,7 +124,7 @@ describe("cancelOrder 撤单", () => {
     expect(txs).toHaveLength(2);
     const cancelTx = txs.find(t => t.type === "cancel")!;
     expect(cancelTx.amount).toBe(100000);
-    expect(cancelTx.balance).toBe(10_000_000);
+    expect(cancelTx.balance).toBe(INITIAL_CASH_CENTS);
     expect(cancelTx.note).toContain("撤单");
   });
 
@@ -150,7 +151,7 @@ describe("cancelOrder 撤单", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
     // 赎回单本就没有流水，撤单也不该有
     const txs = await db
       .select()
@@ -194,7 +195,7 @@ describe("cancelOrder 撤单", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 100000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 100000);
     const cancelTxs = await db
       .select()
       .from(transactions)
@@ -222,7 +223,7 @@ describe("cancelOrder 撤单", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
   });
 
   it("撤别人的订单或不存在的订单：拒绝", async () => {
@@ -263,7 +264,7 @@ describe("amendOrder 改单（原单直改）", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 93600);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 93600);
 
     // 只增不改：buy 流水（-97300）保留，追加 amend（+3700）
     const txs = await db
@@ -272,7 +273,7 @@ describe("amendOrder 改单（原单直改）", () => {
       .where(eq(transactions.orderId, orderId));
     const amendTx = txs.find(t => t.type === "amend")!;
     expect(amendTx.amount).toBe(3700);
-    expect(amendTx.balance).toBe(10_000_000 - 93600);
+    expect(amendTx.balance).toBe(INITIAL_CASH_CENTS - 93600);
   });
 
   it("买单改大金额：补扣差额现金", async () => {
@@ -291,7 +292,7 @@ describe("amendOrder 改单（原单直改）", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 80000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 80000);
     const amendTx = (await db.select().from(transactions))
       .find(t => t.type === "amend")!;
     expect(amendTx.amount).toBe(-30000); // 出账为负
@@ -308,8 +309,9 @@ describe("amendOrder 改单（原单直改）", () => {
       now: NOW,
     });
 
+    // 改单金额比初始本金还大 → 补扣差额必然超过可用现金
     await expect(
-      amendOrder(db, userId, orderId, { amountCents: 10_500_000 }),
+      amendOrder(db, userId, orderId, { amountCents: INITIAL_CASH_CENTS + 1_000_000 }),
     ).rejects.toThrow("现金不足");
 
     const o = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
@@ -317,7 +319,7 @@ describe("amendOrder 改单（原单直改）", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 50000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 50000);
   });
 
   it("新金额低于起购额：拒绝", async () => {
@@ -359,7 +361,7 @@ describe("amendOrder 改单（原单直改）", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 50000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 50000);
   });
 
   it("赎回单改份额：订单更新、不动现金，可改上限排除本单原份额", async () => {
@@ -385,7 +387,7 @@ describe("amendOrder 改单（原单直改）", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
 
     // 改成 700 后，剩余可赎 300 份：挂 300 份成功、301 份被拒
     await expect(
@@ -482,7 +484,7 @@ describe("撤单/改单与撮合的交互", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
     const txTypes = (await db.select().from(transactions)).map(t => t.type);
     expect(txTypes).toEqual(["init", "buy", "cancel"]);
   });
@@ -523,7 +525,7 @@ describe("撤单/改单与撮合的交互", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 93600);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 93600);
   });
 
   it("买单改单竞态：撮合读到旧快照后落改单——过期快照不成交，下轮按新值撮合", async () => {
@@ -559,7 +561,7 @@ describe("撤单/改单与撮合的交互", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 93600);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 93600);
 
     // 下一轮 cron 正常跑：按新金额 93600 成交
     await seedNav("2026-08-24", 15000);
@@ -606,7 +608,7 @@ describe("撤单/改单与撮合的交互", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 80000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 80000);
     const txTypes = (await db.select().from(transactions)).map(t => t.type);
     expect(txTypes).toEqual(["init", "buy", "amend"]); // 没有 buy 退款
   });
@@ -651,7 +653,7 @@ describe("撤单/改单与撮合的交互", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
     // 赎回单本无流水，失败竞态也不该有
     const txs = await db
       .select()

@@ -20,8 +20,8 @@ describe("脚手架冒烟测试", () => {
     expect(typeof INITIAL_CASH_CENTS).toBe("number");
   });
 
-  it("初始本金为 10 万元（以分为单位）", () => {
-    expect(INITIAL_CASH_CENTS).toBe(10_000_000);
+  it("初始本金为 500 万元（以分为单位）", () => {
+    expect(INITIAL_CASH_CENTS).toBe(500_000_000);
   });
 
   it("签到基础奖励 100 元、封顶 500 元", () => {

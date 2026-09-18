@@ -15,6 +15,7 @@ import {
   transactions,
   user,
 } from "~/db/schema";
+import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { registerUser } from "~/services/auth";
 import { doCheckin, getCheckinStatus } from "~/services/checkin-service";
@@ -343,12 +344,12 @@ describe("doCheckin 签到入金", () => {
     const r = await doCheckin(db, userId, new Date("2026-08-24T02:00:00Z"));
     expect(r.reward).toBe(10000);
     expect(r.streak).toBe(1);
-    expect(r.balance).toBe(10_000_000 + 10000);
+    expect(r.balance).toBe(INITIAL_CASH_CENTS + 10000);
 
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_010_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS + 10000);
     expect(acc!.totalCheckin).toBe(10000);
 
     const txs = await db
@@ -357,7 +358,7 @@ describe("doCheckin 签到入金", () => {
       .where(eq(transactions.type, "checkin"));
     expect(txs).toHaveLength(1);
     expect(txs[0].amount).toBe(10000);
-    expect(txs[0].balance).toBe(10_010_000);
+    expect(txs[0].balance).toBe(INITIAL_CASH_CENTS + 10000);
   });
 
   it("同日重复签到抛错且余额不变", async () => {
@@ -389,7 +390,7 @@ describe("doCheckin 签到入金", () => {
 
     expect(r.streak).toBe(2);
     expect(r.reward).toBe(15000);
-    expect(r.balance).toBe(10_000_000 + 10000 + 15000);
+    expect(r.balance).toBe(INITIAL_CASH_CENTS + 10000 + 15000);
   });
 
   it("连签 9 天触及 500 元封顶", async () => {

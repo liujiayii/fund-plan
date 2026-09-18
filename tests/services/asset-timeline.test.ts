@@ -14,6 +14,7 @@ import {
   transactions,
   user,
 } from "~/db/schema";
+import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { calcPurchase } from "~/domain/purchase";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { getAssetTimeline } from "~/services/asset-service";
@@ -92,9 +93,9 @@ describe("getAssetTimeline 在途申购", () => {
 
     const { daily, latest } = await getAssetTimeline(db, userId);
     expect(latest).not.toBeNull();
-    // 现金 10M − 100000 + 在途 100000 = 10M，dayPnl=0
+    // 现金（初始本金 − 100000）+ 在途 100000 = 初始本金，dayPnl=0
     expect(latest!.transitCents).toBe(100000);
-    expect(latest!.totalAssetCents).toBe(10_000_000);
+    expect(latest!.totalAssetCents).toBe(INITIAL_CASH_CENTS);
     expect(latest!.dayPnlCents).toBe(0);
     // 累计收益也不含假亏损
     expect(daily.reduce((s, d) => s + d.dayPnlCents, 0)).toBe(0);
@@ -114,7 +115,7 @@ describe("getAssetTimeline 在途申购", () => {
 
     const { latest } = await getAssetTimeline(db, userId);
     expect(latest!.transitCents).toBe(93600);
-    expect(latest!.totalAssetCents).toBe(10_000_000);
+    expect(latest!.totalAssetCents).toBe(INITIAL_CASH_CENTS);
     expect(latest!.dayPnlCents).toBe(0);
   });
 
@@ -144,9 +145,9 @@ describe("getAssetTimeline 在途申购", () => {
     expect(d1).toBeDefined();
     expect(d2).toBeDefined();
 
-    // 下单日：现金 9900000 + 在途 100000 = 10M，dayPnl=0（旧代码这里是 -100000）
+    // 下单日：现金（初始本金 − 100000）+ 在途 100000 = 初始本金，dayPnl=0（旧代码这里是 -100000）
     expect(d1.transitCents).toBe(100000);
-    expect(d1.totalAssetCents).toBe(10_000_000);
+    expect(d1.totalAssetCents).toBe(INITIAL_CASH_CENTS);
     expect(d1.dayPnlCents).toBe(0);
 
     // 确认日：在途归零换市值，dayPnl 恰好 = −申购费（费用在确认日记损）
@@ -171,6 +172,6 @@ describe("getAssetTimeline 在途申购", () => {
     // 每一天 dayPnl 都是 0（init 首日 + 撤单日），在途最终归零
     expect(daily.every(d => d.dayPnlCents === 0)).toBe(true);
     expect(daily[daily.length - 1].transitCents).toBe(0);
-    expect(daily[daily.length - 1].totalAssetCents).toBe(10_000_000);
+    expect(daily[daily.length - 1].totalAssetCents).toBe(INITIAL_CASH_CENTS);
   });
 });

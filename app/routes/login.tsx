@@ -98,7 +98,7 @@ export default function Login() {
 
       <Paragraph style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
         还没有账号？
-        <Link to="/register">立即注册，送 10 万模拟本金</Link>
+        <Link to="/register">立即注册，送 500 万模拟本金</Link>
       </Paragraph>
     </AuthShell>
   );

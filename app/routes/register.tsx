@@ -13,7 +13,7 @@ const { Title, Paragraph } = Typography;
 export function meta(_: Route.MetaArgs) {
   return pageMeta({
     title: "注册",
-    description: "注册即送 10 万模拟本金，用户名 + 密码即可，不要邮箱不要手机号",
+    description: "注册即送 500 万模拟本金，用户名 + 密码即可，不要邮箱不要手机号",
     path: "/register",
   });
 }
@@ -63,7 +63,7 @@ export default function Register() {
       <Paragraph type="secondary">
         注册即送
         {" "}
-        <strong>10 万元</strong>
+        <strong>500 万元</strong>
         {" "}
         模拟本金，每日签到还能继续领。
         用真实基金数据练手，亏了不心疼。
