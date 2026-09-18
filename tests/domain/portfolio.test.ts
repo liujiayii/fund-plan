@@ -84,16 +84,17 @@ describe("portfolio 组合估值", () => {
       expect(p.cashCents).toBe(500000);
       expect(p.totalAssetCents).toBe(260000 + 500000);
       expect(p.totalPnlCents).toBe(10000 + 10000);
-      // 总收益率 = 总盈亏 / 总成本 = 20000 / 240000
-      expect(p.totalPnlRate).toBeCloseTo(0.0833, 4);
+      // 刻意不断言「组合收益率」：该字段 2026-09-18 已删除（无人消费，
+      // 且它的分母「总成本」与总览卡/排行榜账户口径的分母不是一回事，
+      // 留着只会被误当成全站收益率）。
+      // 需要率的调用方走 domain/money 的 safeRate，见 leaderboard/portfolio 单测
     });
 
-    it("空持仓时只剩现金，收益率为 0", () => {
+    it("空持仓时只剩现金，收益为 0", () => {
       const p = valuatePortfolio([], 10_000_000);
       expect(p.marketValueCents).toBe(0);
       expect(p.totalAssetCents).toBe(10_000_000);
       expect(p.totalPnlCents).toBe(0);
-      expect(p.totalPnlRate).toBe(0);
     });
   });
 

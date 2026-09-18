@@ -1,4 +1,4 @@
-import { fmtYuan } from "./format";
+import { fmtRate, fmtYuan } from "./format";
 
 export interface PnlBadgeProps {
   /** 盈亏金额（分）。传了就显示金额 */
@@ -30,7 +30,8 @@ export function PnlBadge({ cents, rate }: PnlBadgeProps) {
         <span>{`${cents > 0 ? "+" : ""}${fmtYuan(cents)} 元`}</span>
       )}
       {rate !== undefined && (
-        <span>{`${rate > 0 ? "+" : ""}${(rate * 100).toFixed(2)}%`}</span>
+        // 率的格式化与 PnlText 同源（fmtRate）：不抹零、不产出 -0.00%
+        <span>{fmtRate(rate)}</span>
       )}
     </span>
   );

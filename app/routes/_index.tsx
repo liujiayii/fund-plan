@@ -15,7 +15,7 @@ import { DEFAULT_DESCRIPTION, pageMeta, SITE_NAME } from "~/domain/seo";
 import { getAssetTimeline } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
-import { getPortfolio } from "~/services/portfolio-service";
+import { getPendingBuyCents, getPortfolio } from "~/services/portfolio-service";
 import { getSiteStats } from "~/services/stats-service";
 
 const { Title, Paragraph, Text } = Typography;
@@ -65,15 +65,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     } as const;
   }
 
-  const [me, stats, portfolio, timeline] = await Promise.all([
+  const [me, stats, portfolio, timeline, pendingBuyCents] = await Promise.all([
     getCurrentUser(request, db),
     getSiteStats(db),
     getPortfolio(db, admin.id),
     // 示范盘两件套（总览+走势）的序列数据；日历撤下（liquid-glass spec §5.2），「最近操作」早已撤，orders 不再查
     getAssetTimeline(db, admin.id),
+    // 在途资金（+1 条查询）：与 /master、排行榜同口径——
+    // 不用「公开页别多背查询」的旧取舍换两个公开页对同一笔钱给出不同数字
+    getPendingBuyCents(db, admin.id),
   ]);
 
-  return { me, stats, admin, portfolio, timeline } as const;
+  return { me, stats, admin, portfolio, timeline, pendingBuyCents } as const;
 }
 
 /** 产品卖点，讲清「这不是玩具」 */
@@ -216,11 +219,15 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               )}
               extra={<a href="/master">查看完整组合 →</a>}
             >
+              {/* 公开视角总览卡：主位是累计收益率，无「总资产 / 可用余额」——
+                  钱包数字只在本人 /me 可见（与 /master 同口径） */}
               <AssetOverviewCard
                 summary={loaderData.portfolio.summary}
                 daily={loaderData.timeline.daily}
                 latest={loaderData.timeline.latest}
                 totalDepositedCents={loaderData.timeline.totalDepositedCents}
+                pendingBuyCents={loaderData.pendingBuyCents}
+                visibility="public"
               />
               {loaderData.timeline.daily.length > 0 && (
                 <>

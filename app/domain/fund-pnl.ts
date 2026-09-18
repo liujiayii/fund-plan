@@ -1,4 +1,4 @@
-import Decimal from "decimal.js";
+import { safeRate } from "./money";
 import { fundMarketValueCents } from "./portfolio";
 
 /**
@@ -156,10 +156,11 @@ export function attributeFundPnlByDate(
       const dayPnlCents
         = mv - (prevMvMap.get(fundCode) ?? 0) - cash.buy + cash.sell;
 
-      // 当日净值涨跌幅：首见净值日（prevNav < 0）与前向填充日均记 0
-      const dayNavRate = prevNav > 0
-        ? new Decimal(lastNav - prevNav).div(prevNav).toNumber()
-        : 0;
+      // 当日净值涨跌幅：首见净值日（prevNav < 0）与前向填充日均记 0。
+      // ⚠️ 这是**这只基金自己的净值涨跌**，与「你赚了多少」无关——
+      // 展示时必须标「净值涨跌」，否则会被读成持有收益率
+      const dayNavRate
+        = prevNav > 0 ? (safeRate(lastNav - prevNav, prevNav) ?? 0) : 0;
 
       entries.push({ fundCode, dayPnlCents, dayNavRate });
       // 收盘市值滚入「昨日市值」；0 也写入（次日 union 判断会跳过）

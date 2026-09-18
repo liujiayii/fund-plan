@@ -1,16 +1,29 @@
 // app/domain/leaderboard.ts
-import Decimal from "decimal.js";
+import { safeRate } from "./money";
 
 /**
  * 收益排行榜的领域层（spec §2/§4.1）。
  *
  * 口径是本文件唯一的「为什么」：
- *   累计入金 = initialCash + totalCheckin
- *   总资产   = 持仓市值 + 现金 + 在途资金（pending 买单已冻结金额）
- *   总收益   = 总资产 − 累计入金（已实现 + 浮动盈亏都在内）
- *   收益率   = 总收益 ÷ 累计入金
+ *   累计入金   = initialCash + totalCheckin
+ *   总资产     = 持仓市值 + 现金 + 在途资金（pending 买单已冻结金额）
+ *   总收益     = 总资产 − 累计入金（已实现 + 浮动盈亏都在内）
+ *   账户收益率 = 总收益 ÷ 累计入金        ← 分母含没投出去的闲钱
+ *   投入收益率 = 总收益 ÷ 累计买入金额    ← 分母只算真投进基金的钱
  * 这样清仓落袋的利润不会从榜上消失（浮盈口径会），签到是入金不算收益（刷不了榜）。
  * 与 asset-timeline 的「净入金」概念一致，全站口径自洽。
+ *
+ * ## 为什么要有两个收益率（2026-09-18 补）
+ *
+ * 只有账户收益率时，轻仓用户的收益会被闲置现金稀释到显示不出来：
+ * 只把 10 万里的 1000 元买了基金、赚 3.48 元，账户收益率 = 3.48 / 100000
+ * = 0.0035%，四舍五入后是 0.00%——「赚了钱但收益率是 0」还排在收益率榜第一。
+ * 投入收益率 = 3.48 / 1000 = 0.35%，这才是「我的选基能力」该有的数量级。
+ * 两者都不标注分母就没法读，故展示层（leaderboard.tsx 页头）必须写清各自的分母。
+ *
+ * ⚠️ 投入收益率的已知局限：分母是**累计买入额**（周转额），同一笔钱买入卖出
+ * 再买入会重复计入，于是高频交易者的投入收益率会被系统性压低。它衡量的是
+ * 「每投入一元赚了多少」，不是时间加权收益率——榜单展示够用，别拿它做归因。
  */
 
 /** 单用户原始数据（service 层从 D1 查出后拼好喂进来） */
@@ -24,6 +37,8 @@ export interface LeaderboardEntryInput {
   inFlightCashCents: number;
   initialCashCents: number;
   totalCheckinCents: number;
+  /** 累计买入金额（分）= Σ 已成交买单的下单金额。投入收益率的分母 */
+  investedCents: number;
   /** 是否有过 confirmed 订单（上榜门槛） */
   hasTrades: boolean;
 }
@@ -34,8 +49,14 @@ export interface LeaderboardEntry extends LeaderboardEntryInput {
   totalAssetCents: number;
   /** 总收益（分）= 总资产 − 累计入金 */
   totalPnlCents: number;
-  /** 收益率（普通小数，0.05 表示 +5%） */
+  /** 账户收益率（普通小数，0.05 表示 +5%）= 总收益 ÷ 累计入金 */
   totalPnlRate: number;
+  /**
+   * 投入收益率（普通小数）= 总收益 ÷ 累计买入金额。
+   * 从未买过（investedCents = 0）时为 null——「无数据」与「0%」必须区分开，
+   * 页面据此显示「—」而不是一个会误导的 0.00%。
+   */
+  investedPnlRate: number | null;
   rank: number;
 }
 
@@ -57,17 +78,17 @@ export function computeLeaderboard(
       const totalAssetCents
         = r.marketValueCents + r.cashCents + r.inFlightCashCents;
       const totalPnlCents = totalAssetCents - depositedCents;
-      // 除零守卫：注册即有 init 入金，理论到不了 0，守卫只是不让 NaN 上榜
-      const totalPnlRate
-        = depositedCents === 0
-          ? 0
-          : new Decimal(totalPnlCents).div(depositedCents).toNumber();
+      // 除零守卫在 safeRate 里：注册即有 init 入金，理论到不了 0，
+      // 回落 0 只是不让 NaN 上榜
+      const totalPnlRate = safeRate(totalPnlCents, depositedCents) ?? 0;
+      const investedPnlRate = safeRate(totalPnlCents, r.investedCents);
 
       return {
         ...r,
         totalAssetCents,
         totalPnlCents,
         totalPnlRate,
+        investedPnlRate,
         rank: 0,
       };
     });

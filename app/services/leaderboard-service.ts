@@ -1,6 +1,6 @@
 import type { Db } from "~/db/client";
 import type { LeaderboardEntry, LeaderboardEntryInput } from "~/domain/leaderboard";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { account, holding, orders, user } from "~/db/schema";
 import {
   computeLeaderboard,
@@ -46,13 +46,24 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardView> {
   const codes = [...new Set(active.map(h => h.fundCode))];
   const navMap = await latestNavMap(db, codes);
 
-  // ── 查询 4：哪些用户有过 confirmed 订单（上榜门槛） ────────────────
-  const confirmedUserIds = new Set(
-    (await db
-      .selectDistinct({ userId: orders.userId })
-      .from(orders)
-      .where(eq(orders.status, "confirmed")))
-      .map(r => r.userId),
+  // ── 查询 4：有过 confirmed 订单的用户（上榜门槛）+ 各自累计买入金额 ──────
+  // 一条 groupBy 同时拿两件事：门槛（这人在集合里就说明成交过）与投入收益率的
+  // 分母（case-when 条件求和，只累加买单）。
+  // ⚠️ 查询数必须与用户数无关——「逐人查累计买入」就是 N+1，D1 免费版每请求
+  // 50 条查询是硬顶，用户过十来个直接 500
+  const confirmedAgg = await db
+    .select({
+      userId: orders.userId,
+      investedCents: sql<number>`coalesce(sum(case when ${orders.side} = 'buy' then ${orders.amount} else 0 end), 0)`,
+    })
+    .from(orders)
+    .where(eq(orders.status, "confirmed"))
+    .groupBy(orders.userId);
+
+  const tradedUserIds = new Set(confirmedAgg.map(r => r.userId));
+  // SQLite 的 sum 可能回浮点，显式 Number 一下再进领域层（金额仍是整数分）
+  const investedByUser = new Map(
+    confirmedAgg.map(r => [r.userId, Number(r.investedCents)]),
   );
 
   // ── 查询 5：pending 买单的在途资金（下单即冻结现金，但份额要等撮合才生成；
@@ -99,7 +110,9 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardView> {
       inFlightCashCents: inFlightByUser.get(u.userId) ?? 0,
       initialCashCents: u.initialCash ?? 0,
       totalCheckinCents: u.totalCheckin ?? 0,
-      hasTrades: confirmedUserIds.has(u.userId),
+      // 累计买入金额：投入收益率的分母，没成交过就是 0（safeRate 会返回 null）
+      investedCents: investedByUser.get(u.userId) ?? 0,
+      hasTrades: tradedUserIds.has(u.userId),
     };
   });
 

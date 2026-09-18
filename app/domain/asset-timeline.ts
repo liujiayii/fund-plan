@@ -1,4 +1,4 @@
-import Decimal from "decimal.js";
+import { safeRate } from "./money";
 import { fundMarketValueCents } from "./portfolio";
 
 /**
@@ -170,11 +170,10 @@ export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
     const dayPnlCents = isFirstDay ? 0 : totalAssetCents - prevTotalAssetCents - netDeposit;
 
     // ── 步骤 6：日收益率 ──
-    // 前一日总资产为 0 或首日 → 0（避免除零得 NaN/Infinity）
-    let dayPnlRate = 0;
-    if (!isFirstDay && prevTotalAssetCents !== 0) {
-      dayPnlRate = new Decimal(dayPnlCents).div(prevTotalAssetCents).toNumber();
-    }
+    // 分母是「前一日总资产」（与账户级累计收益率的分母「累计入金」不同，
+    // 展示时必须标明口径）。首日无前一日 → 0，不产出 NaN/Infinity
+    const dayPnlRate
+      = isFirstDay ? 0 : (safeRate(dayPnlCents, prevTotalAssetCents) ?? 0);
 
     // ── 步骤 7：推前一日总资产，进下一天 ──
     result.push({

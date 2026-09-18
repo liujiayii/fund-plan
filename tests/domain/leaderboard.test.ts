@@ -12,7 +12,7 @@ import {
  * 造数约定：金额直接用分，一万元写 1_000_000，读起来跟元对应。
  */
 
-/** 快捷构造：默认 10 万入金、无持仓、无签到，按需覆盖 */
+/** 快捷构造：默认 10 万入金、无持仓、无签到、未买过，按需覆盖 */
 function mk(over: Partial<Parameters<typeof computeLeaderboard>[0][number]>) {
   return {
     userId: 1,
@@ -22,6 +22,7 @@ function mk(over: Partial<Parameters<typeof computeLeaderboard>[0][number]>) {
     inFlightCashCents: 0,
     initialCashCents: 10_000_000,
     totalCheckinCents: 0,
+    investedCents: 0,
     hasTrades: true,
     ...over,
   };
@@ -100,6 +101,58 @@ describe("computeLeaderboard 口径", () => {
     ]);
     expect(out[0].totalPnlRate).toBe(0);
     expect(Number.isFinite(out[0].totalPnlRate)).toBe(true);
+  });
+});
+
+/**
+ * 投入收益率（2026-09-18 新增）——修「赚了 3.48 元、收益率显示 0.00%」那个线上问题。
+ * 账户收益率的分母是含闲置现金的累计入金，轻仓用户的收益会被稀释到显示不出来；
+ * 投入收益率的分母只算真投进基金的钱，两者必须各自算对、且都不产出 NaN。
+ */
+describe("computeLeaderboard 投入收益率", () => {
+  it("轻仓用户：账户收益率被闲置现金稀释，投入收益率还原真实幅度", () => {
+    // 10 万本金里只买了 1000 元，赚 3.48 元（线上实测的那个号）
+    const out = computeLeaderboard([
+      mk({
+        marketValueCents: 100_348,
+        cashCents: 9_900_000,
+        investedCents: 100_000,
+      }),
+    ]);
+    expect(out[0].totalPnlCents).toBe(348);
+    // 账户口径：348 / 10_000_000 = 0.00348%（展示层会渲染成 <+0.01% 而不是 0.00%）
+    expect(out[0].totalPnlRate).toBeCloseTo(0.0000348, 10);
+    // 投入口径：348 / 100_000 = 0.348%
+    expect(out[0].investedPnlRate).toBeCloseTo(0.00348, 10);
+  });
+
+  it("从未买过（分母为 0）返回 null，不是 0——「无数据」不能冒充「0%」", () => {
+    const out = computeLeaderboard([mk({ investedCents: 0 })]);
+    expect(out[0].investedPnlRate).toBeNull();
+    // 账户收益率仍走「分母为零回落 0」的老约定（榜单排序不能出现 NaN）
+    expect(out[0].totalPnlRate).toBe(0);
+  });
+
+  it("清仓落袋：账户收益率保留全部收益，投入收益率按累计买入额算", () => {
+    // 买 2000 元 → 清仓落袋赚 100 元，现金 100100 元，无持仓
+    const out = computeLeaderboard([
+      mk({ cashCents: 10_010_000, investedCents: 200_000 }),
+    ]);
+    expect(out[0].totalPnlCents).toBe(10_000);
+    expect(out[0].totalPnlRate).toBeCloseTo(0.001, 10);
+    expect(out[0].investedPnlRate).toBeCloseTo(0.05, 10);
+  });
+
+  it("亏损用户的投入收益率为负，符号与总收益一致", () => {
+    const out = computeLeaderboard([
+      mk({
+        marketValueCents: 90_000,
+        cashCents: 9_900_000,
+        investedCents: 100_000,
+      }),
+    ]);
+    expect(out[0].totalPnlCents).toBe(-10_000);
+    expect(out[0].investedPnlRate).toBeCloseTo(-0.1, 10);
   });
 });
 

@@ -19,6 +19,7 @@ import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { toBeijing } from "~/domain/trading-calendar";
 import { getAdminStats, getUserDetail, listUsersOverview } from "~/services/admin-service";
 import { registerUser } from "~/services/auth";
+import { getLeaderboard } from "~/services/leaderboard-service";
 import { getPortfolio } from "~/services/portfolio-service";
 
 async function resetAll() {
@@ -64,7 +65,7 @@ describe("listUsersOverview 用户列表", () => {
     const a = rows.find(r => r.username === "alice")!;
     // alice 没持仓：市值 0、盈亏 0、现金即账户现金
     expect(a.marketValueCents).toBe(0);
-    expect(a.totalPnlCents).toBe(0);
+    expect(a.holdingPnlCents).toBe(0);
     expect(a.orderCount).toBe(1);
     // 用注册返回值对表校验（registerUser 建 account 发 10 万初始本金）
     expect(a.cashCents).toBeGreaterThan(0);
@@ -135,7 +136,7 @@ describe("listUsersOverview 用户列表", () => {
     const alicePortfolio = await getPortfolio(db, alice.id);
     const a = rows.find(r => r.username === "alice")!;
     expect(a.marketValueCents).toBe(alicePortfolio.summary.marketValueCents);
-    expect(a.totalPnlCents).toBe(alicePortfolio.summary.totalPnlCents);
+    expect(a.holdingPnlCents).toBe(alicePortfolio.summary.totalPnlCents);
 
     // admin 无持仓：市值 0，现金直接来自 account 行
     const adm = rows.find(r => r.username === "testadmin")!;
@@ -176,11 +177,41 @@ describe("listUsersOverview 用户列表", () => {
     const alicePortfolio = await getPortfolio(db, alice.id);
     const a = rows.find(r => r.username === "alice")!;
     expect(a.marketValueCents).toBe(alicePortfolio.summary.marketValueCents);
-    expect(a.totalPnlCents).toBe(alicePortfolio.summary.totalPnlCents);
+    expect(a.holdingPnlCents).toBe(alicePortfolio.summary.totalPnlCents);
     // 防假绿：两条持仓都被计入才有非零市值；有净值那只的成本与市值差得远，
     // 盈亏必然非零——若持仓全被漏掉，两边都空转成 0=0 的对拍就失去意义
     expect(a.marketValueCents).toBeGreaterThan(0);
-    expect(a.totalPnlCents).not.toBe(0);
+    expect(a.holdingPnlCents).not.toBe(0);
+  });
+
+  /**
+   * 交叉不变量（2026-09-18 补）：/admin 的账户口径必须与排行榜逐项相等。
+   *
+   * 此前 /admin 只给「浮动盈亏」（市值 − 持仓成本），榜单给「总收益」
+   * （总资产 − 累计入金），两个数天然对不上，排查「榜上这个数怎么来的」
+   * 时找不到可对照的列。现在两边同源，这条断言把「同源」钉成可回归的契约。
+   */
+  it("账户口径与排行榜逐项相等（总资产 / 账户收益 / 入金 / 在途）", async () => {
+    const db = getDb(env.DB);
+    const alice = await registerUser(db, env, "alice", "hunter2");
+    const today = toBeijing(new Date()).format("YYYY-MM-DD");
+    await db.insert(orders).values([
+      // pending 买单 → 在途资金
+      { userId: alice.id, fundCode: "000001", side: "buy", status: "pending", source: "manual", amount: 30_000, placeDate: today, confirmDate: today, createdAt: Date.now() },
+      // 已确认买单 → 过榜单门槛 + 投入收益率的分母
+      { userId: alice.id, fundCode: "000001", side: "buy", status: "confirmed", source: "manual", amount: 100_000, placeDate: today, confirmDate: today, dealAmount: 98_522, dealShares: 6_568_133, createdAt: Date.now() },
+    ]);
+
+    const rows = await listUsersOverview(db);
+    const a = rows.find(r => r.username === "alice")!;
+    const lb = await getLeaderboard(db);
+    const e = lb.byRate.find(x => x.username === "alice")!;
+
+    expect(a.inFlightCents).toBe(e.inFlightCashCents);
+    expect(a.totalAssetCents).toBe(e.totalAssetCents);
+    expect(a.accountPnlCents).toBe(e.totalPnlCents);
+    expect(a.depositedCents).toBe(e.initialCashCents + e.totalCheckinCents);
+    expect(a.accountPnlRate).toBeCloseTo(e.totalPnlRate, 12);
   });
 });
 

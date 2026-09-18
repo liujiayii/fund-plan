@@ -1,5 +1,5 @@
 import { pnlColor } from "~/theme";
-import { fmtYuan } from "./format";
+import { fmtRate, fmtYuan } from "./format";
 
 export interface PnlTextProps {
   /** 盈亏金额（分）。传了就显示金额 */
@@ -36,8 +36,9 @@ export function PnlText({ cents, rate, size = 14 }: PnlTextProps) {
 
   const amountText
     = cents === undefined ? null : `${cents > 0 ? "+" : ""}${fmtYuan(cents)} 元`;
-  const rateText
-    = rate === undefined ? null : `${rate > 0 ? "+" : ""}${(rate * 100).toFixed(2)}%`;
+  // 率的格式化收口在 fmtRate：它负责「不当抹零」与「绝不产出 -0.00%」，
+  // 本组件不再自己 toFixed(2)（历史写法把轻仓用户的 0.0035% 抹成过 0.00%）
+  const rateText = rate === undefined ? null : fmtRate(rate);
 
   return (
     <span

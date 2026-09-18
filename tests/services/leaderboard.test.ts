@@ -151,6 +151,71 @@ describe("getLeaderboard", () => {
     expect(lb.byPnl.map(e => e.username)).toEqual(["carol", "alice"]);
   });
 
+  it("投入收益率：分母是累计买入金额，不是含闲钱的累计入金", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    await seedNav("2026-08-25", 15_000); // 净值 1.5（与订单成交价一致 → 持仓浮盈 0）
+
+    // alice：10 万入金里只掏了 1000 元买基金（成交净额 985.22 元 + 14.78 元申购费），
+    // 现金剩 9.9 万。持仓浮盈 0，唯一的亏损就是那笔申购费
+    const alice = await seedUser("alice");
+    await seedConfirmedOrder(alice); // amount 100_000 / dealAmount 98_522 / fee 1_478
+    await db.insert(holding).values({
+      userId: alice,
+      fundCode: "000001",
+      totalShares: 6_568_133,
+      totalCost: 98_522,
+    });
+    await db
+      .update(account)
+      .set({ cash: 9_900_000 })
+      .where(eq(account.userId, alice));
+
+    const lb = await getLeaderboard(db);
+    const e = lb.byRate[0];
+    // 总收益 = 9_900_000 + 98_522 − 10_000_000 = −1_478（正好是申购费）
+    expect(e.totalPnlCents).toBe(-1_478);
+    // 账户口径：−1478 / 10_000_000 = −0.01478%——几乎被 9.9 万闲钱稀释没了
+    expect(e.totalPnlRate).toBeCloseTo(-0.0001478, 10);
+    // 投入口径：−1478 / 100_000（累计买入）= −1.478%——这才是真实代价
+    expect(e.investedPnlRate).toBeCloseTo(-0.01478, 10);
+    // 两个率的分母确实不同——这是本口径存在的全部理由
+    expect(e.investedPnlRate).not.toBeCloseTo(e.totalPnlRate, 6);
+  });
+
+  /**
+   * 交叉不变量（2026-09-18 补）：排行榜的收益率分母来自 account 的冗余字段
+   * （initialCash / totalCheckin），总览卡的累计收益率分母来自 transactions
+   * 流水里 init/checkin 的聚合——**两条独立实现**。今天恰好相等，但没有结构性
+   * 保证：历史账号缺 init 流水、或 account 字段被手工改过，两个页面的
+   * 「累计收益率」就会分叉，而没有任何东西会报警。这条断言把它钉死。
+   */
+  it("交叉不变量：account 入金字段 === 流水聚合的净入金 === 榜单分母", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const alice = await seedUser("alice");
+    await seedConfirmedOrder(alice);
+
+    const acc = await db.query.account.findFirst({
+      where: eq(account.userId, alice),
+    });
+    const ledgerRows = await db
+      .select({ type: transactions.type, amount: transactions.amount })
+      .from(transactions)
+      .where(eq(transactions.userId, alice));
+    const fromLedger = ledgerRows
+      .filter(r => r.type === "init" || r.type === "checkin")
+      .reduce((s, r) => s + r.amount, 0);
+
+    // 两条来源必须一致
+    expect(fromLedger).toBe((acc?.initialCash ?? 0) + (acc?.totalCheckin ?? 0));
+
+    // 榜单也必须用同一份分母：totalAsset − totalPnl 反推出来的就是入金
+    const lb = await getLeaderboard(db);
+    const e = lb.byRate[0];
+    expect(e.totalAssetCents - e.totalPnlCents).toBe(fromLedger);
+  });
+
   it("持仓无净值时用成本兜底（市值 = 成本，盈亏为 0）", async () => {
     const db = getDb(env.DB);
     await seedFund();

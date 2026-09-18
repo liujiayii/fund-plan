@@ -101,3 +101,17 @@ export function sharesToDecimal(shares: number): Decimal {
 export function decimalToShares(shares: Decimal.Value): number {
   return roundInt(new Decimal(shares).mul(SHARE_SCALE));
 }
+
+/**
+ * 收益率：分子 ÷ 分母，走 Decimal（精度铁律：率也要走 Decimal）。
+ *
+ * **分母为 0 时返回 `null` 而不是 0**——「无数据」与「收益为零」是两回事，
+ * 由调用方决定显示成「—」还是 0。此前这个「分母为零怎么办」的判断散落在
+ * 领域层与组件里各写一遍（leaderboard 给 0、总览卡给 null、portfolio 给 0），
+ * 同一个名字三种语义就是口径分裂的来源，统一收口到这里。
+ */
+export function safeRate(numerator: Decimal.Value, denominator: Decimal.Value): number | null {
+  if (new Decimal(denominator).isZero())
+    return null;
+  return new Decimal(numerator).div(denominator).toNumber();
+}

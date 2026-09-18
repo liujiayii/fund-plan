@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { NAV_SCALE, navToDecimal, roundInt, sharesToDecimal, YUAN } from "./money";
+import { NAV_SCALE, navToDecimal, roundInt, safeRate, sharesToDecimal, YUAN } from "./money";
 
 /** 单只持仓的估值结果 */
 export interface HoldingValuation {
@@ -26,10 +26,14 @@ export interface PortfolioValuation {
   marketValueCents: number;
   /** 可用现金（分） */
   cashCents: number;
-  /** 总浮动盈亏（分） */
+  /**
+   * 总浮动盈亏（分）= 市值 − 持仓成本。
+   *
+   * ⚠️ **持仓口径**：既不含已实现盈亏，也不含现金与在途，与排行榜的「总收益」
+   * 不是同一个数（见 docs/money-audit.md）。字段名里的 total 指的是「全部持仓
+   * 之和」，不是「全站总收益」——展示时请标明「浮动盈亏 / 持仓收益」，别只写「总收益」。
+   */
   totalPnlCents: number;
-  /** 总收益率（普通小数） */
-  totalPnlRate: number;
 }
 
 /**
@@ -64,10 +68,9 @@ export function valuateHolding(i: {
     i.navScaled,
   );
   const pnlCents = marketValueCents - i.totalCostCents;
-  const pnlRate
-    = i.totalCostCents === 0
-      ? 0
-      : new Decimal(pnlCents).div(i.totalCostCents).toNumber();
+  // 成本为 0（清仓行 / 空仓）时 safeRate 给 null，这里回落 0：
+  // 持仓级收益率没有「无数据」的展示态，0 是唯一安全的默认
+  const pnlRate = safeRate(pnlCents, i.totalCostCents) ?? 0;
 
   return {
     fundCode: i.fundCode,
@@ -100,8 +103,13 @@ export function costBasisNavScaled(
 }
 
 /**
- * 组合汇总。总收益率按「总盈亏 ÷ 总成本」计算，
- * 不含现金——现金没有成本，掺进去会稀释真实投资收益率。
+ * 组合汇总。总资产 = 持仓市值 + 现金。
+ *
+ * 刻意**不再产出组合级收益率**：这个率的分母是「总成本」（不含现金），与
+ * 总览卡 / 排行榜账户口径的分母（累计入金）不是一个东西，而它们都会被叫做
+ * 「收益率」。实测同一份持仓在两种口径下能差 2.8 倍（64,071 元闲钱进分母），
+ * 曾导致排行榜 −0.77% 与持仓列表 −2.15% 同屏对不上。需要账户级收益率的
+ * 调用方请用 domain/leaderboard 的 computeLeaderboard 或 domain/money 的 safeRate。
  */
 export function valuatePortfolio(
   holdings: HoldingValuation[],
@@ -110,17 +118,12 @@ export function valuatePortfolio(
   const marketValueCents = holdings.reduce((s, h) => s + h.marketValueCents, 0);
   const totalCostCents = holdings.reduce((s, h) => s + h.costCents, 0);
   const totalPnlCents = marketValueCents - totalCostCents;
-  const totalPnlRate
-    = totalCostCents === 0
-      ? 0
-      : new Decimal(totalPnlCents).div(totalCostCents).toNumber();
 
   return {
     totalAssetCents: marketValueCents + cashCents,
     marketValueCents,
     cashCents,
     totalPnlCents,
-    totalPnlRate,
   };
 }
 

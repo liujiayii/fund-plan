@@ -21,6 +21,7 @@ import { getAdminUser } from "~/services/guard";
 import {
   getDcaPlans,
   getOrders,
+  getPendingBuyCents,
   getPortfolio,
   getTransactions,
 } from "~/services/portfolio-service";
@@ -53,16 +54,20 @@ export async function loader({ context }: Route.LoaderArgs) {
     return { admin: null, adminName: env.ADMIN_USERNAME ?? "未配置" } as const;
   }
 
-  const [portfolio, orders, plans, txs, profit] = await Promise.all([
+  const [portfolio, orders, plans, txs, profit, pendingBuyCents] = await Promise.all([
     getPortfolio(db, admin.id),
     getOrders(db, admin.id, 50),
     getDcaPlans(db, admin.id),
     getTransactions(db, admin.id, 50),
     // 换 getAssetTimeline 为 getProfitDetail：日历要各基金归因明细（+1 条 fund 名查询）
     getProfitDetail(db, admin.id),
+    // 在途资金（+1 条查询）：此前刻意不查，代价是每个交易日 10:00→20:30
+    // 本页与排行榜对同一笔钱给出不同总资产，净值拉不到顺延时能持续整个周末。
+    // 宁可多背一条查询，也不要两个公开页互相矛盾
+    getPendingBuyCents(db, admin.id),
   ]);
 
-  return { admin, portfolio, orders, plans, txs, profit } as const;
+  return { admin, portfolio, orders, plans, txs, profit, pendingBuyCents } as const;
 }
 
 export default function Master({ loaderData }: Route.ComponentProps) {
@@ -77,7 +82,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
     );
   }
 
-  const { admin, portfolio, orders, plans, txs, profit } = loaderData;
+  const { admin, portfolio, orders, plans, txs, profit, pendingBuyCents } = loaderData;
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -92,16 +97,24 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         </Title>
         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
           这是管理员的模拟组合，持仓、定投与交易流水全部公开，任何人都能围观学习。
+          公开范围只到「操作与收益」——总资产、可用余额这类钱包数字仍只在本人的
+          {" "}
+          <a href="/me">/me</a>
+          {" "}
+          可见。
         </Paragraph>
       </div>
 
-      {/* 顶部与 /me 同款总览卡（一行四格版）。animate-fade-up：首卡无延迟 */}
+      {/* 顶部与 /me 同款总览卡，但走 public 可见性：主位是累计收益率而不是总资产，
+          也没有「可用余额」格。animate-fade-up：首卡无延迟 */}
       <SectionCard className="animate-fade-up">
         <AssetOverviewCard
           summary={portfolio.summary}
           daily={profit.daily}
           latest={profit.latest}
           totalDepositedCents={profit.totalDepositedCents}
+          pendingBuyCents={pendingBuyCents}
+          visibility="public"
         />
       </SectionCard>
 
@@ -197,14 +210,17 @@ function OrdersPane({ orders }: { orders: OrderView[] }) {
       );
 }
 
-/** 资金流水面板：只读流水卡 + 客户端分页 */
+/** 资金流水面板：只读流水卡 + 客户端分页。公开页**不显示每行余额**（见 TxList） */
 function TxsPane({ txs }: { txs: TransactionView[] }) {
   const [page, setPage] = useState(1);
   return txs.length === 0
     ? <EmptyState description="暂无流水" />
     : (
         <>
-          <TxList txs={txs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)} />
+          <TxList
+            txs={txs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+            showBalance={false}
+          />
           {txs.length > PAGE_SIZE && (
             <div className="fp-h-scroll" style={{ marginTop: 16 }}>
               <Pagination

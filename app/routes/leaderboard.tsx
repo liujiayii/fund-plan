@@ -2,7 +2,7 @@ import type { Route } from "./+types/leaderboard";
 import type { LeaderboardEntry } from "~/domain/leaderboard";
 import { Space, Tabs, Tag, Typography } from "antd";
 import { EmptyState } from "~/components/ui/EmptyState";
-import { fmtYuan } from "~/components/ui/format";
+import { fmtRate, fmtSignedYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { isOlympicPodium, splitPodium } from "~/domain/leaderboard";
@@ -103,12 +103,32 @@ function pnlTone(v: number): string {
   return v > 0 ? "text-rise" : v < 0 ? "text-fall" : "text-flat";
 }
 
-function fmtRate(rate: number): string {
-  return `${rate > 0 ? "+" : ""}${(rate * 100).toFixed(2)}%`;
+/** 盈亏金额带符号、带「元」（本页金额一律带单位，否则与百分比混读） */
+function signedYuan(cents: number): string {
+  return `${fmtSignedYuan(cents)} 元`;
 }
 
-function fmtSignedYuan(cents: number): string {
-  return `${cents > 0 ? "+" : ""}${fmtYuan(cents)} 元`;
+/**
+ * 副值行：投入收益率。这是榜单上**唯一**能展示的「比率 + 分母」组合——
+ * 分母（累计买入金额）是本人投出去的钱，不是钱包余额，可以公示。
+ * 没有成交过（分母 0）时显示「—」，绝不用 0.00% 冒充。
+ *
+ * ⚠️ 这里曾经显示的是「总资产 X 元」。撤掉它有两个理由：
+ *  1. **隐私**：资产规模属于钱包信息，基金类产品从不公示他人的总资产/余额；
+ *  2. **无用**：模拟盘人人 10 万本金起步，这个数字既无区分度又挤占信息密度，
+ *     而它挤掉的位置正好能放一个真有信息量的比率。
+ */
+function InvestedRate({ rate }: { rate: number | null }) {
+  if (rate === null) {
+    return <span className="text-tertiary">投入收益率 —</span>;
+  }
+  return (
+    <>
+      投入收益率
+      {" "}
+      <span className={pnlTone(rate)}>{fmtRate(rate)}</span>
+    </>
+  );
 }
 
 /** 号码布：01 / 02 / 03，Space Grotesk 的形体本身就是名次 */
@@ -135,9 +155,9 @@ function TopSpot({
   const isMe = meId !== null && entry.userId === meId;
   const place = PLACE[entry.rank] ?? PLACE[3];
   const heroIsRate = metric === "rate";
-  const hero = heroIsRate ? fmtRate(entry.totalPnlRate) : fmtSignedYuan(entry.totalPnlCents);
+  const hero = heroIsRate ? fmtRate(entry.totalPnlRate) : signedYuan(entry.totalPnlCents);
   const heroTone = pnlTone(heroIsRate ? entry.totalPnlRate : entry.totalPnlCents);
-  const sub = heroIsRate ? fmtSignedYuan(entry.totalPnlCents) : fmtRate(entry.totalPnlRate);
+  const sub = heroIsRate ? signedYuan(entry.totalPnlCents) : fmtRate(entry.totalPnlRate);
   const subTone = pnlTone(heroIsRate ? entry.totalPnlCents : entry.totalPnlRate);
 
   return (
@@ -161,12 +181,9 @@ function TopSpot({
           {entry.username}
           {isMe && <Tag className="ml-2">我</Tag>}
         </div>
-        <div className="mt-0.5 text-xs text-muted">
-          总资产
-          {" "}
-          {fmtYuan(entry.totalAssetCents)}
-          {" "}
-          元
+        {/* 副值：投入收益率。这里原先是「总资产 X 元」——见 InvestedRate 的注释 */}
+        <div className="mt-0.5 font-num text-xs text-muted">
+          <InvestedRate rate={entry.investedPnlRate} />
         </div>
       </div>
 
@@ -289,9 +306,9 @@ function Podium({
           // 经典三人窄屏：冠军通栏，银铜并排
           const mobileSpan = classicThree && isGold ? "col-span-2 mb-2 md:mb-0" : "";
           const heroIsRate = metric === "rate";
-          const hero = heroIsRate ? fmtRate(e.totalPnlRate) : fmtSignedYuan(e.totalPnlCents);
+          const hero = heroIsRate ? fmtRate(e.totalPnlRate) : signedYuan(e.totalPnlCents);
           const heroTone = pnlTone(heroIsRate ? e.totalPnlRate : e.totalPnlCents);
-          const sub = heroIsRate ? fmtSignedYuan(e.totalPnlCents) : fmtRate(e.totalPnlRate);
+          const sub = heroIsRate ? signedYuan(e.totalPnlCents) : fmtRate(e.totalPnlRate);
           const subTone = pnlTone(heroIsRate ? e.totalPnlCents : e.totalPnlRate);
 
           return (
@@ -313,13 +330,10 @@ function Podium({
                 {e.username}
                 {isMe && <Tag className="ml-1 md:ml-2">我</Tag>}
               </div>
-              {/* 总资产仅桌面——移动端柱宽不够，信息让位数字 */}
+              {/* 副值：投入收益率（移动端柱宽不够，这行让位给数字——与原先
+                  「总资产仅桌面」同一取舍）。桌面/移动都有的英雄数字才是主角 */}
               <div className="mt-0.5 hidden text-xs text-muted md:block">
-                总资产
-                {" "}
-                {fmtYuan(e.totalAssetCents)}
-                {" "}
-                元
+                <InvestedRate rate={e.investedPnlRate} />
               </div>
               {/* 英雄数字跟当前 tab 口径；副值用另一口径。
                   窄柱拆两行：PnlText 是 nowrap 倾向的 inline-flex，
@@ -385,12 +399,8 @@ function LeaderRow({
           {entry.username}
           {isMe && <Tag className="ml-2">我</Tag>}
         </div>
-        <div className="mt-0.5 text-xs text-muted">
-          总资产
-          {" "}
-          {fmtYuan(entry.totalAssetCents)}
-          {" "}
-          元
+        <div className="mt-0.5 font-num text-xs text-muted">
+          <InvestedRate rate={entry.investedPnlRate} />
         </div>
       </div>
       <div className="shrink-0 text-right">
@@ -445,6 +455,14 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
         <Paragraph type="secondary" className="mb-0">
           总收益 = 总资产 − 累计入金（初始本金 + 签到奖励）。已清仓落袋的收益也保留在榜上，
           只签到不买基金刷不了榜。
+        </Paragraph>
+        {/* 分母必须写在页面上：同一个「收益率」在本站有多个口径，
+            不写分母就会出现「正收益 0.00%」这种读不通的观感（2026-09-18 审计）。
+            另：榜单只公示收益与比率，不公示任何人的总资产与余额 */}
+        <Paragraph type="secondary" className="mb-0 mt-1 text-xs">
+          收益率 = 总收益 ÷ 累计入金（账户口径，分母含没投出去的闲置现金）；
+          投入收益率 = 总收益 ÷ 累计买入金额（分母只算真投进基金的钱，更贴近选基能力）。
+          榜单只公示收益数字，不公示任何人的资产与余额。
         </Paragraph>
       </div>
 
