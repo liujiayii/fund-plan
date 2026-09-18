@@ -37,7 +37,7 @@ export function ProfitContent({ detail }: ProfitContentProps) {
       <div className="mt-6" />
       <ProfitCalendarCard detail={detail} />
       <Paragraph type="secondary" className="mb-0 mt-3 text-xs">
-        点击日期切换查看当日各基金收益明细
+        切换日 / 周 / 月 / 年粒度看不同周期的收益；点击格子查看该周期各基金的收益明细
       </Paragraph>
     </div>
   );

@@ -1,4 +1,6 @@
+import type { PnlDimension } from "~/domain/pnl-buckets";
 import type { FundProfitDetailView } from "~/services/asset-service";
+import { useMemo, useState } from "react";
 import { FundPnlChart } from "~/components/FundPnlChart";
 import { FUND_RATE_TIERS, ProfitCalendar } from "~/components/ProfitCalendar";
 import { EmptyState } from "~/components/ui/EmptyState";
@@ -24,8 +26,22 @@ export interface FundProfitContentProps {
  */
 export function FundProfitContent({ detail }: FundProfitContentProps) {
   const { dailyPnl, cumulative } = detail;
+  // 日历粒度（日 / 周 / 月 / 年）：受控在内容体，日历只管画
+  const [dimension, setDimension] = useState<PnlDimension>("day");
 
-  if (dailyPnl.length === 0) {
+  // 逐日收益 → 日历要的形状（dayNavRate 即该基金当日涨跌幅）。
+  // memo 一下：日历内部的粒度分桶依赖 data 引用，不 memo 会随父层任意重渲染重算
+  const calendarData = useMemo(
+    () =>
+      dailyPnl.map(d => ({
+        date: d.date,
+        dayPnlCents: d.dayPnlCents,
+        dayPnlRate: d.dayNavRate,
+      })),
+    [dailyPnl],
+  );
+
+  if (calendarData.length === 0) {
     return <EmptyState description="该基金暂无收益数据" />;
   }
 
@@ -40,11 +56,9 @@ export function FundProfitContent({ detail }: FundProfitContentProps) {
           rateTiers 用单基金分档：基金净值单日波动天然比全组合大，套全组合
           阈值会把日历染得太深、文字看不清（2026-09-09 主理人反馈） */}
       <ProfitCalendar
-        data={dailyPnl.map(d => ({
-          date: d.date,
-          dayPnlCents: d.dayPnlCents,
-          dayPnlRate: d.dayNavRate,
-        }))}
+        data={calendarData}
+        dimension={dimension}
+        onDimensionChange={setDimension}
         rateTiers={FUND_RATE_TIERS}
       />
     </div>
