@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "~/db/client";
 import { account, session, transactions, user } from "~/db/schema";
+import { INITIAL_CASH_CENTS } from "~/domain/config";
 import {
   hashPassword,
   loginUser,
@@ -65,7 +66,7 @@ describe("PBKDF2 密码哈希", () => {
 });
 
 describe("registerUser 注册", () => {
-  it("注册成功后自动建账户、发 10 万本金、记一条 init 流水", async () => {
+  it("注册成功后自动建账户、发初始本金、记一条 init 流水", async () => {
     const db = getDb(env.DB);
     const r = await registerUser(db, env, "alice", "hunter2");
 
@@ -76,8 +77,8 @@ describe("registerUser 注册", () => {
       where: eq(account.userId, r.id),
     });
     expect(acc).toBeDefined();
-    expect(acc!.cash).toBe(10_000_000); // 10 万元
-    expect(acc!.initialCash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
+    expect(acc!.initialCash).toBe(INITIAL_CASH_CENTS);
 
     const txs = await db
       .select()
@@ -85,8 +86,8 @@ describe("registerUser 注册", () => {
       .where(eq(transactions.userId, r.id));
     expect(txs).toHaveLength(1);
     expect(txs[0].type).toBe("init");
-    expect(txs[0].amount).toBe(10_000_000);
-    expect(txs[0].balance).toBe(10_000_000);
+    expect(txs[0].amount).toBe(INITIAL_CASH_CENTS);
+    expect(txs[0].balance).toBe(INITIAL_CASH_CENTS);
   });
 
   it("用户名与 ADMIN_USERNAME 一致时获得 admin 角色", async () => {

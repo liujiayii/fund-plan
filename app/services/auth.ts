@@ -136,7 +136,7 @@ export function extractRegisterMeta(request: Request): RegisterMeta {
  *
  * 副作用（同一个 D1 batch 内原子完成）：
  *  1. 建 user 记录（角色由 ADMIN_USERNAME 决定，附带注册来源）
- *  2. 建 account，发 10 万初始本金
+ *  2. 建 account，发 500 万初始本金
  *  3. 记一条 type='init' 的资金流水，便于对账
  *
  * 注意：D1 不支持交互式事务，所以用 batch 保证原子性。

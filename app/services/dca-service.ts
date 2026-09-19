@@ -250,6 +250,11 @@ export async function scanDcaPlans(
         .update(dcaPlan)
         .set({
           nextRun: next,
+          // ⚠️ 这两个是「触发计数」而非「成交计数」：下单成功就 +1，
+          // 撮合业务失败退款（failOrder）或用户撤单都不会回滚。
+          // 展示层（getDcaPlans）已改为从 orders 现场聚合已确认的 dca 买单，
+          // 这里继续写只是为了留一条「计划被触发过几次」的排查线索——
+          // 谁要拿这两个字段做展示或对账，先读 docs/money-audit.md §5。
           runCount: plan.runCount + 1,
           totalInvested: plan.totalInvested + plan.amount,
         })

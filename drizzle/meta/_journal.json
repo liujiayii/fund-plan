@@ -43,6 +43,13 @@
       "when": 1789520118593,
       "tag": "0005_reflective_red_shift",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789783200000,
+      "tag": "0006_grant_initial_cash",
+      "breakpoints": true
     }
   ]
 }

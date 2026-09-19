@@ -34,3 +34,38 @@ export function fmtYuan(cents: number): string {
 export function fmtInt(n: number): string {
   return String(n).replace(/\B(?=(\d{3})+$)/g, ",");
 }
+
+/**
+ * 金额（分）→ 带符号的元串：正数补 `+`，负数用 fmtYuan 自带的 `-`。
+ * 收敛全站反复手写的 `${cents > 0 ? "+" : ""}${fmtYuan(cents)}`。
+ */
+export function fmtSignedYuan(cents: number): string {
+  return `${cents > 0 ? "+" : ""}${fmtYuan(cents)}`;
+}
+
+/**
+ * 收益率（普通小数，0.0231 表示 +2.31%）→ 展示字符串。
+ *
+ * ⚠️ 不能直接 `(rate * 100).toFixed(2)` 拼百分号——两个真实可见的 bug 都由此而来：
+ *
+ *  1. **`-0.00%`**：`rate = -0.00004` 时既不加 `+`、尾数又被四舍五入抹平，
+ *     拼出来就是 `-0.00%`。负号还在、数值是零，读者无法判断到底是赚是亏。
+ *  2. **正收益显示成 0**：轻仓用户的真实收益率（如赚 3.48 元 / 本金 10 万
+ *     = 0.00348%）被抹成 `0.00%`，于是「赚了 3.48 元」与「收益率 0.00%」
+ *     同框，还排在收益率榜第一——2026-09-18 线上实测到的就是这个症状。
+ *
+ * 因此四舍五入后落到 0.00 但原值非 0 时，改用不等号表达「有，只是极小」，
+ * 而不是含糊的 0.00%。
+ */
+export function fmtRate(rate: number): string {
+  const pct = rate * 100;
+  const fixed = pct.toFixed(2);
+  if (fixed === "0.00" || fixed === "-0.00") {
+    if (pct > 0)
+      return "<+0.01%";
+    if (pct < 0)
+      return ">-0.01%";
+    return "0.00%";
+  }
+  return `${pct > 0 ? "+" : ""}${fixed}%`;
+}

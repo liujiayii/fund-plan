@@ -9,6 +9,7 @@ import {
   RATE_SCALE,
   rateToPercent,
   roundInt,
+  safeRate,
   SHARE_SCALE,
   sharesToDisplay,
   YUAN,
@@ -133,6 +134,31 @@ describe("money 精度换算", () => {
     it("非法文本直接抛，由调用方兜住（页面给提示，而不是静默出 0）", () => {
       expect(() => percentToRate("abc")).toThrow();
       expect(() => navFromText("")).toThrow();
+    });
+  });
+
+  /**
+   * 收益率的唯一除法入口。「分母为零怎么办」此前在领域层与组件里各写一遍
+   * （leaderboard 给 0、总览卡给 null、portfolio 给 0），同一个名字三种语义
+   * 就是口径分裂的来源——现在统一成「返回 null，由调用方决定显示 — 还是 0」。
+   */
+  describe("safeRate 收益率收口", () => {
+    it("正常除法走 Decimal，不引入浮点尾差", () => {
+      expect(safeRate(348, 100_000)).toBeCloseTo(0.00348, 12);
+      expect(safeRate(-77087, 10_000_000)).toBeCloseTo(-0.0077087, 12);
+    });
+
+    it("分母为 0 返回 null（而不是 0 或 Infinity）", () => {
+      expect(safeRate(100, 0)).toBeNull();
+      expect(safeRate(0, 0)).toBeNull();
+    });
+
+    it("分子为 0 分母非 0 是「真的 0%」，不是 null", () => {
+      expect(safeRate(0, 10_000)).toBe(0);
+    });
+
+    it("负数分母也照常算（防御性：不该出现，但不能出 NaN）", () => {
+      expect(safeRate(10, -100)).toBeCloseTo(-0.1, 12);
     });
   });
 });

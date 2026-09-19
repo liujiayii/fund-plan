@@ -15,6 +15,7 @@ import {
   transactions,
   user,
 } from "~/db/schema";
+import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { registerUser } from "~/services/auth";
 import { placeBuyOrder, placeSellOrder } from "~/services/trade";
@@ -101,7 +102,7 @@ describe("placeBuyOrder 申购下单", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 100000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 100000);
 
     // 应有一条 buy 流水
     const txs = await db
@@ -110,7 +111,7 @@ describe("placeBuyOrder 申购下单", () => {
       .where(eq(transactions.type, "buy"));
     expect(txs).toHaveLength(1);
     expect(txs[0].amount).toBe(-100000); // 出账为负
-    expect(txs[0].balance).toBe(10_000_000 - 100000);
+    expect(txs[0].balance).toBe(INITIAL_CASH_CENTS - 100000);
     expect(txs[0].orderId).toBe(r.orderId);
   });
 
@@ -164,7 +165,7 @@ describe("placeBuyOrder 申购下单", () => {
       placeBuyOrder(db, env, {
         userId,
         fundCode: "000001",
-        amountCents: 20_000_000, // 20 万，超过 10 万本金
+        amountCents: INITIAL_CASH_CENTS + 1, // 比初始本金多 1 分，必然不足
         now: new Date("2026-08-24T06:00:00Z"),
       }),
     ).rejects.toThrow(/现金不足|余额不足/);
@@ -175,7 +176,7 @@ describe("placeBuyOrder 申购下单", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
   });
 
   it("低于起购金额时拒单", async () => {
@@ -263,7 +264,7 @@ describe("placeBuyOrder 申购下单", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000 - 300000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS - 300000);
   });
 });
 
@@ -314,7 +315,7 @@ describe("placeSellOrder 赎回下单", () => {
     const acc = await db.query.account.findFirst({
       where: eq(account.userId, userId),
     });
-    expect(acc!.cash).toBe(10_000_000);
+    expect(acc!.cash).toBe(INITIAL_CASH_CENTS);
   });
 
   it("赎回份额超过持仓时拒单", async () => {

@@ -1,7 +1,7 @@
 import type { DailyAsset } from "~/domain/asset-timeline";
 import type { FundDayPnl } from "~/domain/fund-pnl";
 import { EmptyState } from "~/components/ui/EmptyState";
-import { fmtYuan } from "~/components/ui/format";
+import { fmtRate, fmtSignedYuan } from "~/components/ui/format";
 import { FundListItem } from "~/components/ui/FundListItem";
 import { PnlBadge } from "~/components/ui/PnlBadge";
 import { PnlText } from "~/components/ui/PnlText";
@@ -29,11 +29,6 @@ export interface DailyPnlDetailProps {
   fundNames: Record<string, string>;
 }
 
-/** 盈亏金额带符号：负号 fmtYuan 自带，正数补 +（与 AssetOverviewCard 同款手法） */
-function signedYuan(cents: number): string {
-  return `${cents > 0 ? "+" : ""}${fmtYuan(cents)}`;
-}
-
 /**
  * 某个区间的收益明细（固定展示区，取代旧弹窗）：合计 + 各基金贡献。
  * 内容与交互原样来自 me.profit 旧 Modal——搬家不是重设计（ux-polish spec §4④）；
@@ -46,12 +41,14 @@ export function DailyPnlDetail({ label, day, days, entries, fundNames }: DailyPn
   return (
     <div>
       {/* 当日金额走 PnlBadge 浅底胶囊（visual-refresh §6.5 强调位）：
-          徽章自带「元」与红绿浅底，StatBig 的 suffix/color 不再传；日期标题与收益率副行保持原样 */}
+          徽章自带「元」与红绿浅底，StatBig 的 suffix/color 不再传；日期标题与收益率副行保持原样。
+          收益率的分母是「前一日总资产」，与总览卡「累计收益率」的「累计入金」不同——
+          周/月/年的区间收益率是复利连乘（见 domain/pnl-buckets），也别与日收益率混读 */}
       <StatBig
         label={`${label} 收益`}
         value={day ? <PnlBadge cents={day.dayPnlCents} /> : "—"}
         extra={day
-          ? `收益率 ${day.dayPnlRate > 0 ? "+" : ""}${(day.dayPnlRate * 100).toFixed(2)}%${
+          ? `收益率 ${fmtRate(day.dayPnlRate)}${
             days && days > 1 ? ` · ${days} 个交易日` : ""
           }`
           : undefined}
@@ -77,11 +74,21 @@ export function DailyPnlDetail({ label, day, days, entries, fundNames }: DailyPn
                       color: pnlColor(f.dayPnlCents),
                     }}
                   >
-                    {signedYuan(f.dayPnlCents)}
+                    {fmtSignedYuan(f.dayPnlCents)}
                     <span style={{ fontSize: 12, color: COLOR.textSecondary }}> 元</span>
                   </span>
                 )}
-                secondary={<PnlText rate={f.dayNavRate} size={12} />}
+                // ⚠️ 右侧百分比必须带「净值涨跌」四个字。它是**这只基金自己的
+                // 当日净值涨跌幅**（与你的仓位无关），不是「这笔持仓赚了 2%」——
+                // 此前裸挂 PnlText，行内会出现「一只 +60 元/+2.00%、一只 +6 元/+2.00%」
+                // 这种金额差 10 倍、百分比相同的排法，被读成收益率就是误导
+                secondary={(
+                  <span style={{ fontSize: 12, color: COLOR.textSecondary }}>
+                    净值涨跌
+                    {" "}
+                    <PnlText rate={f.dayNavRate} size={12} />
+                  </span>
+                )}
               />
             ))}
       </div>

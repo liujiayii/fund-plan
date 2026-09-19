@@ -53,18 +53,45 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
       title: "现金",
       dataIndex: "cashCents",
       align: "right",
-      render: v => fmtYuan(v),
+      render: (v, r) =>
+        // 有在途时标出来：pending 买单的钱已从现金扣、尚未变成份额，
+        // 不标的话排查「现金为什么对不上」时会漏掉这一笔
+        r.inFlightCents > 0
+          ? (
+              <Tooltip title={`另有申购中在途 ${fmtYuan(r.inFlightCents)} 元（已冻结，待撮合）`}>
+                <span>{fmtYuan(v)}</span>
+              </Tooltip>
+            )
+          : fmtYuan(v),
     },
     {
-      title: "持仓市值",
-      dataIndex: "marketValueCents",
+      // 账户收益率的分母。没有这一列就没法验证「账户收益」对不对，
+      // 而从「总资产 − 收益」反推又容易被在途资金带偏
+      title: "累计入金",
+      dataIndex: "depositedCents",
       align: "right",
       render: v => fmtYuan(v),
     },
     {
-      // PnlText 的 rate 可不传：只传 cents 就只渲染金额段（正负判色仍生效）
-      title: "浮动盈亏",
-      dataIndex: "totalPnlCents",
+      // 与排行榜「总资产」同口径（市值 + 现金 + 在途）
+      title: "总资产",
+      dataIndex: "totalAssetCents",
+      align: "right",
+      render: v => fmtYuan(v),
+    },
+    {
+      // ⚠️ 与排行榜「总收益」同口径：含现金、在途、已实现盈亏与全部费用。
+      // 排查榜单数字时对的是这一列，不是下面的「持仓浮盈」
+      title: "账户收益",
+      dataIndex: "accountPnlCents",
+      align: "right",
+      render: (v, r) => <PnlText cents={v} rate={r.accountPnlRate ?? undefined} />,
+    },
+    {
+      // PnlText 的 rate 可不传：只传 cents 就只渲染金额段（正负判色仍生效）。
+      // 纯浮盈口径（市值 − 持仓成本），不含现金与已实现盈亏——列名必须写全
+      title: "持仓浮盈",
+      dataIndex: "holdingPnlCents",
       align: "right",
       render: v => <PnlText cents={v} />,
     },
@@ -124,6 +151,8 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
         <Title level={3} style={{ marginBottom: 4 }}>管理后台</Title>
         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
           只读视图：排查用户问题与全局运行状况。点用户名进入其组合与订单。
+          表里有两个收益口径：「账户收益」= 总资产 − 累计入金，与排行榜「总收益」
+          同口径、可直接对账；「持仓浮盈」= 市值 − 持仓成本，只含当前持仓。
         </Paragraph>
       </div>
 
@@ -145,7 +174,7 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
           dataSource={users}
           pagination={false}
           size="middle"
-          scroll={{ x: 1020 }}
+          scroll={{ x: 1420 }}
         />
       </SectionCard>
     </Space>

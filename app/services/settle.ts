@@ -359,6 +359,12 @@ export async function settleSellOrder(
     throw new Error("账户不存在");
 
   const newCash = acc.cash + calc.totalNetCents;
+  // 卖出总额（分）= 到账净额 + 赎回费。账本按「总额入账 → 扣费」两笔记，
+  // 而不是「净额入账 → 再记一笔负的费用」——后者会让「Σ流水金额」比真实
+  // 余额变化多减一次手续费，且两行余额同值，读起来像「扣了钱但余额没变」
+  // （TxList 逐行渲染余额，用户看得见）。见下方 sell / fee 两行的注释
+  const grossCents = calc.totalNetCents + calc.totalFeeCents;
+  const cashAfterGross = acc.cash + grossCents;
 
   const h = await db.query.holding.findFirst({
     where: and(
@@ -434,19 +440,22 @@ export async function settleSellOrder(
       ),
     // 4. 现金入账
     db.update(account).set({ cash: newCash }).where(eq(account.userId, order.userId)),
-    // 5. 到账流水
+    // 5. 到账流水。记**卖出总额**（净额 + 费），余额是总额入账后的中间态；
+    //    紧接着的第 6 条 fee 流水再把它扣到 newCash。两行相加 = 余额变化，
+    //    余额列严格单调递减，逐行读「这笔之后我还剩多少」不会自相矛盾
     db.insert(transactions).values({
       userId: order.userId,
       type: "sell",
-      amount: calc.totalNetCents,
-      balance: newCash,
+      amount: grossCents,
+      balance: cashAfterGross,
       orderId: order.id,
       note: `赎回 ${f?.name ?? order.fundCode} 到账`,
       createdAt: ts,
     }),
   ];
 
-  // 6. 手续费单独记一条，便于统计总成本
+  // 6. 手续费单独记一条，便于统计总成本。balance 记**扣费后**的最终余额
+  //    （= 上面 sell 行的余额 − 本行费用的绝对值）
   if (calc.totalFeeCents > 0) {
     writes.push(
       db.insert(transactions).values({

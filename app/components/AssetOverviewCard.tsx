@@ -1,11 +1,11 @@
 import type { DailyAsset } from "~/domain/asset-timeline";
 import type { PortfolioValuation } from "~/domain/portfolio";
 import { Col, Row } from "antd";
-import Decimal from "decimal.js";
 import { CountUpText } from "~/components/ui/count-up";
-import { fmtYuan } from "~/components/ui/format";
+import { fmtRate, fmtSignedYuan, fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { StatBig } from "~/components/ui/StatBig";
+import { safeRate } from "~/domain/money";
 import { pnlColor } from "~/theme";
 
 export interface AssetOverviewCardProps {
@@ -18,29 +18,44 @@ export interface AssetOverviewCardProps {
   /** 累计投入本金（分）= 初始 + 历次签到。累计收益率的分母 */
   totalDepositedCents: number;
   /**
-   * pending 买单的在途资金（分），/me 与 /admin/users/:id 传入。
-   * 买单冻结的现金已从余额扣、份额未生成，不并回的话 pending 窗口内
-   * 总资产凭空少一笔——并回「持仓金额」与「总资产」，四格拆解才自洽
-   * （总资产 = 持仓 + 余额）。/master 与首页不传，保持纯市值口径。
+   * pending 买单的在途资金（分）。买单冻结的现金已从余额扣、份额未生成，
+   * 不并回的话 pending 窗口内总资产凭空少一笔——并回「持仓金额」与「总资产」，
+   * 四格拆解才自洽（总资产 = 持仓 + 余额）。
+   * 三个身份（/me、/master、/admin/users/:id）**都必须传**：此前 /master 与首页
+   * 刻意不传，导致每个交易日 10:00→20:30 之间同一个用户在两个公开页上的
+   * 总资产不同（差额正好是当日定投额），净值拉不到顺延时能持续一整个周末。
    */
   pendingBuyCents?: number;
+  /**
+   * 可见性分层（2026-09-18 加）：
+   *
+   * - `private`（默认）：/me 与 /admin/users/:id。主位「总资产」，
+   *   一行四格 = 昨日收益 / 累计收益 / 持仓金额 / 可用余额。
+   * - `public`：/master 与首页。「总资产」「可用余额」是钱包信息，
+   *   基金类产品从不向他人展示；主位换成「累计收益率」，
+   *   一行三格 = 昨日收益 / 持仓金额 / 累计入金。持仓金额与累计入金是
+   *   「仓位与投入」而非「钱包余额」，属于可以公示的投资信息。
+   */
+  visibility?: "private" | "public";
 }
 
 /** 盈亏金额带符号：负号 fmtYuan 自带，正数补 +（沿用旧总览卡的手法） */
 function signedYuan(cents: number): string {
-  return `${cents > 0 ? "+" : ""}${fmtYuan(cents)}`;
+  return fmtSignedYuan(cents);
 }
 
 /**
- * 资产总览卡（支付宝式）：总资产主位 + 昨日收益/累计收益/持仓金额/可用余额一行四格。
- * /me、/master、/admin/users/:id 共用——主理人的盘就是公开盘，一份口径三种身份。
+ * 资产总览卡（支付宝式）：/me、/master、/admin/users/:id 共用——主理人的盘就是
+ * 公开盘，一份口径三种身份。公开身份由 visibility 降级（见该字段注释）。
  *
  * 口径（spec §2/§8）：
  *  - 昨日收益 = 最新有净值交易日的 dayPnlCents（净值延迟同步、周末顺延），
  *    extra 标注「截至 M 月 D 日」，不写死字面上的昨天
  *  - 累计收益 = Σ dayPnl（含已实现盈亏与全部费用、剔除净入金），
  *    与资产走势曲线、收益日历逐日同口径
- *  - 累计收益率 = 累计收益 ÷ 累计投入本金（分母 0 显示 —，防御性兜底）
+ *  - 累计收益率 = 累计收益 ÷ 累计投入本金（分母 0 显示 —，防御性兜底）。
+ *    ⚠️ 这是**账户口径**（分母含没投出去的闲置现金），与持仓列表的
+ *    「持有收益率」（分母是持仓成本）不是同一个数
  *  - 持仓金额 = 市值 + 申购中在途（传 pendingBuyCents 时；标注「含申购中」）
  */
 export function AssetOverviewCard({
@@ -49,21 +64,104 @@ export function AssetOverviewCard({
   latest,
   totalDepositedCents,
   pendingBuyCents,
+  visibility = "private",
 }: AssetOverviewCardProps) {
-  // 在途资金：未传（公开镜像）视为 0，四个数字退化为纯市值口径
+  // 在途资金：未传视为 0（正常情况下三个调用方都会传）
   const inFlightCents = pendingBuyCents ?? 0;
+  const isPublic = visibility === "public";
 
   // 累计收益：分整数域求和（远低于 2^53，零误差），与资产走势曲线同口径
   const totalPnlCents = daily.reduce((s, d) => s + d.dayPnlCents, 0);
-  // 累计收益率：Decimal 除法（精度铁律：率也要走 Decimal）
-  const totalRate = totalDepositedCents > 0
-    ? new Decimal(totalPnlCents).div(totalDepositedCents).toNumber()
-    : null;
+  // 累计收益率：Decimal 除法收口在 safeRate（分母 0 → null → 显示 —）
+  const totalRate = safeRate(totalPnlCents, totalDepositedCents);
+  const rateColor = totalRate === null ? undefined : pnlColor(totalRate);
+  // 收益率辉光：辉光白名单（宪法 §2.4）。0 或不展示不加
+  const rateGlow = totalRate === null || totalRate === 0
+    ? undefined
+    : (totalRate > 0 ? "rise" as const : "fall" as const);
 
   // 昨日收益的截至日期：去前导零（「9 月 5 日」而非「09 月 05 日」）
   const untilLabel = latest
     ? `截至 ${String(Number(latest.date.slice(5, 7)))} 月 ${String(Number(latest.date.slice(8, 10)))} 日`
     : null;
+
+  /** 昨日收益格：私密 / 公开两版共用（公开侧不因分层而少信息） */
+  const yesterdayCell = (
+    <StatBig
+      label="昨日收益"
+      value={latest
+        ? (
+            <CountUpText
+              value={latest.dayPnlCents}
+              format={v => signedYuan(Math.round(v))}
+            />
+          )
+        : "—"}
+      suffix={latest ? "元" : undefined}
+      color={latest ? pnlColor(latest.dayPnlCents) : undefined}
+      // 辉光白名单之二：当日涨跌，同色辉光；0 或无数据不加
+      glow={latest && latest.dayPnlCents !== 0 ? (latest.dayPnlCents > 0 ? "rise" : "fall") : undefined}
+      size={20}
+      extra={untilLabel ?? undefined}
+    />
+  );
+
+  /** 累计收益格（仅私密版使用；公开版的累计收益落在主位的 extra 行） */
+  const cumCell = (
+    <StatBig
+      label="累计收益"
+      value={signedYuan(totalPnlCents)}
+      suffix="元"
+      color={pnlColor(totalPnlCents)}
+      size={20}
+      extra={totalRate === null
+        ? "收益率 —"
+        : (
+            <>
+              收益率
+              {" "}
+              <PnlText rate={totalRate} size={12} />
+            </>
+          )}
+    />
+  );
+
+  // 持仓金额格：市值 + 申购中在途。「总资产 = 持仓 + 余额」的拆解在 pending
+  // 窗口内依然成立（在途已从余额扣，这里补回到持仓侧）
+  const holdingCell = (
+    <StatBig
+      label="持仓金额"
+      value={fmtYuan(summary.marketValueCents + inFlightCents)}
+      suffix="元"
+      size={20}
+      extra={inFlightCents > 0 ? `含申购中 ${fmtYuan(inFlightCents)} 元` : undefined}
+    />
+  );
+
+  if (isPublic) {
+    return (
+      <div>
+        {/* 公开身份主位：累计收益率（相对数，不泄露资产规模） */}
+        <StatBig
+          label="累计收益率"
+          glow={rateGlow}
+          value={totalRate === null ? "—" : fmtRate(totalRate)}
+          color={rateColor}
+          extra={`累计收益 ${signedYuan(totalPnlCents)} 元`}
+        />
+        <Row gutter={[24, 16]} style={{ marginTop: 16 }}>
+          <Col xs={12} sm={8}>{yesterdayCell}</Col>
+          <Col xs={12} sm={8}>{holdingCell}</Col>
+          {/* 第三格是「累计入金」而非「累计收益」：累计收益已由主位的 extra 行
+              展示过，同一张卡上再摆一次是重复；累计入金（初始 + 签到）是「投入」
+              不是「钱包余额」，与持仓金额同属可公示的投资信息 */}
+          <Col xs={12} sm={8}>
+            <StatBig label="累计入金" value={fmtYuan(totalDepositedCents)} suffix="元" size={20} />
+          </Col>
+        </Row>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -84,54 +182,13 @@ export function AssetOverviewCard({
           桌面一行放下不折行；窄屏 2×2 保持可读 */}
       <Row gutter={[24, 16]} style={{ marginTop: 16 }}>
         <Col xs={12} sm={6}>
-          {/* 昨日收益（原三小格版原样保留） */}
-          <StatBig
-            label="昨日收益"
-            value={latest
-              ? (
-                  <CountUpText
-                    value={latest.dayPnlCents}
-                    format={v => signedYuan(Math.round(v))}
-                  />
-                )
-              : "—"}
-            suffix={latest ? "元" : undefined}
-            color={latest ? pnlColor(latest.dayPnlCents) : undefined}
-            // 辉光白名单之二：当日涨跌，同色辉光；0 或无数据不加
-            glow={latest && latest.dayPnlCents !== 0 ? (latest.dayPnlCents > 0 ? "rise" : "fall") : undefined}
-            size={20}
-            extra={untilLabel ?? undefined}
-          />
+          {yesterdayCell}
         </Col>
         <Col xs={12} sm={6}>
-          {/* 累计收益（原样保留） */}
-          <StatBig
-            label="累计收益"
-            value={signedYuan(totalPnlCents)}
-            suffix="元"
-            color={pnlColor(totalPnlCents)}
-            size={20}
-            extra={totalRate === null
-              ? "收益率 —"
-              : (
-                  <>
-                    收益率
-                    {" "}
-                    <PnlText rate={totalRate} size={12} />
-                  </>
-                )}
-          />
+          {cumCell}
         </Col>
         <Col xs={12} sm={6}>
-          {/* 持仓金额：市值 + 申购中在途（/me）。总资产 = 持仓 + 余额的拆解
-              在 pending 窗口内依然成立（在途已从余额扣，这里补回到持仓侧） */}
-          <StatBig
-            label="持仓金额"
-            value={fmtYuan(summary.marketValueCents + inFlightCents)}
-            suffix="元"
-            size={20}
-            extra={inFlightCents > 0 ? `含申购中 ${fmtYuan(inFlightCents)} 元` : undefined}
-          />
+          {holdingCell}
         </Col>
         <Col xs={12} sm={6}>
           <StatBig label="可用余额" value={fmtYuan(summary.cashCents)} suffix="元" size={20} />

@@ -395,7 +395,15 @@ describe("settlePendingOrders 卖单确认", () => {
     expect(h!.totalCost).toBe(0);
   });
 
-  it("卖单确认写两条流水：到账 sell 与手续费 fee", async () => {
+  /**
+   * 2026-09-18 改：sell 行从「净额」改成「卖出总额（净额 + 费）」。
+   *
+   * 旧写法 sell 记净额 191040、fee 再记 −960，于是「Σ流水金额」比真实余额变化
+   * 多减一次手续费，且两行余额同值——TxList 逐行渲染余额，用户会看到
+   * 「手续费 −9.60 元，余额 xxx」与上一行完全一样，读起来像扣了钱余额没变。
+   * 现在按「总额入账 → 扣费」两笔记，两个不变量同时成立。
+   */
+  it("卖单确认写两条流水：总额入账 sell + 手续费 fee，且 Σ金额 = 余额变化", async () => {
     const db = getDb(env.DB);
     await seedFund();
     const userId = await seedUser();
@@ -415,7 +423,8 @@ describe("settlePendingOrders 卖单确认", () => {
       .from(transactions)
       .where(eq(transactions.type, "sell"));
     expect(sellTx).toHaveLength(1);
-    expect(sellTx[0].amount).toBe(191040); // 入账为正
+    // 卖出总额 = 净到账 191040 + 赎回费 960
+    expect(sellTx[0].amount).toBe(192000);
 
     const feeTx = await db
       .select()
@@ -423,6 +432,18 @@ describe("settlePendingOrders 卖单确认", () => {
       .where(eq(transactions.type, "fee"));
     expect(feeTx).toHaveLength(1);
     expect(feeTx[0].amount).toBe(-960); // 手续费记为负
+
+    // 不变量 1：两行金额之和 = 真实现金变化（净到账）
+    expect(sellTx[0].amount + feeTx[0].amount).toBe(191040);
+
+    // 不变量 2：余额列逐行自洽——每行余额 = 上一行余额 + 本行金额
+    expect(sellTx[0].balance - feeTx[0].balance).toBe(960);
+
+    // 不变量 3：最后一行余额 = 账户最终现金
+    const acc = await db.query.account.findFirst({
+      where: eq(account.userId, userId),
+    });
+    expect(feeTx[0].balance).toBe(acc!.cash);
   });
 
   it("幂等：重复撮合卖单不重复入账", async () => {

@@ -1,8 +1,9 @@
 import type { DcaPlanView, OrderView, PortfolioView } from "./portfolio-service";
 import type { Db } from "~/db/client";
 import type { HoldingValuation } from "~/domain/portfolio";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { account, holding, orders, user } from "~/db/schema";
+import { safeRate } from "~/domain/money";
 import { costBasisNavScaled, valuateHolding, valuatePortfolio } from "~/domain/portfolio";
 import { toBeijing } from "~/domain/trading-calendar";
 import {
@@ -13,7 +14,16 @@ import {
   latestNavMap,
 } from "./portfolio-service";
 
-/** /admin 用户列表一行的数据 */
+/**
+ * /admin 用户列表一行的数据。
+ *
+ * ⚠️ 本页同时摆两种「收益」，列标题必须把口径写出来，否则排查的人会拿
+ * 「持仓浮盈」去对排行榜的「总收益」然后怀疑其中一边算错了（2026-09-18 审计）：
+ *  - `accountPnlCents` = 总资产 − 累计入金（含现金、在途、已实现盈亏与全部费用）
+ *    —— **与排行榜 LeaderboardEntry.totalPnlCents 同口径**，可直接对账
+ *  - `holdingPnlCents` = 市值 − 持仓成本（纯浮盈，不含现金与已实现盈亏）
+ *  - `depositedCents`（收益率分母）也一并列出：没有分母就没法验证收益率
+ */
 export interface UserOverview {
   id: number;
   username: string;
@@ -28,10 +38,20 @@ export interface UserOverview {
   registerCity: string | null;
   /** 可用现金（分） */
   cashCents: number;
+  /** pending 买单在途资金（分） */
+  inFlightCents: number;
   /** 持仓市值（分） */
   marketValueCents: number;
-  /** 浮动盈亏（分） */
-  totalPnlCents: number;
+  /** 累计入金（分）= 初始本金 + 签到。账户收益率的分母 */
+  depositedCents: number;
+  /** 总资产（分）= 市值 + 现金 + 在途。与排行榜同口径 */
+  totalAssetCents: number;
+  /** 账户收益（分）= 总资产 − 累计入金。与排行榜「总收益」同口径 */
+  accountPnlCents: number;
+  /** 账户收益率（普通小数）；累计入金为 0 时为 null */
+  accountPnlRate: number | null;
+  /** 持仓浮盈（分）= 市值 − 持仓成本（不含现金与已实现盈亏） */
+  holdingPnlCents: number;
   /** 历史订单总数（含 pending/failed/cancelled） */
   orderCount: number;
   /** 注册时间戳（毫秒） */
@@ -55,13 +75,16 @@ export interface AdminStats {
  *
  * D1 免费版每请求硬顶 50 条查询：旧写法逐人调 getPortfolio（每人 2~4 条），
  * 用户过 ~10 人时 /admin 直接 500。现在一次批量取 user/account/holding +
- * 一条最新净值 + 一条 groupBy 订单数，固定 5 条查询跑完，聚合全在内存做。
+ * 一条最新净值 + 一条 groupBy 订单数 + 一条 pending 买单，固定 6 条查询跑完，
+ * 聚合全在内存做。
  * 单只持仓估值与 getPortfolio 完全同口径：valuateHolding + 无净值时
  * costBasisNavScaled 成本兜底，汇总走 valuatePortfolio。
+ * 账户口径（总资产 / 账户收益 / 收益率）与 leaderboard-service 同源，
+ * 排查「榜上这个数怎么来的」时两边能直接对上。
  */
 export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
-  // ── 第一波：用户 / 账户 / 持仓 / 订单数互不依赖，并行发出 ──────────
-  const [users, accountRows, holdingRows, orderCounts] = await Promise.all([
+  // ── 第一波：用户 / 账户 / 持仓 / 订单数 / 在途互不依赖，并行发出 ────
+  const [users, accountRows, holdingRows, orderCounts, pendingBuys] = await Promise.all([
     db.select().from(user).orderBy(desc(user.createdAt), desc(user.id)),
     db.select().from(account),
     db.select().from(holding),
@@ -70,9 +93,19 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
       .select({ userId: orders.userId, n: sql<number>`count(*)` })
       .from(orders)
       .groupBy(orders.userId),
+    // 在途资金：一条查全再按用户内存累加（与 getPendingBuyCents 同一口径，
+    // 但那次是单人查，这里是全量批量——绝不能退回「逐人查 pending」）
+    db
+      .select({ userId: orders.userId, amount: orders.amount })
+      .from(orders)
+      .where(and(eq(orders.status, "pending"), eq(orders.side, "buy"))),
   ]);
   const countMap = new Map(orderCounts.map(r => [r.userId, r.n]));
-  const cashByUser = new Map(accountRows.map(a => [a.userId, a.cash]));
+  const accountByUser = new Map(accountRows.map(a => [a.userId, a]));
+  const inFlightByUser = new Map<number, number>();
+  for (const r of pendingBuys) {
+    inFlightByUser.set(r.userId, (inFlightByUser.get(r.userId) ?? 0) + (r.amount ?? 0));
+  }
 
   // ── 第二波：净值依赖持仓代码，先去重再一次查全 ────────────────────
   // 沿用 getPortfolio 口径：只统计 totalShares > 0 的行——
@@ -104,7 +137,13 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
 
   return users.map((u) => {
     // 没账户的按 0 兜底（防御，正常注册必有 account）
-    const summary = valuatePortfolio(holdingsByUser.get(u.id) ?? [], cashByUser.get(u.id) ?? 0);
+    const acc = accountByUser.get(u.id);
+    const summary = valuatePortfolio(holdingsByUser.get(u.id) ?? [], acc?.cash ?? 0);
+    // 账户口径与排行榜同源：总资产含在途，收益相对累计入金
+    const inFlightCents = inFlightByUser.get(u.id) ?? 0;
+    const depositedCents = (acc?.initialCash ?? 0) + (acc?.totalCheckin ?? 0);
+    const totalAssetCents = summary.totalAssetCents + inFlightCents;
+    const accountPnlCents = totalAssetCents - depositedCents;
     return {
       id: u.id,
       username: u.username,
@@ -114,8 +153,13 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
       registerCountry: u.registerCountry,
       registerCity: u.registerCity,
       cashCents: summary.cashCents,
+      inFlightCents,
       marketValueCents: summary.marketValueCents,
-      totalPnlCents: summary.totalPnlCents,
+      depositedCents,
+      totalAssetCents,
+      accountPnlCents,
+      accountPnlRate: safeRate(accountPnlCents, depositedCents),
+      holdingPnlCents: summary.totalPnlCents,
       orderCount: countMap.get(u.id) ?? 0,
       createdAt: u.createdAt,
       lastActiveAt: u.lastActiveAt,

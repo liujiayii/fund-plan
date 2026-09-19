@@ -15,6 +15,7 @@ import {
   transactions,
   user,
 } from "~/db/schema";
+import { INITIAL_CASH_CENTS } from "~/domain/config";
 import { calcPurchase } from "~/domain/purchase";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { getAssetTimeline, getProfitDetail } from "~/services/asset-service";
@@ -74,13 +75,13 @@ async function seedNav(navDate: string, unitNav: number, code = "000001") {
 beforeEach(resetAll);
 
 describe("getAssetTimeline 累计投入", () => {
-  it("无签到时 totalDepositedCents = 初始本金 10 万", async () => {
+  it("无签到时 totalDepositedCents = 初始本金", async () => {
     const db = getDb(env.DB);
     await seedFund();
     const userId = await seedUser();
 
     const { totalDepositedCents } = await getAssetTimeline(db, userId);
-    expect(totalDepositedCents).toBe(10_000_000);
+    expect(totalDepositedCents).toBe(INITIAL_CASH_CENTS);
   });
 });
 

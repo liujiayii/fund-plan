@@ -15,7 +15,7 @@ import { DEFAULT_DESCRIPTION, pageMeta, SITE_NAME } from "~/domain/seo";
 import { getAssetTimeline } from "~/services/asset-service";
 import { getAppContext } from "~/services/context";
 import { getAdminUser, getCurrentUser } from "~/services/guard";
-import { getPortfolio } from "~/services/portfolio-service";
+import { getPendingBuyCents, getPortfolio } from "~/services/portfolio-service";
 import { getSiteStats } from "~/services/stats-service";
 
 const { Title, Paragraph, Text } = Typography;
@@ -65,15 +65,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     } as const;
   }
 
-  const [me, stats, portfolio, timeline] = await Promise.all([
+  const [me, stats, portfolio, timeline, pendingBuyCents] = await Promise.all([
     getCurrentUser(request, db),
     getSiteStats(db),
     getPortfolio(db, admin.id),
     // 示范盘两件套（总览+走势）的序列数据；日历撤下（liquid-glass spec §5.2），「最近操作」早已撤，orders 不再查
     getAssetTimeline(db, admin.id),
+    // 在途资金（+1 条查询）：与 /master、排行榜同口径——
+    // 不用「公开页别多背查询」的旧取舍换两个公开页对同一笔钱给出不同数字
+    getPendingBuyCents(db, admin.id),
   ]);
 
-  return { me, stats, admin, portfolio, timeline } as const;
+  return { me, stats, admin, portfolio, timeline, pendingBuyCents } as const;
 }
 
 /** 产品卖点，讲清「这不是玩具」 */
@@ -98,7 +101,7 @@ const FEATURES = [
 
 /** 三步上手：给第一次进来的人一条最短路径（首页此前只有卖点，没有「怎么玩」） */
 const STEPS = [
-  { n: "01", title: "注册领本金", desc: "用户名 + 密码即可，注册即到账 10 万模拟本金，每日签到再领 100~500 元。" },
+  { n: "01", title: "注册领本金", desc: "用户名 + 密码即可，注册即到账 500 万模拟本金，每日签到再领 100~500 元。" },
   { n: "02", title: "挑基金下单", desc: "搜代码或看排行榜，买入后按真实 T+1 规则撮合；也可以设日 / 周 / 月定投。" },
   { n: "03", title: "看盘复盘", desc: "总资产走势、收益日历、逐笔订单与份额批次全透明，随时对照真实规则复盘。" },
 ];
@@ -118,7 +121,7 @@ const RULES = [
   {
     key: "cash",
     label: "钱从哪来、能提现吗？",
-    children: "本金全部是模拟资金：注册送 10 万，每日签到连签递增（100 元起、每天 +50、封顶 500）。不涉及任何真实资金，不能提现，亏了不心疼。",
+    children: "本金全部是模拟资金：注册送 500 万，每日签到连签递增（100 元起、每天 +50、封顶 500）。不涉及任何真实资金，不能提现，亏了不心疼。",
   },
   {
     key: "data",
@@ -190,7 +193,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
                 )
               : (
                   <>
-                    <NavButton type="primary" size="large" shape="round" to="/register">免费注册，领 10 万本金</NavButton>
+                    <NavButton type="primary" size="large" shape="round" to="/register">免费注册，领 500 万本金</NavButton>
                     {/* 保持原生 <a>：游客态走边缘缓存，SPA 跳转反而绕开缓存 */}
                     <Button size="large" shape="round" href="/master">先围观主理人的盘</Button>
                   </>
@@ -216,11 +219,15 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               )}
               extra={<a href="/master">查看完整组合 →</a>}
             >
+              {/* 公开视角总览卡：主位是累计收益率，无「总资产 / 可用余额」——
+                  钱包数字只在本人 /me 可见（与 /master 同口径） */}
               <AssetOverviewCard
                 summary={loaderData.portfolio.summary}
                 daily={loaderData.timeline.daily}
                 latest={loaderData.timeline.latest}
                 totalDepositedCents={loaderData.timeline.totalDepositedCents}
+                pendingBuyCents={loaderData.pendingBuyCents}
+                visibility="public"
               />
               {loaderData.timeline.daily.length > 0 && (
                 <>

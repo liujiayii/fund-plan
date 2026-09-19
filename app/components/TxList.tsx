@@ -16,6 +16,15 @@ const TX_TYPE_MAP: Record<TransactionView["type"], { color: string; text: string
 
 export interface TxListProps {
   txs: TransactionView[];
+  /**
+   * 是否显示每行「余额」副值。默认 true（/me 这种本人页面）。
+   *
+   * /master 传 false：那是**公开**页面，逐行余额等于把主理人的钱包
+   * 随时间摊开给所有人看——单看某一行的余额是一个时点快照，串起来就是
+   * 完整的资金曲线。流水本身（申购 / 赎回到账 / 手续费）是操作记录，
+   * 可以公示；余额是钱包，不行。
+   */
+  showBalance?: boolean;
 }
 
 /**
@@ -31,7 +40,7 @@ export interface TxListProps {
  *
  * 同类的有意偏离还有：身份 Tag 红→蓝、状态绿→蓝、手续费 danger→常规色、预计到账 红→蓝。
  */
-export function TxList({ txs }: TxListProps) {
+export function TxList({ txs, showBalance = true }: TxListProps) {
   return (
     <div>
       {txs.map((t, i) => {
@@ -86,17 +95,20 @@ export function TxList({ txs }: TxListProps) {
                 <span style={{ fontSize: 12, color: COLOR.textSecondary }}> 元</span>
               </div>
               {/* 余额也走等宽数字：它和上面的金额同属一个右对齐数值列，
-                  少了等宽字体，行与行之间金额对齐、余额却参差 */}
-              <div
-                className="font-num"
-                style={{
-                  fontSize: 12,
-                  color: COLOR.textSecondary,
-                  marginTop: 2,
-                }}
-              >
-                {`余额 ${fmtYuan(t.balance)} 元`}
-              </div>
+                  少了等宽字体，行与行之间金额对齐、余额却参差。
+                  公开页（showBalance=false）整行不渲染——见 props 注释 */}
+              {showBalance && (
+                <div
+                  className="font-num"
+                  style={{
+                    fontSize: 12,
+                    color: COLOR.textSecondary,
+                    marginTop: 2,
+                  }}
+                >
+                  {`余额 ${fmtYuan(t.balance)} 元`}
+                </div>
+              )}
             </div>
           </div>
         );

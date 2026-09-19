@@ -154,8 +154,11 @@ export async function getPortfolio(
  * 买单下单即冻结现金（trade.ts 直接扣 account.cash），份额要等 T+1 撮合才生成——
  * pending 窗口内这笔钱既不在持仓市值也不在可用余额里，总资产凭空少一笔
  * （与 leaderboard-service 的 inFlightCashCents 是同一笔账，那边为榜单口径补过）。
- * /me 与 /admin/users/:id 总览卡用它把在途并回「持仓金额 / 总资产」并标注「含申购中」；
- * /master 与首页刻意不调（公开盘保持纯市值口径，别多背一条查询）。
+ *
+ * **三个调用方都必须调**：/me、/admin/users/:id、以及 /master 与首页这两个公开页。
+ * （2026-09-18 起公开页也调：此前「公开盘保持纯市值口径，别多背一条查询」的取舍，
+ * 代价是每个交易日 10:00→20:30 之间 /master 与 /leaderboard 对同一笔钱给出
+ * 相差一个定投额的总资产，净值拉不到顺延时会一直错到周一。多一条查询换口径自洽。）
  */
 export async function getPendingBuyCents(db: Db, userId: number): Promise<number> {
   const rows = await db
@@ -229,12 +232,26 @@ export interface DcaPlanView {
   dayOfMonth: number | null;
   status: "active" | "paused";
   nextRun: string;
+  /**
+   * **已成交**期数（= 该基金上 `source='dca'` 且 `status='confirmed'` 的订单数）。
+   * 不读 `dca_plan.run_count`——那个字段在下单时就 +1，撮合失败退款或用户撤单
+   * 都不回滚，会永久虚高（见 docs/money-audit.md §5）。
+   */
   runCount: number;
+  /** **已成交**累计投入（分），口径同 runCount（Σ 已确认 dca 买单的下单金额） */
   totalInvested: number;
   createdAt: number;
 }
 
-/** 读取用户的定投计划。fundCode 传入时只返回该基金的计划（持仓详情页定投页签用） */
+/**
+ * 读取用户的定投计划。fundCode 传入时只返回该基金的计划（持仓详情页定投页签用）。
+ *
+ * ⚠️ 「执行次数 / 累计投入」由 `orders` 现场聚合，**不读 dca_plan 的冗余计数**：
+ * 冗余字段是「下单即计数」，而真实口径是「成交才计数」，两者在失败/撤单路径上
+ * 会永久分叉。聚合按 (userId, fundCode) 分组，同基金建了两个计划的极端情况下
+ * 两边会分到同一份聚合值——这是刻意的取舍：宁可两个计划显示同一份真实成交额，
+ * 也不要一个虚高的假数字。
+ */
 export async function getDcaPlans(
   db: Db,
   userId: number,
@@ -250,17 +267,41 @@ export async function getDcaPlans(
     )
     .orderBy(desc(dcaPlan.createdAt));
 
-  const codes = [...new Set(rows.map(r => r.fundCode))];
-  const funds
-    = codes.length > 0
-      ? await db.select().from(fund).where(inArray(fund.code, codes))
-      : [];
-  const nameMap = new Map(funds.map(f => [f.code, f.name]));
+  if (rows.length === 0)
+    return [];
 
-  return rows.map(r => ({
-    ...r,
-    fundName: nameMap.get(r.fundCode) ?? r.fundCode,
-  }));
+  const codes = [...new Set(rows.map(r => r.fundCode))];
+  const [funds, agg] = await Promise.all([
+    db.select().from(fund).where(inArray(fund.code, codes)),
+    db
+      .select({
+        fundCode: orders.fundCode,
+        n: sql<number>`count(*)`,
+        // 下单金额（含内扣申购费）而非成交净额：这是用户真掏出去的钱
+        invested: sql<number>`coalesce(sum(${orders.amount}), 0)`,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.userId, userId),
+          eq(orders.source, "dca"),
+          eq(orders.status, "confirmed"),
+        ),
+      )
+      .groupBy(orders.fundCode),
+  ]);
+  const nameMap = new Map(funds.map(f => [f.code, f.name]));
+  const aggMap = new Map(agg.map(r => [r.fundCode, r]));
+
+  return rows.map((r) => {
+    const a = aggMap.get(r.fundCode);
+    return {
+      ...r,
+      fundName: nameMap.get(r.fundCode) ?? r.fundCode,
+      runCount: Number(a?.n ?? 0),
+      totalInvested: Number(a?.invested ?? 0),
+    };
+  });
 }
 
 /** 资金流水视图 */

@@ -32,7 +32,7 @@ import { SellDrawer } from "~/components/SellDrawer";
 import { BottomActionBar } from "~/components/ui/BottomActionBar";
 import { DataRow } from "~/components/ui/DataRow";
 import { EmptyState } from "~/components/ui/EmptyState";
-import { fmtYuan } from "~/components/ui/format";
+import { fmtRate, fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
@@ -237,7 +237,7 @@ export default function MeHoldingDetail({ loaderData, params }: Route.ComponentP
           <Col xs={24} sm={8}>
             <StatBig
               label="持有收益率"
-              value={`${d.pnlRate > 0 ? "+" : ""}${(d.pnlRate * 100).toFixed(2)}%`}
+              value={fmtRate(d.pnlRate)}
               color={pnlColor(d.pnlCents)}
               size={24}
             />
