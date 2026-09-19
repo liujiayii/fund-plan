@@ -106,7 +106,7 @@ export function AssetOverviewCard({
     />
   );
 
-  /** 累计收益格（不带率；率的落点由两版各自决定） */
+  /** 累计收益格（仅私密版使用；公开版的累计收益落在主位的 extra 行） */
   const cumCell = (
     <StatBig
       label="累计收益"
@@ -114,17 +114,15 @@ export function AssetOverviewCard({
       suffix="元"
       color={pnlColor(totalPnlCents)}
       size={20}
-      extra={isPublic
-        ? undefined
-        : totalRate === null
-          ? "收益率 —"
-          : (
-              <>
-                收益率
-                {" "}
-                <PnlText rate={totalRate} size={12} />
-              </>
-            )}
+      extra={totalRate === null
+        ? "收益率 —"
+        : (
+            <>
+              收益率
+              {" "}
+              <PnlText rate={totalRate} size={12} />
+            </>
+          )}
     />
   );
 
@@ -153,8 +151,13 @@ export function AssetOverviewCard({
         />
         <Row gutter={[24, 16]} style={{ marginTop: 16 }}>
           <Col xs={12} sm={8}>{yesterdayCell}</Col>
-          <Col xs={12} sm={8}>{cumCell}</Col>
           <Col xs={12} sm={8}>{holdingCell}</Col>
+          {/* 第三格是「累计入金」而非「累计收益」：累计收益已由主位的 extra 行
+              展示过，同一张卡上再摆一次是重复；累计入金（初始 + 签到）是「投入」
+              不是「钱包余额」，与持仓金额同属可公示的投资信息 */}
+          <Col xs={12} sm={8}>
+            <StatBig label="累计入金" value={fmtYuan(totalDepositedCents)} suffix="元" size={20} />
+          </Col>
         </Row>
       </div>
     );
