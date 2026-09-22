@@ -110,6 +110,7 @@ export default function AdminUserDetail({ loaderData }: Route.ComponentProps) {
           daily={profit.daily}
           latest={profit.latest}
           totalDepositedCents={profit.totalDepositedCents}
+          investedCents={profit.investedCents}
           pendingBuyCents={pendingBuyCents}
         />
       </SectionCard>

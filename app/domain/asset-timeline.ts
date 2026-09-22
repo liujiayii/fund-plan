@@ -170,7 +170,7 @@ export function replayDailyAssets(input: ReplayInput): DailyAsset[] {
     const dayPnlCents = isFirstDay ? 0 : totalAssetCents - prevTotalAssetCents - netDeposit;
 
     // ── 步骤 6：日收益率 ──
-    // 分母是「前一日总资产」（与账户级累计收益率的分母「累计入金」不同，
+    // 分母是「前一日总资产」（与选基收益率的分母「累计买入额」不同，
     // 展示时必须标明口径）。首日无前一日 → 0，不产出 NaN/Infinity
     const dayPnlRate
       = isFirstDay ? 0 : (safeRate(dayPnlCents, prevTotalAssetCents) ?? 0);

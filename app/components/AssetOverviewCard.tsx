@@ -15,8 +15,13 @@ export interface AssetOverviewCardProps {
   daily: DailyAsset[];
   /** 最新一天快照；null（新用户无数据）时昨日收益显示 — */
   latest: DailyAsset | null;
-  /** 累计投入本金（分）= 初始 + 历次签到。累计收益率的分母 */
+  /** 累计投入本金（分）= 初始 + 历次签到。仅公开版「累计入金」格用 */
   totalDepositedCents: number;
+  /**
+   * 累计买入金额（分）= Σ 已成交买单的下单金额。选基收益率的分母。
+   * 与排行榜 LeaderboardEntry.investedCents 同源；从未买过为 0，比率显示「—」。
+   */
+  investedCents: number;
   /**
    * pending 买单的在途资金（分）。买单冻结的现金已从余额扣、份额未生成，
    * 不并回的话 pending 窗口内总资产凭空少一笔——并回「持仓金额」与「总资产」，
@@ -32,7 +37,7 @@ export interface AssetOverviewCardProps {
    * - `private`（默认）：/me 与 /admin/users/:id。主位「总资产」，
    *   一行四格 = 昨日收益 / 累计收益 / 持仓金额 / 可用余额。
    * - `public`：/master 与首页。「总资产」「可用余额」是钱包信息，
-   *   基金类产品从不向他人展示；主位换成「累计收益率」，
+   *   基金类产品从不向他人展示；主位换成「选基收益率」，
    *   一行三格 = 昨日收益 / 持仓金额 / 累计入金。持仓金额与累计入金是
    *   「仓位与投入」而非「钱包余额」，属于可以公示的投资信息。
    */
@@ -53,9 +58,10 @@ function signedYuan(cents: number): string {
  *    extra 标注「截至 M 月 D 日」，不写死字面上的昨天
  *  - 累计收益 = Σ dayPnl（含已实现盈亏与全部费用、剔除净入金），
  *    与资产走势曲线、收益日历逐日同口径
- *  - 累计收益率 = 累计收益 ÷ 累计投入本金（分母 0 显示 —，防御性兜底）。
- *    ⚠️ 这是**账户口径**（分母含没投出去的闲置现金），与持仓列表的
- *    「持有收益率」（分母是持仓成本）不是同一个数
+ *  - 选基收益率 = 累计收益 ÷ 累计买入金额（分母 0 显示 —）。
+ *    ⚠️ 分母是**累计买入额**，不是累计入金：闲钱不稀释它，但同一笔钱
+ *    来回买卖会重复计入、把比率压低。与持仓列表的「持有收益率」
+ *    （分母是持仓成本）也不是同一个数
  *  - 持仓金额 = 市值 + 申购中在途（传 pendingBuyCents 时；标注「含申购中」）
  */
 export function AssetOverviewCard({
@@ -63,6 +69,7 @@ export function AssetOverviewCard({
   daily,
   latest,
   totalDepositedCents,
+  investedCents,
   pendingBuyCents,
   visibility = "private",
 }: AssetOverviewCardProps) {
@@ -72,8 +79,8 @@ export function AssetOverviewCard({
 
   // 累计收益：分整数域求和（远低于 2^53，零误差），与资产走势曲线同口径
   const totalPnlCents = daily.reduce((s, d) => s + d.dayPnlCents, 0);
-  // 累计收益率：Decimal 除法收口在 safeRate（分母 0 → null → 显示 —）
-  const totalRate = safeRate(totalPnlCents, totalDepositedCents);
+  // 选基收益率：分母是累计买入额，Decimal 除法收口在 safeRate（分母 0 → null → 显示 —）
+  const totalRate = safeRate(totalPnlCents, investedCents);
   const rateColor = totalRate === null ? undefined : pnlColor(totalRate);
   // 收益率辉光：辉光白名单（宪法 §2.4）。0 或不展示不加
   const rateGlow = totalRate === null || totalRate === 0
@@ -115,10 +122,10 @@ export function AssetOverviewCard({
       color={pnlColor(totalPnlCents)}
       size={20}
       extra={totalRate === null
-        ? "收益率 —"
+        ? "选基收益率 —"
         : (
             <>
-              收益率
+              选基收益率
               {" "}
               <PnlText rate={totalRate} size={12} />
             </>
@@ -141,9 +148,9 @@ export function AssetOverviewCard({
   if (isPublic) {
     return (
       <div>
-        {/* 公开身份主位：累计收益率（相对数，不泄露资产规模） */}
+        {/* 公开身份主位：选基收益率（相对数，不泄露资产规模） */}
         <StatBig
-          label="累计收益率"
+          label="选基收益率"
           glow={rateGlow}
           value={totalRate === null ? "—" : fmtRate(totalRate)}
           color={rateColor}

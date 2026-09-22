@@ -21,8 +21,10 @@ import {
  * 「持仓浮盈」去对排行榜的「总收益」然后怀疑其中一边算错了（2026-09-18 审计）：
  *  - `accountPnlCents` = 总资产 − 累计入金（含现金、在途、已实现盈亏与全部费用）
  *    —— **与排行榜 LeaderboardEntry.totalPnlCents 同口径**，可直接对账
+ *  - `investedCents` = Σ 已成交买单下单金额。选基收益率的分母，与榜单同源
  *  - `holdingPnlCents` = 市值 − 持仓成本（纯浮盈，不含现金与已实现盈亏）
- *  - `depositedCents`（收益率分母）也一并列出：没有分母就没法验证收益率
+ *  - `depositedCents`（累计入金）也一并列出：总收益的对照基准，
+ *    从「总资产 − 收益」反推容易被在途资金带偏
  */
 export interface UserOverview {
   id: number;
@@ -42,13 +44,15 @@ export interface UserOverview {
   inFlightCents: number;
   /** 持仓市值（分） */
   marketValueCents: number;
-  /** 累计入金（分）= 初始本金 + 签到。账户收益率的分母 */
+  /** 累计入金（分）= 初始本金 + 签到。总收益的对照基准，不是收益率分母 */
   depositedCents: number;
+  /** 累计买入金额（分）= Σ 已成交买单下单金额。选基收益率的分母 */
+  investedCents: number;
   /** 总资产（分）= 市值 + 现金 + 在途。与排行榜同口径 */
   totalAssetCents: number;
   /** 账户收益（分）= 总资产 − 累计入金。与排行榜「总收益」同口径 */
   accountPnlCents: number;
-  /** 账户收益率（普通小数）；累计入金为 0 时为 null */
+  /** 选基收益率（普通小数）= 账户收益 ÷ 累计买入金额；从未买过时为 null */
   accountPnlRate: number | null;
   /** 持仓浮盈（分）= 市值 − 持仓成本（不含现金与已实现盈亏） */
   holdingPnlCents: number;
@@ -79,18 +83,23 @@ export interface AdminStats {
  * 聚合全在内存做。
  * 单只持仓估值与 getPortfolio 完全同口径：valuateHolding + 无净值时
  * costBasisNavScaled 成本兜底，汇总走 valuatePortfolio。
- * 账户口径（总资产 / 账户收益 / 收益率）与 leaderboard-service 同源，
+ * 账户口径（总资产 / 账户收益 / 选基收益率）与 leaderboard-service 同源，
  * 排查「榜上这个数怎么来的」时两边能直接对上。
  */
 export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
   // ── 第一波：用户 / 账户 / 持仓 / 订单数 / 在途互不依赖，并行发出 ────
-  const [users, accountRows, holdingRows, orderCounts, pendingBuys] = await Promise.all([
+  const [users, accountRows, holdingRows, orderAgg, pendingBuys] = await Promise.all([
     db.select().from(user).orderBy(desc(user.createdAt), desc(user.id)),
     db.select().from(account),
     db.select().from(holding),
-    // 每用户订单数一条 groupBy 拿全，避免再逐人 count
+    // 每用户一条 groupBy 同时拿订单数与累计买入额（选基收益率的分母）。
+    // ⚠️ 绝不能退回「逐人查」——D1 免费版每请求 50 条查询是硬顶
     db
-      .select({ userId: orders.userId, n: sql<number>`count(*)` })
+      .select({
+        userId: orders.userId,
+        n: sql<number>`count(*)`,
+        investedCents: sql<number>`coalesce(sum(case when ${orders.status} = 'confirmed' and ${orders.side} = 'buy' then ${orders.amount} else 0 end), 0)`,
+      })
       .from(orders)
       .groupBy(orders.userId),
     // 在途资金：一条查全再按用户内存累加（与 getPendingBuyCents 同一口径，
@@ -100,7 +109,9 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
       .from(orders)
       .where(and(eq(orders.status, "pending"), eq(orders.side, "buy"))),
   ]);
-  const countMap = new Map(orderCounts.map(r => [r.userId, r.n]));
+  const countMap = new Map(orderAgg.map(r => [r.userId, r.n]));
+  // SQLite 的 sum 可能回浮点，显式 Number 一下（金额仍是整数分）
+  const investedByUser = new Map(orderAgg.map(r => [r.userId, Number(r.investedCents)]));
   const accountByUser = new Map(accountRows.map(a => [a.userId, a]));
   const inFlightByUser = new Map<number, number>();
   for (const r of pendingBuys) {
@@ -142,6 +153,7 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
     // 账户口径与排行榜同源：总资产含在途，收益相对累计入金
     const inFlightCents = inFlightByUser.get(u.id) ?? 0;
     const depositedCents = (acc?.initialCash ?? 0) + (acc?.totalCheckin ?? 0);
+    const investedCents = investedByUser.get(u.id) ?? 0;
     const totalAssetCents = summary.totalAssetCents + inFlightCents;
     const accountPnlCents = totalAssetCents - depositedCents;
     return {
@@ -156,9 +168,10 @@ export async function listUsersOverview(db: Db): Promise<UserOverview[]> {
       inFlightCents,
       marketValueCents: summary.marketValueCents,
       depositedCents,
+      investedCents,
       totalAssetCents,
       accountPnlCents,
-      accountPnlRate: safeRate(accountPnlCents, depositedCents),
+      accountPnlRate: safeRate(accountPnlCents, investedCents),
       holdingPnlCents: summary.totalPnlCents,
       orderCount: countMap.get(u.id) ?? 0,
       createdAt: u.createdAt,

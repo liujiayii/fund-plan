@@ -211,7 +211,9 @@ describe("listUsersOverview 用户列表", () => {
     expect(a.totalAssetCents).toBe(e.totalAssetCents);
     expect(a.accountPnlCents).toBe(e.totalPnlCents);
     expect(a.depositedCents).toBe(e.initialCashCents + e.totalCheckinCents);
-    expect(a.accountPnlRate).toBeCloseTo(e.totalPnlRate, 12);
+    expect(a.investedCents).toBe(e.investedCents);
+    // 两边的选基收益率必须同源：都是账户收益 ÷ 累计买入额
+    expect(a.accountPnlRate).toBeCloseTo(e.investedPnlRate!, 12);
   });
 });
 

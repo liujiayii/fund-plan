@@ -105,7 +105,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </div>
 
-      {/* 顶部与 /me 同款总览卡，但走 public 可见性：主位是累计收益率而不是总资产，
+      {/* 顶部与 /me 同款总览卡，但走 public 可见性：主位是选基收益率而不是总资产，
           也没有「可用余额」格。animate-fade-up：首卡无延迟 */}
       <SectionCard className="animate-fade-up">
         <AssetOverviewCard
@@ -113,6 +113,7 @@ export default function Master({ loaderData }: Route.ComponentProps) {
           daily={profit.daily}
           latest={profit.latest}
           totalDepositedCents={profit.totalDepositedCents}
+          investedCents={profit.investedCents}
           pendingBuyCents={pendingBuyCents}
           visibility="public"
         />

@@ -27,6 +27,8 @@ async function buildReplayInput(db: Db, userId: number): Promise<{
   fundPnlInput: FundPnlInput;
   /** 累计投入本金（分）= Σ净入金（初始 + 历次签到） */
   totalDepositedCents: number;
+  /** 累计买入金额（分）= Σ 已成交买单下单金额。选基收益率的分母 */
+  investedCents: number;
   /** 历史确认订单涉及的全部基金代码（含已清仓） */
   fundCodes: string[];
 }> {
@@ -208,6 +210,15 @@ async function buildReplayInput(db: Db, userId: number): Promise<{
     totalDepositedCents += v;
   }
 
+  // 累计买入金额：已成交买单的下单金额之和。选基收益率的分母，
+  // 与排行榜 leaderboard-service 的 investedCents 同一口径（confirmed + side=buy + amount）。
+  // 这里直接从已取回的订单里加，不再单独查一次
+  let investedCents = 0;
+  for (const row of orderRows) {
+    if (row.status === "confirmed" && row.side === "buy" && row.amount !== null)
+      investedCents += row.amount;
+  }
+
   // ── 拼 ReplayInput 喂领域层 ─────────────────────────────────────
   const input: ReplayInput = {
     dateAxis,
@@ -219,7 +230,7 @@ async function buildReplayInput(db: Db, userId: number): Promise<{
   };
   const fundPnlInput: FundPnlInput = { dateAxis, navSeries, confirmedOrders: fundPnlOrders };
 
-  return { input, fundPnlInput, totalDepositedCents, fundCodes };
+  return { input, fundPnlInput, totalDepositedCents, investedCents, fundCodes };
 }
 
 /**
@@ -228,24 +239,27 @@ async function buildReplayInput(db: Db, userId: number): Promise<{
  * @param db   Drizzle 实例（由 loader 传入）
  * @param userId 用户 ID
  * @returns daily 逐日资产快照；latest 最新一天（页面可标注日期）；
- *   totalDepositedCents 累计投入本金（Σ净入金，分）
+ *   totalDepositedCents 累计投入本金（Σ净入金，分）；
+ *   investedCents 累计买入金额（分，选基收益率的分母）
  */
 export async function getAssetTimeline(
   db: Db,
   userId: number,
-): Promise<{ daily: DailyAsset[]; latest: DailyAsset | null; totalDepositedCents: number }> {
-  const { input, totalDepositedCents } = await buildReplayInput(db, userId);
+): Promise<{ daily: DailyAsset[]; latest: DailyAsset | null; totalDepositedCents: number; investedCents: number }> {
+  const { input, totalDepositedCents, investedCents } = await buildReplayInput(db, userId);
   const daily = replayDailyAssets(input);
   const latest = daily.length > 0 ? daily[daily.length - 1] : null;
-  return { daily, latest, totalDepositedCents };
+  return { daily, latest, totalDepositedCents, investedCents };
 }
 
 /** 收益明细页视图（/me/profit）。序列化安全：loader 数据要跨 SSR 脱水，一律普通对象不外泄 Map */
 export interface ProfitDetailView {
   daily: DailyAsset[];
   latest: DailyAsset | null;
-  /** 累计投入本金（Σ净入金，分）——总览卡算累计收益率用（/master、/admin/users/:id 复用本视图） */
+  /** 累计投入本金（Σ净入金，分）。公开总览卡的「累计入金」格用 */
   totalDepositedCents: number;
+  /** 累计买入金额（分）= Σ 已成交买单下单金额。总览卡选基收益率的分母 */
+  investedCents: number;
   /** 日期 → 当日各基金收益（当日有持仓/现金流的日期才有 key，含已清仓基金） */
   fundPnlByDate: Record<string, FundDayPnl[]>;
   /** fundCode → 基金名 */
@@ -261,7 +275,7 @@ export async function getProfitDetail(
   db: Db,
   userId: number,
 ): Promise<ProfitDetailView> {
-  const { input, fundPnlInput, totalDepositedCents, fundCodes } = await buildReplayInput(db, userId);
+  const { input, fundPnlInput, totalDepositedCents, investedCents, fundCodes } = await buildReplayInput(db, userId);
   const daily = replayDailyAssets(input);
 
   // 基金名一次 inArray 查询（含已清仓——历史日期的归因里有它们）
@@ -286,6 +300,7 @@ export async function getProfitDetail(
     daily,
     latest: daily.length > 0 ? daily[daily.length - 1] : null,
     totalDepositedCents,
+    investedCents,
     fundPnlByDate,
     fundNames,
   };
