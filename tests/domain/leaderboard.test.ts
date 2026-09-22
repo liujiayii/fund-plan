@@ -70,7 +70,7 @@ describe("computeLeaderboard 口径", () => {
     expect(out[0].totalPnlCents).toBe(1_000_000);
   });
 
-  it("亏损用户：收益为负、率为负，照常上榜", () => {
+  it("亏损且从未买入：收益为负，选基收益率无分母（不进收益率榜）", () => {
     const out = computeLeaderboard([
       mk({ cashCents: 9_000_000 }),
     ]);

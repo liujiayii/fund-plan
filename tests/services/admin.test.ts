@@ -196,9 +196,14 @@ describe("listUsersOverview 用户列表", () => {
     const alice = await registerUser(db, env, "alice", "hunter2");
     const today = toBeijing(new Date()).format("YYYY-MM-DD");
     await db.insert(orders).values([
-      // pending 买单 → 在途资金
+      // pending 买单 → 在途资金，不进累计买入
       { userId: alice.id, fundCode: "000001", side: "buy", status: "pending", source: "manual", amount: 30_000, placeDate: today, confirmDate: today, createdAt: Date.now() },
-      // 已确认买单 → 过榜单门槛 + 投入收益率的分母
+      // 失败买单：有金额但没成交，两边都不能算进分母
+      { userId: alice.id, fundCode: "000001", side: "buy", status: "failed", source: "manual", amount: 50_000, placeDate: today, confirmDate: today, createdAt: Date.now() },
+      // 已确认赎回：amount 为 null（赎回按下单份额计），SQL sum 忽略 null、
+      // 内存累加也跳过 null，这笔绝不能把分母弄脏
+      { userId: alice.id, fundCode: "000001", side: "sell", status: "confirmed", source: "manual", amount: null, placeDate: today, confirmDate: today, dealAmount: 20_000, dealShares: 1_000_000, createdAt: Date.now() },
+      // 已确认买单 → 过榜单门槛 + 选基收益率的分母，唯一该计入的一笔
       { userId: alice.id, fundCode: "000001", side: "buy", status: "confirmed", source: "manual", amount: 100_000, placeDate: today, confirmDate: today, dealAmount: 98_522, dealShares: 6_568_133, createdAt: Date.now() },
     ]);
 
@@ -212,6 +217,10 @@ describe("listUsersOverview 用户列表", () => {
     expect(a.accountPnlCents).toBe(e.totalPnlCents);
     expect(a.depositedCents).toBe(e.initialCashCents + e.totalCheckinCents);
     expect(a.investedCents).toBe(e.investedCents);
+    // 绝对数钉死：只有那笔 confirmed buy 的 100_000 进分母。
+    // failed buy / pending buy / confirmed sell（amount=null）三笔都不算——
+    // 这条是 admin 的 case-when 与榜单 where status='confirmed' 两套实现的等价契约
+    expect(a.investedCents).toBe(100_000);
     // 两边的选基收益率必须同源：都是账户收益 ÷ 累计买入额
     expect(a.accountPnlRate).toBeCloseTo(e.investedPnlRate!, 12);
   });

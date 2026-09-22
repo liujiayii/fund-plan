@@ -1,6 +1,7 @@
 import type { Route } from "./+types/leaderboard";
 import type { LeaderboardEntry } from "~/domain/leaderboard";
 import { Space, Tabs, Tag, Typography } from "antd";
+import { useState } from "react";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtRate, fmtSignedYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
@@ -359,11 +360,15 @@ function Podium({
 function LeaderRow({
   entry,
   meId,
+  metric,
 }: {
   entry: LeaderboardEntry;
   meId: number | null;
+  /** 当前榜：决定哪边是主角。跟领奖台同一套规则，别两套 UI 各说各话 */
+  metric: RankMetric;
 }) {
   const isMe = meId !== null && entry.userId === meId;
+  const heroIsRate = metric === "rate";
   return (
     // 自己的条目冰雾高亮：bg-primary/6 = 主色 6% 透明度
     // ⚠️ 单边边框的正确姿势是 border-b + [border-bottom-style:solid]：
@@ -394,11 +399,21 @@ function LeaderRow({
           {isMe && <Tag className="ml-2">我</Tag>}
         </div>
         <div className="mt-0.5 font-num text-xs text-muted">
-          <InvestedRate rate={entry.investedPnlRate} />
+          {/* 副值是「另一个口径」：收益率榜给收益金额（这榜上的人都买过，
+              不会是 null）；总收益榜才给选基收益率，「—」只留给真没买过的人 */}
+          {heroIsRate
+            ? signedYuan(entry.totalPnlCents)
+            : <InvestedRate rate={entry.investedPnlRate} />}
         </div>
       </div>
       <div className="shrink-0 text-right">
-        <PnlText cents={entry.totalPnlCents} size={14} />
+        {heroIsRate
+          ? (
+              <span className={`font-num text-[14px] ${pnlTone(entry.investedPnlRate ?? 0)}`}>
+                {entry.investedPnlRate === null ? "—" : fmtRate(entry.investedPnlRate)}
+              </span>
+            )
+          : <PnlText cents={entry.totalPnlCents} size={14} />}
       </div>
     </div>
   );
@@ -411,15 +426,17 @@ function LeaderRow({
 function ListTape({
   entries,
   meId,
+  metric,
 }: {
   entries: LeaderboardEntry[];
   meId: number | null;
+  metric: RankMetric;
 }) {
   if (entries.length === 0)
     return null;
   return (
     <div className="-mx-4 md:-mx-6">
-      {entries.map(e => <LeaderRow key={e.userId} entry={e} meId={meId} />)}
+      {entries.map(e => <LeaderRow key={e.userId} entry={e} meId={meId} metric={metric} />)}
     </div>
   );
 }
@@ -427,10 +444,13 @@ function ListTape({
 export default function Leaderboard({ loaderData }: Route.ComponentProps) {
   const { me, lb } = loaderData;
   const meId = me?.id ?? null;
+  // 受控 tab：「我的排名」必须看当前榜。只赎回、从未买入的人被排除在
+  // 收益率榜之外，但总收益榜上有他——固定查 byRate 会把在榜的人显示成没上榜
+  const [metric, setMetric] = useState<RankMetric>("pnl");
 
-  /** 自己的条目（可能不在榜上：没成交过 / 没登录） */
-  const mine
-    = meId === null ? null : lb.byRate.find(e => e.userId === meId) ?? null;
+  /** 自己在当前榜的条目（没登录 / 当前榜没有自己时为 null） */
+  const board = metric === "rate" ? lb.byRate : lb.byPnl;
+  const mine = meId === null ? null : board.find(e => e.userId === meId) ?? null;
 
   // 两榜各自切一次：领先档完整吃进条带，名单带只拿剩下的。
   // 切分必须在 Tabs 外做——items.children 里写 IIFE 是为了躲 lint 的副作用。
@@ -444,8 +464,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
           收益排行榜
         </Title>
         <Paragraph type="secondary" className="mb-0">
-          总收益 = 总资产 − 累计入金（初始本金 + 签到奖励）。已清仓落袋的收益也保留在榜上，
-          只签到不买基金刷不了榜。
+          总收益 = 总资产 − 累计入金（初始本金 + 签到奖励）。已清仓落袋的收益也保留在榜上。
+          收益率榜只排买过基金的人；总收益榜只要成交过（含只赎回）就在。
         </Paragraph>
         {/* 分母必须写在页面上：选基收益率的分母是累计买入额，不是账户里的闲钱，
             同一笔钱来回买卖会重复计入、把比率压低（2026-09-22 撤掉账户收益率后，
@@ -470,7 +490,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
             )
           : (
               <Tabs
-                defaultActiveKey="pnl"
+                activeKey={metric}
+                onChange={key => setMetric(key as RankMetric)}
                 items={[
                   {
                     key: "pnl",
@@ -478,7 +499,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                     children: (
                       <>
                         <Podium leads={pnlBoard.leads} rest={pnlBoard.rest} meId={meId} metric="pnl" />
-                        <ListTape entries={pnlBoard.tape} meId={meId} />
+                        <ListTape entries={pnlBoard.tape} meId={meId} metric="pnl" />
                       </>
                     ),
                   },
@@ -488,7 +509,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                     children: (
                       <>
                         <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} metric="rate" />
-                        <ListTape entries={rateBoard.tape} meId={meId} />
+                        <ListTape entries={rateBoard.tape} meId={meId} metric="rate" />
                       </>
                     ),
                   },
@@ -507,7 +528,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
             ? (
                 // 单行卡不走 ListTape 负边距：外卡 body 自己就是左右呼吸
                 <div className="-mx-4 md:-mx-6">
-                  <LeaderRow entry={mine} meId={meId} />
+                  <LeaderRow entry={mine} meId={meId} metric={metric} />
                 </div>
               )
             : (
