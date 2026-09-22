@@ -1,12 +1,33 @@
+import type { DiagramLabel } from "~/domain/plan-diagram";
+import {
+  CURVE_BASELINE,
+  CURVE_DASH,
+  CURVE_GUIDES,
+  CURVE_LABELS,
+  CURVE_POINTS,
+  CURVE_VIEW,
+  LABEL_FS,
+  labelLeader,
+  PILL_PAD_X,
+  pillRect,
+  VENN_CENTER,
+  VENN_LENS_R,
+  VENN_R,
+  VENN_RING_R,
+  VENN_VERTICES,
+  VENN_VIEW,
+  vennLabels,
+} from "~/domain/plan-diagram";
+
 /**
- * `/plan`（低估指数定投计划）的两张示意图 —— 三圈交叉图与定投方法曲线。
+ * `/plan`（低估指数定投计划）的三张示意图 —— 两张三圈交叉图与一条定投方法曲线。
  *
- * 为什么自己画 SVG 而不是引图表库：这两张都是**装饰性的理念图**（不是数据图），
+ * 为什么自己画 SVG 而不是引图表库：这三张都是**装饰性的理念图**（不是数据图），
  * `@ant-design/charts` 那套底层吃 canvas，SSR 会渲染出空内容、hydration 报
  * useContext 为空（见 CLAUDE.md「依赖 canvas/DOM 的库必须懒加载」）。用 SVG 画
  * 则是纯静态标记，SSR 与浏览器两端产出逐字节相同，没有懒加载与占位骨架的麻烦。
  *
- * 视觉语言（2026-09-22 主人要求「再炫一点」后重做），四层叠出来：
+ * 视觉语言（2026-09-22 第四次迭代），四层叠出来：
  *   1. **极光**：整张图底下一团径向光晕（primary 0.30 → 0），先给画面垫上光
  *   2. **光带**：曲线下方压一条 11px 宽的半透明同形描边，冒充辉光
  *   3. **渐变**：描边与填充走 linearGradient / radialGradient，端点取
@@ -18,17 +39,12 @@
  * ⚠️ 也不许用 SVG 滤镜（feGaussianBlur / feDisplacementMap）——宪法 §3 明令禁止，
  * 低端安卓与 workerd SSR 都扛不住；上面那四层就是不用滤镜做出辉光的全部手段。
  *
- * 几何都是**手算的**，改动前先看这几条（2026-09-22 主人验收后返工）：
- *   - 每个标签必须与它对应的点**同在一条竖线上**（主人指出「开始定投」没对齐、
- *     「下跌坚持」根本没有点）
- *   - 标签之间不许叠字：算完 x 跨度再定圆心距，别凭感觉挪
- *   - 曲线往右上爬的那一段会**吃掉右上角的空间**，标签放它上面会压到线
- *   - 画布边界要留够：第一版 hero 的硬币圆心 186 + 半径 16 = 202，超出 viewBox
- *     宽度 200，右边被裁掉一块
+ * 几何**全在 `app/domain/plan-diagram.ts`**，本文件只管把它画出来：
+ * 坐标、字号、胶囊尺寸、标签与锚点的对应关系都不在这里手写。历史教训是
+ * 几何靠肉眼截图走查（贵且漏），现已由 `tests/domain/plan-diagram.test.ts`
+ * 钉成不变量（胶囊不越界 / 不咬字 / 不侵入镜片 / 与锚点同轴）。
+ * **在这里再抄一份坐标 = 守卫守的是影子副本，等于没守。**
  */
-
-/** 文字尺寸：整张图随容器等比缩放，手机上会缩到约八成，所以基准给到 13.5 */
-const FS = 13.5;
 
 /**
  * 一段「玻璃高光弧」：从 205° 扫到 305°（屏幕坐标，y 向下，角度顺时针为正）。
@@ -46,7 +62,49 @@ function glassArc(cx: number, cy: number, r: number, from = 205, to = 305): stri
   return `M ${pt(from)} A ${r} ${r} 0 0 1 ${pt(to)}`;
 }
 
-/** 三圈交叉图：三个等权圆 + 中心结论圆。两个理念小节共用一张，视觉语言一致 */
+/**
+ * 标签胶囊：把裸文字装进一枚冰雾小片，**站在线之上**而不是压在线上。
+ *
+ * 2026-09-22 第四版加的这一层，一次解决三件事：
+ *   1. 裸文字直接压在圈线/曲线上，读起来像线把字划开了（「分批止盈」当年只能
+ *      被迫缩到点的左边，就是因为压在 Med 陡升的曲线上）
+ *   2. 同排相邻的标签会咬字（左右两枚 venn 标签曾只隔 3px）
+ *   3. 与全站的 well/elevated 材料同源，图不再是「另一套设计」
+ */
+function LabelPill({ label, fontSize = LABEL_FS }: { label: DiagramLabel; fontSize?: number }) {
+  const r = pillRect(label, fontSize);
+  const warm = label.tone === "warm";
+  const ink = warm ? "var(--fp-pending)" : "var(--fp-text-secondary)";
+  const line = warm ? "var(--fp-pending)" : "var(--fp-primary)";
+  return (
+    <g>
+      <rect
+        x={r.x}
+        y={r.y}
+        width={r.w}
+        height={r.h}
+        rx={r.h / 2}
+        fill="var(--fp-elevated)"
+        fillOpacity="0.86"
+        stroke={line}
+        strokeOpacity={warm ? 0.5 : 0.32}
+        strokeWidth="1"
+      />
+      <text
+        // anchor=end 时 x 是胶囊右缘，文字得再退一个内边距才落在片上（不减就是贴边）
+        x={label.anchor === "middle" ? label.x : label.x - PILL_PAD_X}
+        y={label.y + fontSize * 0.34}
+        textAnchor={label.anchor === "middle" ? "middle" : "end"}
+        fontSize={fontSize}
+        fill={ink}
+      >
+        {label.text}
+      </text>
+    </g>
+  );
+}
+
+/** 三圈交叉图：三个等权圆 + 中心结论圆。两个理念小节共用一套几何，靠 variant 拉开重量 */
 export interface TriVennProps {
   /**
    * 渐变 / 极光的 id 前缀。⚠️ **必须与同页其它实例不同**：一页上有两张这种图，
@@ -60,32 +118,22 @@ export interface TriVennProps {
   center: readonly string[];
   /** 无障碍描述；纯装饰的话传空串 */
   ariaLabel: string;
+  /**
+   * 圈的重量。两张图共用一套几何，若画得一模一样就会被读成「同一张图印了两遍」：
+   *   - `fill`（定投品种）：实心雾圈，读「三个品种都在这一片里」
+   *   - `line`（基金选择）：描边圈 + 虚线刻度环，读「三个条件都得满足才进得去」
+   * 只调重量与环的虚实，**不动构图**（主人 2026-09-22 定的：三圈底子不动）。
+   */
+  variant?: "fill" | "line";
 }
 
-export function TriVenn({ idPrefix, labels, center, ariaLabel }: TriVennProps) {
-  // 等边三角形：重心 (180,140)，顶点到重心 R=58；圈半径 62 保证三圈两两相交
-  // 且都盖住重心（58 < 62），中心那块三重叠区才真的存在
-  const verts = [
-    { x: 180, y: 82, g: "a" },
-    { x: 129.8, y: 169, g: "b" },
-    { x: 230.2, y: 169, g: "c" },
-  ] as const;
-  const R = 62;
-  // 标签摆在「重心 → 自己那个圆」方向上、离重心 90 处：这样它落在自己圆的外缘内侧，
-  // 既出了中心圆（45 + 半个标签宽），又还没进邻居的圆（实测邻居圆心距 129 > 62）。
-  // ⚠️ 这个距离是被**标签宽度**卡出来的，不是被圆卡出来的：78 的时候标签内端
-  // 离中心圆只剩 2px，视觉上直接贴在深色圆边上（截图走查）
-  const D = 90;
-  const dirs = [
-    { x: 0, y: -1 },
-    { x: -0.866, y: 0.5 },
-    { x: 0.866, y: 0.5 },
-  ] as const;
-  const labelPos = dirs.map(d => ({ x: 180 + d.x * D, y: 140 + d.y * D }));
+export function TriVenn({ idPrefix, labels, center, ariaLabel, variant = "fill" }: TriVennProps) {
+  const liney = variant === "line";
+  const ringR = VENN_RING_R;
 
   return (
     <svg
-      viewBox="0 0 360 250"
+      viewBox={`0 0 ${VENN_VIEW.w} ${VENN_VIEW.h}`}
       className="mx-auto block w-full"
       style={{ maxWidth: 520 }}
       role={ariaLabel ? "img" : undefined}
@@ -99,10 +147,12 @@ export function TriVenn({ idPrefix, labels, center, ariaLabel }: TriVennProps) {
           <stop offset="55%" stopColor="var(--fp-primary)" stopOpacity="0.07" />
           <stop offset="100%" stopColor="var(--fp-primary)" stopOpacity="0" />
         </radialGradient>
-        {/* 圈内径向微光：比一层平铺的冰雾更有体积感，边缘自然收掉 */}
-        <radialGradient id={`${idPrefix}-fill`}>
-          <stop offset="0%" stopColor="var(--fp-primary)" stopOpacity="0.20" />
-          <stop offset="100%" stopColor="var(--fp-primary)" stopOpacity="0.04" />
+        {/* 圈内径向微光：比一层平铺的冰雾更有体积感，边缘自然收掉。
+            焦点（fx/fy）刻意偏到圆的左上：三个圈各自「左上打光」，
+            叠在一起才像三片被同一盏灯照着的冰，而不是一坨均匀的雾 */}
+        <radialGradient id={`${idPrefix}-fill`} fx="0.32" fy="0.26">
+          <stop offset="0%" stopColor="var(--fp-primary)" stopOpacity="0.26" />
+          <stop offset="100%" stopColor="var(--fp-primary)" stopOpacity="0.02" />
         </radialGradient>
         {/* 三个圈的描边各走一个角度的冰蓝→冰白渐变，叠在一起才不像复制粘贴 */}
         <linearGradient id={`${idPrefix}-s-a`} x1="0" y1="0" x2="1" y2="1">
@@ -125,28 +175,34 @@ export function TriVenn({ idPrefix, labels, center, ariaLabel }: TriVennProps) {
         </radialGradient>
       </defs>
 
-      <ellipse cx="180" cy="140" rx="178" ry="128" fill={`url(#${idPrefix}-aurora)`} />
+      <ellipse cx={VENN_CENTER.x} cy={VENN_CENTER.y} rx="178" ry="128" fill={`url(#${idPrefix}-aurora)`} />
 
-      {verts.map(v => (
+      {/* 三圈。试过给每片压一道「下缘暗弧」制造厚度（2026-09-22），**删掉了**：
+          圈的底部本来就落在深底上，再往深处压暗等于什么都没画（截图对比两版无差），
+          留着一堆看不见的节点只会让人以为这里有层次。厚度靠高光脊 + 逐片渐变的
+          焦点偏移来表达（见上面 defs 的注释） */}
+      {VENN_VERTICES.map(v => (
         <circle
           key={v.g}
           cx={v.x}
           cy={v.y}
-          r={R}
+          r={VENN_R}
           fill={`url(#${idPrefix}-fill)`}
+          // line 档把填充整体压下去：同样是那块渐变，读起来从「雾」变成「描边」
+          fillOpacity={liney ? 0.5 : 1}
           stroke={`url(#${idPrefix}-s-${v.g})`}
-          strokeWidth="2"
+          strokeWidth={liney ? 2.4 : 2}
         />
       ))}
       {/* 高光脊：压在描边同半径处，圈一下子立起来了 */}
-      {verts.map(v => (
+      {VENN_VERTICES.map(v => (
         <path
           key={`hl-${v.g}`}
-          d={glassArc(v.x, v.y, R)}
+          d={glassArc(v.x, v.y, VENN_R)}
           fill="none"
           stroke="var(--fp-primary-to)"
           strokeWidth="2.5"
-          strokeOpacity="0.55"
+          strokeOpacity={liney ? 0.4 : 0.55}
           strokeLinecap="round"
         />
       ))}
@@ -156,33 +212,42 @@ export function TriVenn({ idPrefix, labels, center, ariaLabel }: TriVennProps) {
           responsive.css §8 已在 prefers-reduced-motion 下关掉它） */}
       <g className="animate-float">
         <circle
-          cx="180"
-          cy="140"
-          r="52"
+          cx={VENN_CENTER.x}
+          cy={VENN_CENTER.y}
+          r={ringR}
           fill="none"
           stroke="var(--fp-primary)"
           strokeWidth="1"
-          strokeOpacity="0.3"
+          strokeOpacity={liney ? 0.45 : 0.3}
+          // line 档的环做成刻度虚线：这是两张图之间最省的一处差异化
+          strokeDasharray={liney ? "3 7" : undefined}
         />
         {/* 半径 45 是被最长那行（「投资价值较高」6 字 × 13.5 ≈ 81px）撑出来的——
-            再小文字会顶出圆边，再大就会碰上外圈标签（最近的距圆心 90） */}
-        <circle cx="180" cy="140" r="45" fill={`url(#${idPrefix}-lens)`} stroke="var(--fp-primary)" strokeWidth="1.5" />
+            再小文字会顶出圆边，再大就会碰上外圈胶囊（最近的距重心 98，见 domain 的常量） */}
+        <circle
+          cx={VENN_CENTER.x}
+          cy={VENN_CENTER.y}
+          r={VENN_LENS_R}
+          fill={`url(#${idPrefix}-lens)`}
+          stroke="var(--fp-primary)"
+          strokeWidth="1.5"
+        />
         {/* 镜片也要一道高光脊，不然中心那枚「宝石」是哑的 */}
         <path
-          d={glassArc(180, 140, 45)}
+          d={glassArc(VENN_CENTER.x, VENN_CENTER.y, VENN_LENS_R)}
           fill="none"
           stroke="var(--fp-primary-to)"
           strokeWidth="2.5"
-          strokeOpacity="0.7"
+          strokeOpacity={liney ? 0.9 : 0.7}
           strokeLinecap="round"
         />
         {center.map((line, i) => (
           <text
             key={line}
-            x="180"
+            x={VENN_CENTER.x}
             y={center.length > 1 ? 135 + i * 19 : 145}
             textAnchor="middle"
-            fontSize={FS}
+            fontSize={LABEL_FS}
             fontWeight="600"
             fill="var(--fp-text-primary)"
           >
@@ -191,17 +256,8 @@ export function TriVenn({ idPrefix, labels, center, ariaLabel }: TriVennProps) {
         ))}
       </g>
 
-      {labelPos.map((p, i) => (
-        <text
-          key={labels[i]}
-          x={p.x}
-          y={p.y}
-          textAnchor="middle"
-          fontSize={FS}
-          fill="var(--fp-text-secondary)"
-        >
-          {labels[i]}
-        </text>
+      {vennLabels(labels).map(l => (
+        <LabelPill key={l.text} label={l} />
       ))}
     </svg>
   );
@@ -210,25 +266,17 @@ export function TriVenn({ idPrefix, labels, center, ariaLabel }: TriVennProps) {
 /**
  * 定投方法示意图：一条「下跌加码、上涨止盈」的净值曲线。
  *
- * 四个锚点全部落在曲线上（贝塞尔段的首尾端点天然在曲线上，不是估的），
- * 每个标签与它那个锚点**同 x**：
- *   开始定投(52) · 下跌坚持(112) · 低点多投(190) · 分批止盈(300)
+ * 四个锚点、标签位置、高估虚线的坐标全在 domain 那份数据里（含它们的来历），
+ * 这里只负责画：极光 → 三条参考线 → 面积 → 光带 → 曲线 → 虚线 → 锚点 → 胶囊。
  *
- * 为什么虚线标「高估」而不是一整块色带：第一版画的是右侧整条竖带，实测那 18% 宽的
- * 暖色块比曲线还抢眼（截图走查）。虚线横线才真正表达「估值到了这条线」，
- * 曲线越过它的那一刻正好是该止盈的位置。
+ * 参考线给曲线一个「坐标系」的暗示：以前曲线是悬在空底上的一条光，
+ * 读者不容易判断它跌了多少、涨到哪。三条（110 / 140 / 150）都极淡，
+ * 抢不了戏，但谷底与基线的关系一眼看得出来。
  */
 export function MethodCurve() {
   const id = "plan-method";
   // 锚点：起点 → 下跌途中 → 谷底 → 与高估线相交处 → 末端
-  const p0 = { x: 52, y: 110 };
-  const p1 = { x: 112, y: 132 };
-  const p2 = { x: 190, y: 140 };
-  const p3 = { x: 300, y: 70 };
-  // 末端刻意**停在画布右缘之外**（420 就是 viewBox 宽度）：曲线与面积一起出画，
-  // 像一张还在往上走的图。停在 390 会留下一块平顶（面积填充顺着平顶落到基线），
-  // 看着像台子（截图走查）
-  const p4 = { x: 420, y: 10 };
+  const [p0, p1, p2, p3, p4] = CURVE_POINTS;
   // 控制点刻意取成「前后相连」的（p3 处 262,120 → 300,70 → 334,34 近似共线），
   // 否则贝塞尔链在 p3 会折出一个肉眼可见的尖角
   const curve
@@ -238,8 +286,7 @@ export function MethodCurve() {
       + ` C 226 139 262 120 ${p3.x} ${p3.y}`
       + ` C 334 34 376 18 ${p4.x} ${p4.y}`;
   // 面积填充的基线取 150（正好在谷底 140 之下、标签之上）；右端直接落到画布外
-  const BASELINE = 150;
-  const area = `${curve} L ${p4.x} ${BASELINE} L ${p0.x} ${BASELINE} Z`;
+  const area = `${curve} L ${p4.x} ${CURVE_BASELINE} L ${p0.x} ${CURVE_BASELINE} Z`;
 
   /** 光晕点：先铺一层径向渐变软光斑，再压实心小点 */
   const dot = (p: { x: number; y: number }, warm = false) => (
@@ -251,9 +298,12 @@ export function MethodCurve() {
 
   return (
     <svg
-      viewBox="0 0 420 196"
+      viewBox={`0 0 ${CURVE_VIEW.w} ${CURVE_VIEW.h}`}
       className="mx-auto block w-full"
-      style={{ maxWidth: 700 }}
+      // 660 而不是 720：这张图的字号与整张 venn 的**渲染后**字号才咬得齐
+      // （venn 在桌面宽 468、曲线 660 时，两边的字都落在一档里；给到 720
+      //  曲线的胶囊会比 venn 的大出一圈，同一张卡里两种字号一眼看得出）
+      style={{ maxWidth: 660 }}
       role="img"
       aria-label="定投方法示意：开始定投后遇下跌坚持买入，在低位多投；估值越过虚线进入高估阶段时，分批止盈"
     >
@@ -291,30 +341,44 @@ export function MethodCurve() {
           <stop offset="62%" stopColor="var(--fp-text-primary)" stopOpacity="1" />
           <stop offset="100%" stopColor="var(--fp-text-primary)" stopOpacity="0" />
         </linearGradient>
-        <mask id={`${id}-fade-mask`} maskUnits="userSpaceOnUse" x="0" y="0" width="420" height="196">
-          <rect x="0" y="0" width="420" height="196" fill={`url(#${id}-fade)`} />
+        <mask id={`${id}-fade-mask`} maskUnits="userSpaceOnUse" x="0" y="0" width={CURVE_VIEW.w} height={CURVE_VIEW.h}>
+          <rect x="0" y="0" width={CURVE_VIEW.w} height={CURVE_VIEW.h} fill={`url(#${id}-fade)`} />
         </mask>
       </defs>
 
       <ellipse cx="215" cy="120" rx="205" ry="118" fill={`url(#${id}-aurora)`} />
+
+      {/* 参考线：起于曲线左侧一点，一直拉到画布右缘（曲线本身也出画，读数一致） */}
+      {CURVE_GUIDES.map(y => (
+        <line
+          key={y}
+          x1="32"
+          y1={y}
+          x2={CURVE_VIEW.w}
+          y2={y}
+          stroke="var(--fp-border)"
+          strokeWidth="1"
+          strokeOpacity="0.35"
+        />
+      ))}
 
       <path d={area} fill={`url(#${id}-area)`} mask={`url(#${id}-fade-mask)`} />
       {/* 光带：同形描边加粗到 11px 压半透明，不用滤镜冒充辉光 */}
       <path d={curve} fill="none" stroke="var(--fp-primary)" strokeWidth="11" strokeOpacity="0.14" strokeLinecap="round" />
       <path d={curve} fill="none" stroke={`url(#${id}-line)`} strokeWidth="3.5" strokeLinecap="round" />
 
-      {/* 高估阈值线：暖色（pending）表示「该留意了」，与涨红跌绿都区分得开 */}
+      {/* 高估阈值线：暖色（pending）表示「该留意了」，与涨红跌绿都区分得开。
+          标签挂在它自己的右端外侧（见 domain 的 CURVE_LABELS），不标点——它标的是线 */}
       <line
-        x1="195"
-        y1={p3.y}
-        x2="412"
-        y2={p3.y}
+        x1={CURVE_DASH.x1}
+        y1={CURVE_DASH.y}
+        x2={CURVE_DASH.x2}
+        y2={CURVE_DASH.y}
         stroke="var(--fp-pending)"
         strokeWidth="1.5"
         strokeDasharray="5 5"
         strokeOpacity="0.7"
       />
-      <text x="412" y="60" textAnchor="end" fontSize={FS} fill="var(--fp-pending)">高估</text>
 
       {/* 四个关键点。下跌坚持那个点以前漏了，主人点了出来 */}
       {dot(p0)}
@@ -322,14 +386,28 @@ export function MethodCurve() {
       {dot(p2)}
       {dot(p3, true)}
 
-      {/* 标签：开始定投 / 低点多投 共用一条基线（读起来整齐），
-          下跌坚持 挪到曲线上方的空处——放同一行会和邻居的标签咬在一起。
-          分批止盈 只能摆在自己的点**左边**：它上方是那段陡升的曲线，标签压上去
-          会被线从中间穿过（试过居中在上方，x=333 处必然撞线） */}
-      <text x="52" y="176" textAnchor="middle" fontSize={FS} fill="var(--fp-text-secondary)">开始定投</text>
-      <text x="190" y="176" textAnchor="middle" fontSize={FS} fill="var(--fp-text-secondary)">低点多投</text>
-      <text x="112" y="112" textAnchor="middle" fontSize={FS} fill="var(--fp-text-secondary)">下跌坚持</text>
-      <text x="288" y="62" textAnchor="end" fontSize={FS} fill="var(--fp-pending)">分批止盈</text>
+      {/* 引线：把「分批止盈」那枚胶囊接回它标注的交点。
+          它没法与点同 x（上方是陡升的曲线，居中必被穿），只能靠这根线表态 */}
+      {CURVE_LABELS.map((l) => {
+        const lead = labelLeader(l);
+        return lead
+          ? (
+              <line
+                key={`lead-${l.text}`}
+                x1={lead.x1}
+                y1={lead.y1}
+                x2={lead.x2}
+                y2={lead.y2}
+                stroke="var(--fp-pending)"
+                strokeWidth="1"
+                strokeOpacity="0.5"
+              />
+            )
+          : null;
+      })}
+      {CURVE_LABELS.map(l => (
+        <LabelPill key={l.text} label={l} />
+      ))}
     </svg>
   );
 }

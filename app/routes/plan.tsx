@@ -100,27 +100,55 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 /**
- * 理念小节：小标题 + 一句正文 + 一张示意图，**上下堆叠、图居中**。
+ * 理念小节：小标题 + 一句正文 + 一张示意图。
  *
  *  试过「文左图右」的弹性两栏（图能大一圈），又退回来了（主人 2026-09-22 一眼看出不对）：
  *  「定投品种」「基金选择」的正文只有一行，左栏会剩下三百多像素的空白，跟右边的图
  *  完全不成比例；三块里只有「定投方法」文字够长、配得上两栏——同一张卡里混两种
  *  排版反而乱。上下堆叠与主人给的原图一致，图的大小靠 SVG 自己的 maxWidth 调。
+ *
+ * 2026-09-22 第四版改了两件事，都是为了「图不再淹在空板里」：
+ *   1. 图框**贴着图身收窄**（`max-w-[552px]` / `max-w-[692px]` = SVG 的 maxWidth
+ *      + 两侧 padding）。以前框撑满整卡（约 1008px），图只占中间 520px，
+ *      左右各空 240px，三张图 = 三块空板——这是这一节最丑的地方
+ *   2. 桌面 ≥md 时 01/02 两张 venn **并排两列**、03 定投方法满宽。
+ *      与上次被否掉的「文左图右」是两回事：那次是**一行文案**去配一张大图，
+ *      左栏自然剩下三百多像素空白；这次是两块**同构内容**并排，谁也不比谁空。
+ *      移动端仍是一列（UnoCSS 的 md 断点，见 responsive 约定）
+ *
+ * 间距用 className 从外面给：并排时两列靠 grid 的 gap，堆叠时才要 mt-*，
+ * 间距是版式的事，组件自己不该替调用方决定。
  */
 function PhilosophyBlock({
   title,
   children,
   diagram,
+  /** 满宽的图（定投方法曲线）走大一号的框；两张 venn 并排时用默认档 */
+  wide = false,
+  className,
 }: {
   title: string;
   children: ReactNode;
   diagram: ReactNode;
+  wide?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="mb-6 last:mb-0">
+    // flex-col + 正文 flex-1：两列并排时两个块被 grid 拉成等高，多出来的高度
+    // 全给正文那一行，图框就被压到同一水平线上。否则「定投品种」的正文在两列里
+    // 折成两行、「基金选择」只有一行，两张图的顶边差 20 多像素，一眼看得出歪
+    <div className={`flex flex-col ${className ?? ""}`}>
       <div className="mb-2 text-[16px] font-semibold text-ink">{title}</div>
-      <p className="mt-0 mb-3 text-[14px] leading-relaxed text-muted">{children}</p>
-      <div className="rounded-[12px] bg-well p-4">{diagram}</div>
+      <p className="mt-0 mb-3 flex-1 text-[14px] leading-relaxed text-muted">{children}</p>
+      <div
+        className={
+          wide
+            ? "mx-auto w-full max-w-[692px] rounded-[12px] bg-well p-4"
+            : "mx-auto w-full max-w-[552px] rounded-[12px] bg-well p-4"
+        }
+      >
+        {diagram}
+      </div>
     </div>
   );
 }
@@ -182,35 +210,43 @@ export default function PlanPage({ loaderData }: Route.ComponentProps) {
           )}
 
       <SectionCard title="指数基金投资理念" className="animate-fade-up animate-delay-[60ms]">
-        <PhilosophyBlock
-          title="定投品种"
-          diagram={(
-            <TriVenn
-              idPrefix="plan-venn-variety"
-              labels={["宽基指数基金", "策略指数基金", "行业指数基金"]}
-              center={["低估阶段", "投资价值较高"]}
-              ariaLabel="定投品种的挑选：在宽基、策略与行业指数基金里，选处于低估阶段、投资价值较高的"
-            />
-          )}
-        >
-          精选当前处于低估阶段，投资价值较高的宽基指数基金、策略指数基金以及优秀行业指数基金。
-        </PhilosophyBlock>
+        {/* 01 / 02 并排两列（窄屏回落成一列）：两张 venn 是同构内容，
+            并排既不产生「文左图右」那种三百多像素的空白，也把这一节的高度砍掉近三成 */}
+        <div className="grid gap-x-6 gap-y-6 md:grid-cols-2">
+          <PhilosophyBlock
+            title="定投品种"
+            diagram={(
+              <TriVenn
+                idPrefix="plan-venn-variety"
+                labels={["宽基指数基金", "策略指数基金", "行业指数基金"]}
+                center={["低估阶段", "投资价值较高"]}
+                ariaLabel="定投品种的挑选：在宽基、策略与行业指数基金里，选处于低估阶段、投资价值较高的"
+              />
+            )}
+          >
+            精选当前处于低估阶段，投资价值较高的宽基指数基金、策略指数基金以及优秀行业指数基金。
+          </PhilosophyBlock>
 
-        <PhilosophyBlock
-          title="基金选择"
-          diagram={(
-            <TriVenn
-              idPrefix="plan-venn-selection"
-              labels={["费率较低", "跟踪误差较小", "规模较大"]}
-              center={["场外基金"]}
-              ariaLabel="基金选择的三个条件：费率较低、跟踪误差较小、规模较大，集中在场外基金里挑"
-            />
-          )}
-        >
-          综合考虑，优先选择费率较低、跟踪误差较小、规模较大的场外基金。
-        </PhilosophyBlock>
+          <PhilosophyBlock
+            title="基金选择"
+            diagram={(
+              <TriVenn
+                idPrefix="plan-venn-selection"
+                // line 档：描边圈 + 虚线刻度环，与「定投品种」那枚实心雾圈拉开重量，
+                // 不然两张图读起来是同一张印了两遍（构图不变，只换表现）
+                variant="line"
+                labels={["费率较低", "跟踪误差较小", "规模较大"]}
+                center={["场外基金"]}
+                ariaLabel="基金选择的三个条件：费率较低、跟踪误差较小、规模较大，集中在场外基金里挑"
+              />
+            )}
+          >
+            综合考虑，优先选择费率较低、跟踪误差较小、规模较大的场外基金。
+          </PhilosophyBlock>
+        </div>
 
-        <PhilosophyBlock title="定投方法" diagram={<MethodCurve />}>
+        {/* 03 满宽：这条曲线是「时间轴上的动作」，本身就想要宽度 */}
+        <PhilosophyBlock wide className="mt-6" title="定投方法" diagram={<MethodCurve />}>
           采用定期不定额投资，相比普通定投，基于市场估值调整定投金额，估值越低每周买入越多，
           未来有机会获得更好的长期收益。当定投品种的估值进入高估阶段，也会给出相应的分批止盈建议。
         </PhilosophyBlock>
