@@ -32,6 +32,7 @@ export const DEFAULT_DESCRIPTION
 export const SITEMAP_STATIC_PATHS = [
   "/",
   "/master",
+  "/plan",
   "/leaderboard",
   "/funds",
   "/tools/fee-calculator",
@@ -336,6 +337,44 @@ export function buildDcaBacktestMeta(input: DcaBacktestMetaInput): { title: stri
       + `收益率 ${signedPercent(backtest.returnRate)}、最大回撤 ${rateToPercent(backtest.maxDrawdown)}`
       + `（含真实申购费，净值口径：${navLabel}）`,
   };
+}
+
+/**
+ * `/plan`（低估指数定投计划）的 title / description。
+ *
+ * 标题刻意**不带期号**：这一页每周都更新，标题跟着churn对搜索引擎没有好处
+ * （爬虫每次抓到不同的 title，反而像两页）。要新鲜的证据放 description——
+ * 期日、品种数、买入总额都是真的，且每周自动变，正是「定期更新的独有内容」
+ * 该有的样子。
+ *
+ * 主理人一期都没发过车时回落通用版：不装作有计划，也不给爬虫一个「有标题没内容」的页。
+ */
+export function buildPlanMeta(input: PlanMetaInput): { title: string; description: string } {
+  const { period, fundCount, totalCents } = input;
+  const title = "低估指数定投计划";
+  if (!period || fundCount <= 0) {
+    return {
+      title,
+      description: "主理人的低估指数定投实盘：每周二买入处于低估阶段的宽基、策略与行业指数基金，"
+        + "逐期公开品种与金额，并可按自己的资金与比例换算出本期该投多少；附指数基金投资理念",
+    };
+  }
+  return {
+    title,
+    description: `主理人 ${period} 这一期买入 ${fundCount} 只低估指数基金、合计 ${yuanText(totalCents)} 元，`
+      + "品种与金额逐期公开；可按自己的资金与比例一键换算出本期定投金额，"
+      + "附「定投品种 / 基金选择 / 定投方法」的投资理念说明",
+  };
+}
+
+/** `buildPlanMeta` 的入参：本期事实。全来自真实订单，别手改文案里的数字 */
+export interface PlanMetaInput {
+  /** 本期日期（周二 YYYY-MM-DD）；主理人一期都没发过车时传 null */
+  period: string | null;
+  /** 本期品种数 */
+  fundCount: number;
+  /** 主理人本期买入总额（分） */
+  totalCents: number;
 }
 
 /**

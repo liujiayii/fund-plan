@@ -97,4 +97,40 @@ describe("液态玻璃宪法守卫", () => {
     const offenders = tsxFiles.filter(f => /color="blue"/.test(readFileSync(f, "utf8")));
     expect(offenders.map(f => path.relative(APP_DIR, f))).toEqual([]);
   });
+
+  it("tsx / 手写 CSS 里 var(--fp-*) 引用的变量必须在 theme.ts 里有定义", () => {
+    // 2026-09-22 定投计划页实测：SVG 里写了 fill="var(--fp-pending-soft)"，
+    // 而 theme.ts 的键是 pendingBg（映射成 --fp-pending-bg）——变量名不存在，
+    // var() 解析失败，那块底色**静默掉成黑色**（浏览器不报错、构建不报错、
+    // 类型检查也不管字符串）。tooltip 里的类名是 bg-pending-soft，
+    // 变量名却是 --fp-pending-bg，两者不同源，很容易写串。
+    //
+    // 这条守卫把「主题类名」与「CSS 变量名」这对易混的名字钉死：
+    // 变量只能来自 COLOR 的键（kebab 化）加 uno.config 里手写的那几个。
+    const theme = readFileSync(path.join(APP_DIR, "theme.ts"), "utf8");
+    const colorBlock = theme.slice(
+      theme.indexOf("export const COLOR"),
+      theme.indexOf("} as const"),
+    );
+    const kebab = (s: string) => s.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
+    const defined = new Set<string>([
+      ...[...colorBlock.matchAll(/^ {2}([a-z]+):/gim)].map(m => `--fp-${kebab(m[1]!)}`),
+      // uno.config.ts 的 FP_ROOT_VARS 里手写的那几个（非 COLOR 映射）
+      "--fp-num-font",
+      "--fp-primary-gradient",
+      "--fp-duration-fast",
+      "--fp-duration-base",
+      "--fp-duration-slow",
+      "--fp-ease",
+    ]);
+
+    const used = new Set<string>();
+    for (const f of [...tsxFiles, ...cssFiles]) {
+      for (const m of readFileSync(f, "utf8").matchAll(/var\((--fp-[a-z0-9-]+)\)/g)) {
+        used.add(m[1]!);
+      }
+    }
+
+    expect([...used].filter(v => !defined.has(v)).sort()).toEqual([]);
+  });
 });

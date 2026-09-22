@@ -62,6 +62,13 @@ describe("resolveSelectedKey", () => {
     // 两个 key 都以 /tools/ 开头，写错成父级前缀会让另一页高亮错项
     expect(resolveSelectedKey("/tools/fee-calculator", NAV_ITEMS)).toBe("/tools/fee-calculator");
   });
+
+  it("低估定投计划挂进导航，且不吞掉「主理人的盘」的高亮", () => {
+    expect(NAV_ITEMS.some(i => i.key === "/plan")).toBe(true);
+    expect(resolveSelectedKey("/plan", NAV_ITEMS)).toBe("/plan");
+    // /plan 与 /master 是平级页，谁都不该是对方的前缀
+    expect(resolveSelectedKey("/master", NAV_ITEMS)).toBe("/master");
+  });
 });
 
 describe("MOBILE_TAB_KEYS", () => {
