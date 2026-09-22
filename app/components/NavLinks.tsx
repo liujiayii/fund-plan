@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { NavItem } from "~/domain/nav";
 import {
   AreaChartOutlined,
+  BulbOutlined,
   CalculatorOutlined,
   CrownOutlined,
   DashboardOutlined,
@@ -17,6 +18,9 @@ import { Link } from "react-router";
 const NAV_ICON: Record<string, ReactNode> = {
   "/": <HomeOutlined />,
   "/master": <CrownOutlined />,
+  // 低估定投计划：灯泡（讲的是「低估」这套理念与每周一期的计划，
+  // 与排行榜的奖杯、基金的钞票图标都区分得开）
+  "/plan": <BulbOutlined />,
   "/leaderboard": <TrophyOutlined />,
   "/funds": <FundOutlined />,
   "/tools/fee-calculator": <CalculatorOutlined />,

@@ -10,7 +10,8 @@ import { flatRoutes } from "@react-router/fs-routes";
  *   `me.holdings.$code.tsx` → /me/holdings/:code
  *
  * 鉴权不在路由表里，而在各自 loader：
- *   公开页（游客可见）：/ /master /leaderboard /funds /funds/:code /login /register
+ *   公开页（游客可见）：/ /master /plan /leaderboard /funds /funds/:code
+ *     /tools/* /login /register
  *   需登录页：/me 系列（loader 里 requireUser 把门）
  *   管理页：/admin 系列（loader 里 requireAdmin 把门，非 admin 一律 403）
  *   爬虫资源：robots[.]txt.ts → /robots.txt；sitemap[.]xml.ts → /sitemap.xml

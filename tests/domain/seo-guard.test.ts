@@ -68,6 +68,7 @@ describe("SEO 路由守卫", () => {
     const publicFiles = [
       "_index.tsx",
       "master.tsx",
+      "plan.tsx",
       "leaderboard.tsx",
       "funds._index.tsx",
       "funds.$code.tsx",

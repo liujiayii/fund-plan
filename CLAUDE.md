@@ -84,7 +84,7 @@ workers/app.ts   Worker 入口：export default { fetch, scheduled }
 - `funds.$code.tsx` → `/funds/:code`（`$` 开头是动态参数）
 - `me.holdings.$code.tsx` → `/me/holdings/:code`（点号串联即层级）
 
-鉴权不在路由表里，而在各自 loader：公开页（`/` `/master` `/leaderboard`
+鉴权不在路由表里，而在各自 loader：公开页（`/` `/master` `/plan` `/leaderboard`
 `/funds*` `/tools*` `/login` `/register`）游客可见；`/me` 系列用 `requireUser` 把门；
 `/admin` 系列用 `requireAdmin` 把门（非 admin 一律 403）。
 
