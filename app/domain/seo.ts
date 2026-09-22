@@ -356,13 +356,13 @@ export function buildPlanMeta(input: PlanMetaInput): { title: string; descriptio
     return {
       title,
       description: "主理人的低估指数定投实盘：每周二买入处于低估阶段的宽基、策略与行业指数基金，"
-        + "逐期公开品种与金额，并可按自己的资金与比例换算出本期该投多少；附指数基金投资理念",
+        + "逐期公开品种与金额，并可按自己的跟投比例换算出本期该投多少；附指数基金投资理念",
     };
   }
   return {
     title,
     description: `主理人 ${period} 这一期买入 ${fundCount} 只低估指数基金、合计 ${yuanText(totalCents)} 元，`
-      + "品种与金额逐期公开；可按自己的资金与比例一键换算出本期定投金额，"
+      + "品种与金额逐期公开；可按自己的跟投比例一键换算出本期定投金额，"
       + "附「定投品种 / 基金选择 / 定投方法」的投资理念说明",
   };
 }

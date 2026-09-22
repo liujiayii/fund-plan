@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getDb } from "~/db/client";
+import { getDb, runBatch } from "~/db/client";
 import {
   account,
   fund,
@@ -206,5 +206,35 @@ describe("getPlanPeriod", () => {
 
     const v = await getPlanPeriod(db, uid, "2026-09-22");
     expect(v.buys.map(b => b.fundCode)).toEqual(["000003", "000002", "000001"]);
+  });
+
+  it("本期的单子**全部**进明细，不受扫描上限截断（上限只加在日期上，不加在明细上）", async () => {
+    const uid = await seedUser();
+    await seedFund("000001");
+    // 一趟 350 笔（刻意超过早先那版给明细查询设的 300 条上限）。
+    // 上限若加在明细上，这里会静默只算到 300 笔、总额少 500 分——
+    // 真实盘一天当然下不了这么多单，但「本期明细必须完整」是硬性质，
+    // 用一条能被旧实现打红的用例钉住（CodeRabbit 评审 #4）
+    await runBatch(
+      db,
+      Array.from({ length: 350 }, () =>
+        db.insert(orders).values({
+          userId: uid,
+          fundCode: "000001",
+          side: "buy",
+          status: "confirmed",
+          source: "manual",
+          amount: 10,
+          shares: null,
+          placeDate: "2026-09-15",
+          confirmDate: "2026-09-15",
+          createdAt: Date.now(),
+        })),
+    );
+
+    const v = await getPlanPeriod(db, uid, "2026-09-22");
+    expect(v.period).toBe("2026-09-15");
+    expect(v.buys).toHaveLength(1);
+    expect(v.totalCents).toBe(3500);
   });
 });

@@ -41,15 +41,30 @@ export const PLAN_RATIO_MAX_BPS = 50_000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * 严格解析 YYYY-MM-DD：格式对**且这一天真存在**才返回 dayjs，否则 null。
+ *
+ * ⚠️ 为什么不能只看格式：dayjs 会把越界日期**静默顺延**——`2026-13-40` 变成
+ * 2027-02-09，而那天恰好是周二，于是 `isPlanDay` 会对一个脏字符串返回 true，
+ * 凭空造出一期（实测取证）。回写比对是唯一可靠的判据，与 `seo.ts` 的
+ * `isValidLastmod` 同一手法。
+ */
+function parseStrictDate(date: string): dayjs.Dayjs | null {
+  if (!DATE_RE.test(date))
+    return null;
+  const d = dayjs(date);
+  if (!d.isValid() || d.format("YYYY-MM-DD") !== date)
+    return null;
+  return d;
+}
+
+/**
  * 是不是定投执行日（周二）。
  *
  * 为什么按「星期几」而不是「每 7 天」：主理人的买入习惯就是跟着周历走，
  * 跨月、跨年都不会把同一周切成两期（与 `dca-backtest` 里「按周 = 自然周」同一口径）。
  */
 export function isPlanDay(date: string): boolean {
-  if (!DATE_RE.test(date))
-    return false;
-  return dayjs(date).day() === PLAN_WEEKDAY;
+  return parseStrictDate(date)?.day() === PLAN_WEEKDAY;
 }
 
 /**
@@ -84,10 +99,8 @@ export function latestPlanPeriod(
  * 以下停留在上一期」，否则读者会以为那就是他这周的实盘。
  */
 export function currentPlanDay(today: string): string | null {
-  if (!DATE_RE.test(today))
-    return null;
-  const d = dayjs(today);
-  if (!d.isValid())
+  const d = parseStrictDate(today);
+  if (!d)
     return null;
   // 往回退 (今天星期几 − 周二) % 7 天：今天就是周二时退 0 天
   return d.subtract((d.day() - PLAN_WEEKDAY + 7) % 7, "day").format("YYYY-MM-DD");
@@ -154,9 +167,15 @@ export function allocateByWeight(
   const out = exact.map(e => e.toDecimalPlaces(0, Decimal.ROUND_FLOOR).toNumber());
   const rest = targetCents - out.reduce((s, v) => s + v, 0);
 
-  const order = exact
+  // 余数按**小数部分**从大到小发，不是按精确值大小。
+  // 两者在整数部分不同时会分道扬镳：exact = [10.3, 9.7] 只剩 1 分时，
+  // 按精确值会把这一分给第一项 → [11, 9]（各偏 ±0.7 分）；按小数部分给第二项
+  // → [10, 10]（各偏 ∓0.3 分）。最大余数法的「最大」指的是**余数**，
+  // 这两行的顺序写反了不会破坏和不变式（Σ 照样对），只会让分配悄悄变差
+  // ——正是那种测试不盯就永远发现不了的错（CodeRabbit 评审 #3，已实测复现）
+  const order = safe
     .map((_, i) => i)
-    .sort((a, b) => exact[b]!.cmp(exact[a]!) || a - b);
+    .sort((a, b) => exact[b]!.minus(out[b]!).cmp(exact[a]!.minus(out[a]!)) || a - b);
   for (let k = 0; k < rest; k++) {
     const idx = order[k % order.length]!;
     out[idx] = out[idx]! + 1;

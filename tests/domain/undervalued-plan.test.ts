@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { describe, expect, it } from "vitest";
 import {
   allocateByWeight,
@@ -44,6 +45,16 @@ describe("isPlanDay", () => {
     expect(isPlanDay("2026/09/22")).toBe(false);
     expect(isPlanDay("abc")).toBe(false);
     expect(isPlanDay("2026-09-22T10:00:00")).toBe(false);
+  });
+
+  it("格式对但**这天不存在**的日期也为假（dayjs 会静默顺延，必须回写比对）", () => {
+    // 2026-13-40 会被 dayjs 顺延成 2027-02-09，而那天恰好是周二——
+    // 不校验的话一个脏字符串就能凭空造出一期（CodeRabbit 评审 #2，已实测复现）
+    expect(dayjs("2026-13-40").day()).toBe(2); // 先钉住「顺延后确实是周二」这个前提
+    expect(isPlanDay("2026-13-40")).toBe(false);
+    expect(isPlanDay("2026-02-30")).toBe(false);
+    expect(isPlanDay("2026-04-31")).toBe(false);
+    expect(isPlanDay("2026-09-31")).toBe(false);
   });
 });
 
@@ -111,6 +122,9 @@ describe("currentPlanDay", () => {
     expect(currentPlanDay("")).toBeNull();
     expect(currentPlanDay("2026/09/22")).toBeNull();
     expect(currentPlanDay("abc")).toBeNull();
+    // 格式对但日期不存在：同样 null（顺延后的那天可能恰好是周二）
+    expect(currentPlanDay("2026-13-40")).toBeNull();
+    expect(currentPlanDay("2026-02-30")).toBeNull();
   });
 });
 
@@ -178,6 +192,20 @@ describe("allocateByWeight", () => {
     const three = [1, 1, 1].map((w, i) => ({ fundCode: `f${i}`, weightCents: w }));
     expect(allocateByWeight(three, 100).map(a => a.amountCents)).toEqual([34, 33, 33]);
     expect(allocateByWeight(three, 100).map(a => a.amountCents)).toEqual([34, 33, 33]);
+  });
+
+  it("余数按**小数部分**发，不是按精确值大小（两者会分道扬镳）", () => {
+    // 权重 103:97、目标 20 分 → 精确值 [10.3, 9.7]，向下取整后余 1 分。
+    //   · 按小数部分：第二项余数 0.7 > 第一项 0.3 → [10, 10]，各偏 ∓0.3
+    //   · 按精确值  ：把这一分给第一项 → [11, 9]，各偏 ±0.7
+    // 两种都满足「Σ == 目标」，但后者是更差的分配——这就是为什么必须按余数排
+    // （CodeRabbit 评审 #3：原来的代码写反了，且不破坏和不变式，测试不盯就发现不了）
+    const two = [103, 97].map((w, i) => ({ fundCode: `f${i}`, weightCents: w }));
+    expect(allocateByWeight(two, 20).map(a => a.amountCents)).toEqual([10, 10]);
+    // 每笔与精确值相差不超过 1 分（补余数法的一般性质，两种排序都满足）
+    const out = allocateByWeight(two, 20);
+    expect(Math.abs(out[0]!.amountCents - 10.3)).toBeLessThan(1);
+    expect(Math.abs(out[1]!.amountCents - 9.7)).toBeLessThan(1);
   });
 
   it("输出顺序与入参一致（页面按主理人的买入顺序展示）", () => {
