@@ -8,22 +8,23 @@ import { safeRate } from "./money";
  *   累计入金   = initialCash + totalCheckin
  *   总资产     = 持仓市值 + 现金 + 在途资金（pending 买单已冻结金额）
  *   总收益     = 总资产 − 累计入金（已实现 + 浮动盈亏都在内）
- *   账户收益率 = 总收益 ÷ 累计入金        ← 分母含没投出去的闲钱
- *   投入收益率 = 总收益 ÷ 累计买入金额    ← 分母只算真投进基金的钱
+ *   选基收益率 = 总收益 ÷ 累计买入金额    ← 分母只算真投进基金的钱
  * 这样清仓落袋的利润不会从榜上消失（浮盈口径会），签到是入金不算收益（刷不了榜）。
  * 与 asset-timeline 的「净入金」概念一致，全站口径自洽。
  *
- * ## 为什么要有两个收益率（2026-09-18 补）
+ * ## 为什么只留选基收益率（2026-09-22）
  *
- * 只有账户收益率时，轻仓用户的收益会被闲置现金稀释到显示不出来：
- * 只把 10 万里的 1000 元买了基金、赚 3.48 元，账户收益率 = 3.48 / 100000
- * = 0.0035%，四舍五入后是 0.00%——「赚了钱但收益率是 0」还排在收益率榜第一。
- * 投入收益率 = 3.48 / 1000 = 0.35%，这才是「我的选基能力」该有的数量级。
- * 两者都不标注分母就没法读，故展示层（leaderboard.tsx 页头）必须写清各自的分母。
+ * 曾经同时展示「账户收益率 = 总收益 ÷ 累计入金」。分母含没投出去的闲钱，
+ * 轻仓用户会被稀释到看不出收益：只把 10 万里的 1000 元买了基金、赚 3.48 元，
+ * 账户收益率 = 3.48 / 100000 = 0.0035%，四舍五入后是 0.00%——「赚了钱但
+ * 收益率是 0」。它和选基收益率并排时，用户分不清哪个才是自己的成绩，
+ * 所以全站去掉账户收益率，收益率榜、总览卡、后台都只留选基收益率。
+ * 总收益金额本身不动（它仍然相对累计入金），拿掉的只是那个比率。
  *
- * ⚠️ 投入收益率的已知局限：分母是**累计买入额**（周转额），同一笔钱买入卖出
- * 再买入会重复计入，于是高频交易者的投入收益率会被系统性压低。它衡量的是
+ * ⚠️ 选基收益率的已知局限：分母是**累计买入额**（周转额），同一笔钱买入卖出
+ * 再买入会重复计入，于是高频交易者的选基收益率会被系统性压低。它衡量的是
  * 「每投入一元赚了多少」，不是时间加权收益率——榜单展示够用，别拿它做归因。
+ * 从未买过（investedCents = 0）时为 null，展示「—」，也不参与收益率榜排序。
  */
 
 /** 单用户原始数据（service 层从 D1 查出后拼好喂进来） */
@@ -37,7 +38,7 @@ export interface LeaderboardEntryInput {
   inFlightCashCents: number;
   initialCashCents: number;
   totalCheckinCents: number;
-  /** 累计买入金额（分）= Σ 已成交买单的下单金额。投入收益率的分母 */
+  /** 累计买入金额（分）= Σ 已成交买单的下单金额。选基收益率的分母 */
   investedCents: number;
   /** 是否有过 confirmed 订单（上榜门槛） */
   hasTrades: boolean;
@@ -49,12 +50,11 @@ export interface LeaderboardEntry extends LeaderboardEntryInput {
   totalAssetCents: number;
   /** 总收益（分）= 总资产 − 累计入金 */
   totalPnlCents: number;
-  /** 账户收益率（普通小数，0.05 表示 +5%）= 总收益 ÷ 累计入金 */
-  totalPnlRate: number;
   /**
-   * 投入收益率（普通小数）= 总收益 ÷ 累计买入金额。
+   * 选基收益率（普通小数）= 总收益 ÷ 累计买入金额。
    * 从未买过（investedCents = 0）时为 null——「无数据」与「0%」必须区分开，
    * 页面据此显示「—」而不是一个会误导的 0.00%。
+   * 收益率榜只排这个数；null 的人不进该榜（见 rankLeaderboard）。
    */
   investedPnlRate: number | null;
   rank: number;
@@ -78,16 +78,14 @@ export function computeLeaderboard(
       const totalAssetCents
         = r.marketValueCents + r.cashCents + r.inFlightCashCents;
       const totalPnlCents = totalAssetCents - depositedCents;
-      // 除零守卫在 safeRate 里：注册即有 init 入金，理论到不了 0，
-      // 回落 0 只是不让 NaN 上榜
-      const totalPnlRate = safeRate(totalPnlCents, depositedCents) ?? 0;
+      // 分母为 0（从未买过）时 safeRate 返回 null：展示「—」，
+      // 也不能拿一个假 0 去跟真·持平的人抢收益率榜的名次
       const investedPnlRate = safeRate(totalPnlCents, r.investedCents);
 
       return {
         ...r,
         totalAssetCents,
         totalPnlCents,
-        totalPnlRate,
         investedPnlRate,
         rank: 0,
       };
@@ -104,8 +102,14 @@ export function rankLeaderboard(
   entries: LeaderboardEntry[],
   by: "rate" | "pnl",
 ): LeaderboardEntry[] {
-  const metric = (e: LeaderboardEntry) => (by === "rate" ? e.totalPnlRate : e.totalPnlCents);
-  const sorted = [...entries].sort((a, b) => {
+  // 收益率榜只排真买过的人：investedPnlRate 为 null 表示分母是 0，
+  // 没有「选基能力」可排，塞进去只会占一个说不清的名次。
+  // 总收益榜照旧全收——清仓落袋、只签到的人收益金额仍然有意义。
+  const pool = by === "rate"
+    ? entries.filter(e => e.investedPnlRate !== null)
+    : entries;
+  const metric = (e: LeaderboardEntry) => (by === "rate" ? e.investedPnlRate! : e.totalPnlCents);
+  const sorted = [...pool].sort((a, b) => {
     const d = metric(b) - metric(a);
     return d !== 0 ? d : a.userId - b.userId;
   });

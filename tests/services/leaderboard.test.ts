@@ -141,18 +141,22 @@ describe("getLeaderboard", () => {
 
     const lb = await getLeaderboard(db);
 
-    // bob 被门槛过滤；carol(+5%) 压过 alice(+1%)
+    // bob 被门槛过滤。
     expect(lb.byRate.map(e => e.username)).toEqual(["carol", "alice"]);
-    expect(lb.byRate[0].totalPnlRate).toBeCloseTo(0.05, 10);
     // alice：市值 = 10 万份 × 1.5 元 = 15_000_000 分
     expect(lb.byRate[1].marketValueCents).toBe(15_000_000);
     expect(lb.byRate[1].totalAssetCents).toBe(INITIAL_CASH_CENTS + 5_000_000);
     expect(lb.byRate[1].totalPnlCents).toBe(5_000_000);
     // 总收益榜同序（+25 万 > +5 万）
     expect(lb.byPnl.map(e => e.username)).toEqual(["carol", "alice"]);
+    // 收益率榜按选基收益率：两人都只买过 seedConfirmedOrder 的 1000 元，
+    // carol 赚 25 万、alice 赚 5 万，carol 的比率更高
+    expect(lb.byRate.map(e => e.username)).toEqual(["carol", "alice"]);
+    expect(lb.byRate[0].investedPnlRate).toBeCloseTo(25_000_000 / 100_000, 6);
+    expect(lb.byRate[1].investedPnlRate).toBeCloseTo(5_000_000 / 100_000, 6);
   });
 
-  it("投入收益率：分母是累计买入金额，不是含闲钱的累计入金", async () => {
+  it("选基收益率：分母是累计买入金额，闲置现金不进分母", async () => {
     const db = getDb(env.DB);
     await seedFund();
     await seedNav("2026-08-25", 15_000); // 净值 1.5（与订单成交价一致 → 持仓浮盈 0）
@@ -176,20 +180,19 @@ describe("getLeaderboard", () => {
     const e = lb.byRate[0];
     // 总收益 = (初始本金 − 100_000) + 98_522 − 初始本金 = −1_478（正好是申购费）
     expect(e.totalPnlCents).toBe(-1_478);
-    // 账户口径：−1478 / 500_000_000 ≈ −0.0003%——被 500 万闲钱稀释到几乎看不见
-    expect(e.totalPnlRate).toBeCloseTo(-1_478 / INITIAL_CASH_CENTS, 10);
-    // 投入口径：−1478 / 100_000（累计买入）= −1.478%——这才是真实代价
+    // 选基口径：−1478 / 100_000（累计买入）= −1.478%——这才是真实代价。
+    // 旧的账户口径是 −1478 / 500_000_000 ≈ −0.0003%，被闲钱稀释到看不见，已撤
     expect(e.investedPnlRate).toBeCloseTo(-0.01478, 10);
-    // 两个率的分母确实不同——这是本口径存在的全部理由
-    expect(e.investedPnlRate).not.toBeCloseTo(e.totalPnlRate, 6);
   });
 
   /**
-   * 交叉不变量（2026-09-18 补）：排行榜的收益率分母来自 account 的冗余字段
-   * （initialCash / totalCheckin），总览卡的累计收益率分母来自 transactions
+   * 交叉不变量（2026-09-18 补）：排行榜的累计入金来自 account 的冗余字段
+   * （initialCash / totalCheckin），总览卡的累计入金来自 transactions
    * 流水里 init/checkin 的聚合——**两条独立实现**。今天恰好相等，但没有结构性
    * 保证：历史账号缺 init 流水、或 account 字段被手工改过，两个页面的
-   * 「累计收益率」就会分叉，而没有任何东西会报警。这条断言把它钉死。
+   * 「累计入金」就会分叉，而没有任何东西会报警。这条断言把它钉死。
+   * （2026-09-22：它不再是收益率的分母，选基收益率的分母是累计买入额；
+   *  入金一致性本身仍要守，总收益 = 总资产 − 累计入金靠它。）
    */
   it("交叉不变量：account 入金字段 === 流水聚合的净入金 === 榜单分母", async () => {
     const db = getDb(env.DB);

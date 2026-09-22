@@ -1,6 +1,7 @@
 import type { Route } from "./+types/leaderboard";
 import type { LeaderboardEntry } from "~/domain/leaderboard";
 import { Space, Tabs, Tag, Typography } from "antd";
+import { useState } from "react";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtRate, fmtSignedYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
@@ -109,22 +110,18 @@ function signedYuan(cents: number): string {
 }
 
 /**
- * 副值行：投入收益率。这是榜单上**唯一**能展示的「比率 + 分母」组合——
- * 分母（累计买入金额）是本人投出去的钱，不是钱包余额，可以公示。
- * 没有成交过（分母 0）时显示「—」，绝不用 0.00% 冒充。
+ * 副值行：选基收益率。分母（累计买入金额）是本人投出去的钱，不是钱包余额，可以公示。
+ * 没有买过（分母 0）时显示「—」，绝不用 0.00% 冒充。
  *
- * ⚠️ 这里曾经显示的是「总资产 X 元」。撤掉它有两个理由：
- *  1. **隐私**：资产规模属于钱包信息，基金类产品从不公示他人的总资产/余额；
- *  2. **无用**：模拟盘人人 500 万本金起步，这个数字既无区分度又挤占信息密度，
- *     而它挤掉的位置正好能放一个真有信息量的比率。
+ * 收益率榜上它就是主角，这行只在总收益榜出现——两榜不重复展示同一个数。
  */
 function InvestedRate({ rate }: { rate: number | null }) {
   if (rate === null) {
-    return <span className="text-tertiary">投入收益率 —</span>;
+    return <span className="text-tertiary">选基收益率 —</span>;
   }
   return (
     <>
-      投入收益率
+      选基收益率
       {" "}
       <span className={pnlTone(rate)}>{fmtRate(rate)}</span>
     </>
@@ -155,10 +152,11 @@ function TopSpot({
   const isMe = meId !== null && entry.userId === meId;
   const place = PLACE[entry.rank] ?? PLACE[3];
   const heroIsRate = metric === "rate";
-  const hero = heroIsRate ? fmtRate(entry.totalPnlRate) : signedYuan(entry.totalPnlCents);
-  const heroTone = pnlTone(heroIsRate ? entry.totalPnlRate : entry.totalPnlCents);
-  const sub = heroIsRate ? signedYuan(entry.totalPnlCents) : fmtRate(entry.totalPnlRate);
-  const subTone = pnlTone(heroIsRate ? entry.totalPnlCents : entry.totalPnlRate);
+  // 收益率榜的主角是选基收益率（null 的人已被 rankLeaderboard 排除，这里兜「—」）
+  const hero = heroIsRate
+    ? (entry.investedPnlRate === null ? "—" : fmtRate(entry.investedPnlRate))
+    : signedYuan(entry.totalPnlCents);
+  const heroTone = pnlTone(heroIsRate ? (entry.investedPnlRate ?? 0) : entry.totalPnlCents);
 
   return (
     <div
@@ -181,22 +179,21 @@ function TopSpot({
           {entry.username}
           {isMe && <Tag className="ml-2">我</Tag>}
         </div>
-        {/* 副值：投入收益率。这里原先是「总资产 X 元」——见 InvestedRate 的注释 */}
         <div className="mt-0.5 font-num text-xs text-muted">
-          <InvestedRate rate={entry.investedPnlRate} />
+          {heroIsRate
+            ? signedYuan(entry.totalPnlCents)
+            : <InvestedRate rate={entry.investedPnlRate} />}
         </div>
       </div>
 
-      {/* 英雄数字跟当前 tab 口径；副值用另一口径——两榜切换时主角对调 */}
+      {/* 英雄数字跟当前 tab：收益率榜是选基收益率，总收益榜是收益金额。
+          另一个口径放到名字下面那行，避免两个收益率并排 */}
       <div className={featured ? "md:text-right" : ""}>
         <div className={`font-num leading-none ${heroTone} ${
           featured ? "text-[28px] md:text-[32px]" : "text-[22px]"
         }`}
         >
           {hero}
-        </div>
-        <div className={`mt-1 font-num text-[13px] leading-none ${subTone}`}>
-          {sub}
         </div>
       </div>
     </div>
@@ -306,10 +303,10 @@ function Podium({
           // 经典三人窄屏：冠军通栏，银铜并排
           const mobileSpan = classicThree && isGold ? "col-span-2 mb-2 md:mb-0" : "";
           const heroIsRate = metric === "rate";
-          const hero = heroIsRate ? fmtRate(e.totalPnlRate) : signedYuan(e.totalPnlCents);
-          const heroTone = pnlTone(heroIsRate ? e.totalPnlRate : e.totalPnlCents);
-          const sub = heroIsRate ? signedYuan(e.totalPnlCents) : fmtRate(e.totalPnlRate);
-          const subTone = pnlTone(heroIsRate ? e.totalPnlCents : e.totalPnlRate);
+          const hero = heroIsRate
+            ? (e.investedPnlRate === null ? "—" : fmtRate(e.investedPnlRate))
+            : signedYuan(e.totalPnlCents);
+          const heroTone = pnlTone(heroIsRate ? (e.investedPnlRate ?? 0) : e.totalPnlCents);
 
           return (
             <article
@@ -330,22 +327,20 @@ function Podium({
                 {e.username}
                 {isMe && <Tag className="ml-1 md:ml-2">我</Tag>}
               </div>
-              {/* 副值：投入收益率（移动端柱宽不够，这行让位给数字——与原先
-                  「总资产仅桌面」同一取舍）。桌面/移动都有的英雄数字才是主角 */}
+              {/* 名字下的另一口径：收益率榜给收益金额，总收益榜给选基收益率。
+                  移动端柱宽不够，这行让位给英雄数字 */}
               <div className="mt-0.5 hidden text-xs text-muted md:block">
-                <InvestedRate rate={e.investedPnlRate} />
+                {heroIsRate
+                  ? signedYuan(e.totalPnlCents)
+                  : <InvestedRate rate={e.investedPnlRate} />}
               </div>
-              {/* 英雄数字跟当前 tab 口径；副值用另一口径。
-                  窄柱拆两行：PnlText 是 nowrap 倾向的 inline-flex，
-                  一行两段在 ~90px 里会把「元」挤到第二行 */}
+              {/* 英雄数字跟当前 tab。窄柱不再叠第二行比率——
+                  两个收益率并排正是这页读不懂的原因 */}
               <div className={`mt-2 font-num leading-none ${heroTone} ${
                 isGold ? "text-[18px] md:text-[22px]" : "text-[14px] md:text-[18px]"
               }`}
               >
                 {hero}
-              </div>
-              <div className={`mt-1 font-num text-[11px] leading-none md:text-[13px] ${subTone}`}>
-                {sub}
               </div>
               {/* 台身：名次水印沉底，高度即名次 */}
               <div className={`fp-podium-ped ${m.ped} mt-3 flex w-full items-end justify-center pb-1.5 ${m.pedH}`}>
@@ -365,11 +360,15 @@ function Podium({
 function LeaderRow({
   entry,
   meId,
+  metric,
 }: {
   entry: LeaderboardEntry;
   meId: number | null;
+  /** 当前榜：决定哪边是主角。跟领奖台同一套规则，别两套 UI 各说各话 */
+  metric: RankMetric;
 }) {
   const isMe = meId !== null && entry.userId === meId;
+  const heroIsRate = metric === "rate";
   return (
     // 自己的条目冰雾高亮：bg-primary/6 = 主色 6% 透明度
     // ⚠️ 单边边框的正确姿势是 border-b + [border-bottom-style:solid]：
@@ -400,14 +399,21 @@ function LeaderRow({
           {isMe && <Tag className="ml-2">我</Tag>}
         </div>
         <div className="mt-0.5 font-num text-xs text-muted">
-          <InvestedRate rate={entry.investedPnlRate} />
+          {/* 副值是「另一个口径」：收益率榜给收益金额（这榜上的人都买过，
+              不会是 null）；总收益榜才给选基收益率，「—」只留给真没买过的人 */}
+          {heroIsRate
+            ? signedYuan(entry.totalPnlCents)
+            : <InvestedRate rate={entry.investedPnlRate} />}
         </div>
       </div>
       <div className="shrink-0 text-right">
-        <PnlText cents={entry.totalPnlCents} size={14} />
-        <div className="mt-0.5">
-          <PnlText rate={entry.totalPnlRate} size={12} />
-        </div>
+        {heroIsRate
+          ? (
+              <span className={`font-num text-[14px] ${pnlTone(entry.investedPnlRate ?? 0)}`}>
+                {entry.investedPnlRate === null ? "—" : fmtRate(entry.investedPnlRate)}
+              </span>
+            )
+          : <PnlText cents={entry.totalPnlCents} size={14} />}
       </div>
     </div>
   );
@@ -420,15 +426,17 @@ function LeaderRow({
 function ListTape({
   entries,
   meId,
+  metric,
 }: {
   entries: LeaderboardEntry[];
   meId: number | null;
+  metric: RankMetric;
 }) {
   if (entries.length === 0)
     return null;
   return (
     <div className="-mx-4 md:-mx-6">
-      {entries.map(e => <LeaderRow key={e.userId} entry={e} meId={meId} />)}
+      {entries.map(e => <LeaderRow key={e.userId} entry={e} meId={meId} metric={metric} />)}
     </div>
   );
 }
@@ -436,10 +444,13 @@ function ListTape({
 export default function Leaderboard({ loaderData }: Route.ComponentProps) {
   const { me, lb } = loaderData;
   const meId = me?.id ?? null;
+  // 受控 tab：「我的排名」必须看当前榜。只赎回、从未买入的人被排除在
+  // 收益率榜之外，但总收益榜上有他——固定查 byRate 会把在榜的人显示成没上榜
+  const [metric, setMetric] = useState<RankMetric>("pnl");
 
-  /** 自己的条目（可能不在榜上：没成交过 / 没登录） */
-  const mine
-    = meId === null ? null : lb.byRate.find(e => e.userId === meId) ?? null;
+  /** 自己在当前榜的条目（没登录 / 当前榜没有自己时为 null） */
+  const board = metric === "rate" ? lb.byRate : lb.byPnl;
+  const mine = meId === null ? null : board.find(e => e.userId === meId) ?? null;
 
   // 两榜各自切一次：领先档完整吃进条带，名单带只拿剩下的。
   // 切分必须在 Tabs 外做——items.children 里写 IIFE 是为了躲 lint 的副作用。
@@ -453,15 +464,16 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
           收益排行榜
         </Title>
         <Paragraph type="secondary" className="mb-0">
-          总收益 = 总资产 − 累计入金（初始本金 + 签到奖励）。已清仓落袋的收益也保留在榜上，
-          只签到不买基金刷不了榜。
+          总收益 = 总资产 − 累计入金（初始本金 + 签到奖励）。已清仓落袋的收益也保留在榜上。
+          收益率榜只排买过基金的人；总收益榜只要成交过（含只赎回）就在。
         </Paragraph>
-        {/* 分母必须写在页面上：同一个「收益率」在本站有多个口径，
-            不写分母就会出现「正收益 0.00%」这种读不通的观感（2026-09-18 审计）。
+        {/* 分母必须写在页面上：选基收益率的分母是累计买入额，不是账户里的闲钱，
+            同一笔钱来回买卖会重复计入、把比率压低（2026-09-22 撤掉账户收益率后，
+            这是榜上唯一的比率，更要写清它量的是什么）。
             另：榜单只公示收益与比率，不公示任何人的总资产与余额 */}
         <Paragraph type="secondary" className="mb-0 mt-1 text-xs">
-          收益率 = 总收益 ÷ 累计入金（账户口径，分母含没投出去的闲置现金）；
-          投入收益率 = 总收益 ÷ 累计买入金额（分母只算真投进基金的钱，更贴近选基能力）。
+          选基收益率 = 总收益 ÷ 累计买入金额（分母只算真投进基金的钱；
+          同一笔钱买了再卖、卖了再买会重复计入，频繁交易会把这个比率压低）。
           榜单只公示收益数字，不公示任何人的资产与余额。
         </Paragraph>
       </div>
@@ -478,7 +490,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
             )
           : (
               <Tabs
-                defaultActiveKey="pnl"
+                activeKey={metric}
+                onChange={key => setMetric(key as RankMetric)}
                 items={[
                   {
                     key: "pnl",
@@ -486,7 +499,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                     children: (
                       <>
                         <Podium leads={pnlBoard.leads} rest={pnlBoard.rest} meId={meId} metric="pnl" />
-                        <ListTape entries={pnlBoard.tape} meId={meId} />
+                        <ListTape entries={pnlBoard.tape} meId={meId} metric="pnl" />
                       </>
                     ),
                   },
@@ -496,7 +509,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                     children: (
                       <>
                         <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} metric="rate" />
-                        <ListTape entries={rateBoard.tape} meId={meId} />
+                        <ListTape entries={rateBoard.tape} meId={meId} metric="rate" />
                       </>
                     ),
                   },
@@ -515,7 +528,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
             ? (
                 // 单行卡不走 ListTape 负边距：外卡 body 自己就是左右呼吸
                 <div className="-mx-4 md:-mx-6">
-                  <LeaderRow entry={mine} meId={meId} />
+                  <LeaderRow entry={mine} meId={meId} metric={metric} />
                 </div>
               )
             : (

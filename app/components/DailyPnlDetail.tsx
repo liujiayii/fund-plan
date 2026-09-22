@@ -42,7 +42,7 @@ export function DailyPnlDetail({ label, day, days, entries, fundNames }: DailyPn
     <div>
       {/* 当日金额走 PnlBadge 浅底胶囊（visual-refresh §6.5 强调位）：
           徽章自带「元」与红绿浅底，StatBig 的 suffix/color 不再传；日期标题与收益率副行保持原样。
-          收益率的分母是「前一日总资产」，与总览卡「累计收益率」的「累计入金」不同——
+          收益率的分母是「前一日总资产」，与总览卡「选基收益率」的「累计买入额」不同——
           周/月/年的区间收益率是复利连乘（见 domain/pnl-buckets），也别与日收益率混读 */}
       <StatBig
         label={`${label} 收益`}

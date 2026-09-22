@@ -208,6 +208,7 @@ export default function MeIndex({ loaderData }: Route.ComponentProps) {
               daily={timeline.daily}
               latest={timeline.latest}
               totalDepositedCents={timeline.totalDepositedCents}
+              investedCents={timeline.investedCents}
               pendingBuyCents={pendingBuyCents}
             />
             <div className="fp-mobile">

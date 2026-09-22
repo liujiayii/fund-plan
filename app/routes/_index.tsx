@@ -219,13 +219,14 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               )}
               extra={<a href="/master">查看完整组合 →</a>}
             >
-              {/* 公开视角总览卡：主位是累计收益率，无「总资产 / 可用余额」——
+              {/* 公开视角总览卡：主位是选基收益率，无「总资产 / 可用余额」——
                   钱包数字只在本人 /me 可见（与 /master 同口径） */}
               <AssetOverviewCard
                 summary={loaderData.portfolio.summary}
                 daily={loaderData.timeline.daily}
                 latest={loaderData.timeline.latest}
                 totalDepositedCents={loaderData.timeline.totalDepositedCents}
+                investedCents={loaderData.timeline.investedCents}
                 pendingBuyCents={loaderData.pendingBuyCents}
                 visibility="public"
               />

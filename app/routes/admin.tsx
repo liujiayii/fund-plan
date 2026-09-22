@@ -65,8 +65,8 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
           : fmtYuan(v),
     },
     {
-      // 账户收益率的分母。没有这一列就没法验证「账户收益」对不对，
-      // 而从「总资产 − 收益」反推又容易被在途资金带偏
+      // 总收益的对照基准（收益 = 总资产 − 累计入金）。
+      // 它不再是收益率的分母——比率看的是右边「累计买入」
       title: "累计入金",
       dataIndex: "depositedCents",
       align: "right",
@@ -80,8 +80,17 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
       render: v => fmtYuan(v),
     },
     {
+      // 选基收益率的分母。与「账户收益」并排，才能核对比率是不是
+      // 收益金额 ÷ 累计买入额（闲钱不进这个分母）
+      title: "累计买入",
+      dataIndex: "investedCents",
+      align: "right",
+      render: v => fmtYuan(v),
+    },
+    {
       // ⚠️ 与排行榜「总收益」同口径：含现金、在途、已实现盈亏与全部费用。
-      // 排查榜单数字时对的是这一列，不是下面的「持仓浮盈」
+      // 排查榜单数字时对的是这一列，不是下面的「持仓浮盈」。
+      // 比率是选基收益率（÷ 累计买入），不再是旧的账户收益率（÷ 累计入金）
       title: "账户收益",
       dataIndex: "accountPnlCents",
       align: "right",
@@ -174,7 +183,7 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
           dataSource={users}
           pagination={false}
           size="middle"
-          scroll={{ x: 1420 }}
+          scroll={{ x: 1560 }}
         />
       </SectionCard>
     </Space>

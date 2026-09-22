@@ -47,7 +47,7 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardView> {
   const navMap = await latestNavMap(db, codes);
 
   // ── 查询 4：有过 confirmed 订单的用户（上榜门槛）+ 各自累计买入金额 ──────
-  // 一条 groupBy 同时拿两件事：门槛（这人在集合里就说明成交过）与投入收益率的
+  // 一条 groupBy 同时拿两件事：门槛（这人在集合里就说明成交过）与选基收益率的
   // 分母（case-when 条件求和，只累加买单）。
   // ⚠️ 查询数必须与用户数无关——「逐人查累计买入」就是 N+1，D1 免费版每请求
   // 50 条查询是硬顶，用户过十来个直接 500
@@ -110,7 +110,8 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardView> {
       inFlightCashCents: inFlightByUser.get(u.userId) ?? 0,
       initialCashCents: u.initialCash ?? 0,
       totalCheckinCents: u.totalCheckin ?? 0,
-      // 累计买入金额：投入收益率的分母，没成交过就是 0（safeRate 会返回 null）
+      // 累计买入金额：选基收益率的分母，没买过就是 0（safeRate 会返回 null，
+      // 收益率榜据此把此人排除）
       investedCents: investedByUser.get(u.userId) ?? 0,
       hasTrades: tradedUserIds.has(u.userId),
     };
