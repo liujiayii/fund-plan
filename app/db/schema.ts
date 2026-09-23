@@ -76,8 +76,14 @@ export const user = sqliteTable("user", {
   passwordHash: text("password_hash").notNull(),
   /** 随机盐（hex） */
   salt: text("salt").notNull(),
-  /** 角色：admin（主理人，组合公开）| user */
+  /** 角色：admin（主理人）| user */
   role: text("role", { enum: ["admin", "user"] }).notNull().default("user"),
+  /**
+   * 组合是否对其他已公开用户可见。0 关（默认）/ 1 开。
+   * 双向：只有自己开着，别人才能从排行榜点进你的盘；
+   * 你也只有开着，才能点进同样开着的人。admin 后台不受这个开关影响。
+   */
+  portfolioPublic: integer("portfolio_public").notNull().default(0),
   /** 注册来源 IP（cf-connecting-ip）。存量用户无此记录（NULL） */
   registerIp: text("register_ip"),
   /** 注册时的 User-Agent，排查脚本注册用 */

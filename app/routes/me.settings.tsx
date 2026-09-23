@@ -6,6 +6,7 @@ import {
   Input,
   Popconfirm,
   Space,
+  Switch,
   Tag,
   Typography,
 } from "antd";
@@ -56,6 +57,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       createdAt: acc?.createdAt ?? 0,
     },
     registeredAt: u?.createdAt ?? 0,
+    portfolioPublic: u?.portfolioPublic === 1,
   };
 }
 
@@ -66,6 +68,20 @@ export async function action({ request, context }: Route.ActionArgs) {
   const intent = String(fd.get("intent") ?? "");
 
   try {
+    if (intent === "setPortfolioPublic") {
+      const next = fd.get("portfolioPublic") === "1" ? 1 : 0;
+      await db
+        .update(userTable)
+        .set({ portfolioPublic: next })
+        .where(eq(userTable.id, user.id));
+      return {
+        ok: true,
+        message: next
+          ? "已公开。同样打开的人可以在排行榜点进你的组合，你也能点进他们的。"
+          : "已关闭。你看不了别人的组合，别人也看不了你的。",
+      };
+    }
+
     if (intent === "changePassword") {
       const oldPwd = String(fd.get("oldPassword") ?? "");
       const newPwd = String(fd.get("newPassword") ?? "");
@@ -117,7 +133,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MeSettings({ loaderData }: Route.ComponentProps) {
-  const { user, account: acc, registeredAt } = loaderData;
+  const { user, account: acc, registeredAt, portfolioPublic } = loaderData;
   const fetcher = useFetcher<typeof action>();
   const submitting = fetcher.state === "submitting";
 
@@ -144,7 +160,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
           label="角色"
           value={
             user.role === "admin"
-              ? <Tag>管理员（组合公开）</Tag>
+              ? <Tag>管理员</Tag>
               : <Tag>普通用户</Tag>
           }
         />
@@ -159,8 +175,34 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
         />
       </SectionCard>
 
+      <SectionCard title="公开我的组合" className="animate-fade-up animate-delay-[60ms]">
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            默认关闭。打开后，
+            <Text strong>同样打开了这个开关的人</Text>
+            可以在排行榜点进你的持仓、收益和订单（只读）；你也能点进他们的。
+            关掉之后，你看不了别人，别人也看不了你。游客和没打开的人始终只能看榜，进不了任何人的盘。
+          </Paragraph>
+          <fetcher.Form method="post">
+            <input type="hidden" name="intent" value="setPortfolioPublic" />
+            <input type="hidden" name="portfolioPublic" value={portfolioPublic ? "0" : "1"} />
+            <Space align="center">
+              <Switch
+                checked={portfolioPublic}
+                loading={submitting}
+                onChange={() => fetcher.submit(
+                  { intent: "setPortfolioPublic", portfolioPublic: portfolioPublic ? "0" : "1" },
+                  { method: "post" },
+                )}
+              />
+              <Text>{portfolioPublic ? "已公开，排行榜上互相可见" : "未公开"}</Text>
+            </Space>
+          </fetcher.Form>
+        </Space>
+      </SectionCard>
+
       {/* 交错进场：第 N 卡延迟 (N-1)×60ms（animate-delay 写法的坑见 uno.config.ts） */}
-      <SectionCard title="修改密码" className="animate-fade-up animate-delay-[60ms]">
+      <SectionCard title="修改密码" className="animate-fade-up animate-delay-[120ms]">
         {/* min(420px, 100%)：显式兜底窄屏（Task 10），不再依赖外层 padding 的巧合 */}
         <fetcher.Form method="post" style={{ maxWidth: "min(420px, 100%)" }}>
           <input type="hidden" name="intent" value="changePassword" />
@@ -182,7 +224,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
         </Paragraph>
       </SectionCard>
 
-      <SectionCard title="重置模拟盘" className="animate-fade-up animate-delay-[120ms]">
+      <SectionCard title="重置模拟盘" className="animate-fade-up animate-delay-[180ms]">
         <Space direction="vertical" style={{ width: "100%" }}>
           <Alert
             type="warning"

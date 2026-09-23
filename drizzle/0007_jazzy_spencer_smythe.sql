@@ -1,0 +1,1 @@
+ALTER TABLE `user` ADD `portfolio_public` integer DEFAULT 0 NOT NULL;
