@@ -14,6 +14,7 @@ import {
   shareLot,
   transactions,
 } from "~/db/schema";
+import { NAV_BACKFILL_MIN_ROWS, shouldBackfillNav } from "~/domain/nav-backfill";
 import {
 
   costBasisNavScaled,
@@ -387,23 +388,49 @@ export async function getNavSeries(
  * 任何基金只要有持仓/待确认单，在被人类访问之前就已有数据——写成 length === 0
  * 的话回填永远不触发，库里永远只有薄薄一层滑动窗口（实测 14 只基金全是
  * 20~23 条，图表与近 1 年阶段涨幅全都残缺）。60 ≈ 一个季度交易日，低于它
- * 必是残缺历史；回填一次后库里就有完整历史，条件自然不再命中（每基金一次性）。
+ * 必是残缺历史。
+ *
+ * ⚠️ 光看行数会漏一类基金：**上市不足 60 个交易日的新基金**，上游总共就没有
+ * 60 行（2026-09-23 实测 028439 只有 50 行），条件对它**永久成立** ⇒ 每次访问
+ * 白拉 3 页东财 + 写一遍 D1，永不收敛。所以再叠一道 `fund.nav_backfilled_at`
+ * 记忆化闸门（不论成败都记，单基金 ≤ 4 次/天），判断逻辑在 domain/nav-backfill。
  *
  * 依赖方向：本文件 → fund-data（fetchNavHistory）。**不能反过来**——
  * fund-data 不 import 本模块，否则成环。
- * ⚠️ 基金页 loader 里还有一份内联的同款逻辑（那一页本次未动），改口径时两处同改。
+ * 基金页 loader 已改为调用本函数（此前那份内联同款逻辑已删），口径唯一。
  */
 export async function ensureNavHistory(
   db: Db,
   env: Env,
   fundCode: string,
-  minRows = 60,
+  minRows = NAV_BACKFILL_MIN_ROWS,
   maxRows = 400,
 ): Promise<NavSeriesRow[]> {
   const series = await getNavSeries(db, fundCode);
-  if (series.length >= minRows) {
+
+  const f = await db.query.fund.findFirst({
+    where: eq(fund.code, fundCode),
+    columns: { navBackfilledAt: true },
+  });
+  const now = Date.now();
+  if (
+    !shouldBackfillNav({
+      rowCount: series.length,
+      backfilledAt: f?.navBackfilledAt ?? null,
+      now,
+      minRows,
+    })
+  ) {
     return series;
   }
+
+  // 先记账再拉：中途崩了也不会让下一个访客接着重试（代价只是少拉一次，
+  // 下个窗口自会再试）。失败也记——「上游拉不到」不该退化成按访问次数重试
+  await db
+    .update(fund)
+    .set({ navBackfilledAt: now })
+    .where(eq(fund.code, fundCode));
+
   const rows = await fetchNavHistory(env, fundCode, maxRows);
   if (rows.length === 0) {
     // 东财拉不到（节假日抖动/接口挂了）就把现有的还给调用方，别把页面打成 500

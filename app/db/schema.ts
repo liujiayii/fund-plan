@@ -43,6 +43,15 @@ export const fund = sqliteTable("fund", {
   status: text("status").notNull().default("开放申购"),
   /** 档案元数据更新时间戳（毫秒） */
   updatedAt: integer("updated_at").notNull(),
+  /**
+   * 上次「长历史回填」尝试的时间戳（毫秒）；NULL = 从未尝试。
+   *
+   * 为什么需要它：回填判据是「净值行数 < 60」，对**生命周期不足 60 个
+   * 交易日的新基金**永久成立（实测 028439 上游总共只有 50 行），
+   * 于是每次访问都要拉 3 页东财 + 写一遍 D1。记下尝试时间做闸门
+   * （不论成败都记，失败基金也不该被每个访客反复重试）。
+   */
+  navBackfilledAt: integer("nav_backfilled_at"),
 });
 
 /** 历史净值（撮合与画图的数据底座；所有用户共用一份） */

@@ -1,0 +1,1 @@
+ALTER TABLE `fund` ADD `nav_backfilled_at` integer;
