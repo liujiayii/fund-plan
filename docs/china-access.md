@@ -36,10 +36,18 @@ SSR bundle 上传体积 11.7MB，冷启动 isolate 上「模块初始化 + React
 - 大量 `0` / 10s 超时：SSR 排队 + 绕路链路叠加；
 - `error 1102`：冷 isolate 超出 CPU 上限——单用户日常访问偶发白屏的元凶。
 
-**应对**：匿名页缓存已升级为 stale-while-revalidate，`/` 与 `/master` 的
-游客路径不再付 SSR CPU（后台刷新挂掉也只是缓存继续旧，自愈）；但个性化
-页面（/me、/funds/…）仍走实时 SSR，冷 isolate 上依旧可能偶发 1102——
-根治需 Workers 付费版（$5/月，CPU 上限 30s）或瘦身 SSR bundle。
+**应对**：匿名页缓存已升级为 stale-while-revalidate，`/`、`/master` 与
+**基金页（`/funds`、`/funds/<6 位代码>`）**的游客路径不再付 SSR CPU（后台刷新
+挂掉也只是缓存继续旧，自愈）；但个性化页面（`/me`、`/admin`）仍走实时 SSR，
+冷 isolate 上依旧可能偶发 1102——根治需 Workers 付费版（$5/月，CPU 上限 30s）
+或瘦身 SSR bundle。
+
+基金页是 2026-09-23 加进来的（原因见 `docs/deployment.md` 的免费版额度一节：
+基金页一次冷启动对每只基金写 7 个 KV key，而 sitemap 把库里全部基金都投给爬虫，
+于是「爬虫抓一遍」≈「全量重建缓存」）。整页缓存把这条成本挪到边缘：爬虫的重复
+抓取只命中缓存或触发后台刷新，loader 不跑，KV 读写与 D1 查询一起省。
+⚠️ 注意站内点击基金链接仍走 react-router 客户端导航（`.data` 请求带查询串，
+按规则不缓存），所以这条主要惠及爬虫与直连 GET，别指望改善用户点击的体感。
 另注：17ce 的 160 节点并发对 D1 直连 SSR 的站点是自打自压，结果只当
 压力测试看，不代表真实用户体验。
 
@@ -78,11 +86,13 @@ LAX/SJC 段**。除非走 B2 把 D1 搬去欧洲，那时优选目标才反转�
    - AMS 入境用户首页 TTFB 预计 4.5s → ~2.5s
 2. **`/assets/*` 上 immutable 长缓存**（`public/_headers`）：回访免条件请求
 3. **匿名页边缘缓存（stale-while-revalidate）**（`feat(cache)` / `fix(cache)`
-   commit）：`/` 与 `/master` 的游客视角整页缓存在入口机房 Cache API——
-   fresh（60s 内）直接命中，TTFB ≈ 单程 RTT；stale（60s~1h）先给旧页、
-   后台重渲染覆盖，SSR 永不进用户关键路径（规避上面的 1102）。带
-   `session` cookie 一律旁路；排障看 `x-fp-cache` 响应头
-   （hit / stale / miss / bypass）。
+   commit）：`/`、`/master` 与基金页（`/funds`、`/funds/<6 位代码>`）的游客视角
+   整页缓存在入口机房 Cache API——fresh（60s 内）直接命中，TTFB ≈ 单程 RTT；
+   stale（60s~1h）先给旧页、后台重渲染覆盖，SSR 永不进用户关键路径（规避上面的
+   1102）。带 `session` cookie 一律旁路；排障看 `x-fp-cache` 响应头
+   （hit / stale / miss / bypass）。可缓存范围在
+   `app/domain/anon-page-cache.ts`（精确白名单 + 基金页模式，改这里要同步
+   `tests/domain/anon-page-cache.test.ts` 的契约断言）。
 
 **部署后验证清单**：
 
@@ -94,6 +104,10 @@ curl -sSI https://liujiayii.dpdns.org/assets/root-Dm1z4mVn.js | grep -iE 'cache-
 curl -sS -D - -o /dev/null -H 'sec-fetch-dest: document' -H 'accept: text/html' \
   -A 'Mozilla/5.0' -H 'cookie: fp_vid=11111111-1111-1111-1111-111111111111' \
   https://liujiayii.dpdns.org/ | grep -i x-fp-cache
+
+# 3. 基金页同样走边缘缓存（两次应 miss → hit；这是 KV 写峰值的主要来源）
+curl -sS -D - -o /dev/null -H 'sec-fetch-dest: document' -H 'accept: text/html' \
+  -A 'Mozilla/5.0' https://liujiayii.dpdns.org/funds/000001 | grep -i x-fp-cache
 
 # 3. 带 session cookie 必须是 bypass
 #   （同上加 -H 'cookie: fp_vid=...; session=x'）

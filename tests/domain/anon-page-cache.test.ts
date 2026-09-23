@@ -41,10 +41,25 @@ describe("isAnonCacheablePage", () => {
     // /me、/login、排行榜等个性化或动态页不在白名单
     expect(isAnonCacheablePage(info({ pathname: "/me" }))).toBe(false);
     expect(isAnonCacheablePage(info({ pathname: "/leaderboard" }))).toBe(false);
-    expect(isAnonCacheablePage(info({ pathname: "/funds/000001" }))).toBe(false);
+    expect(isAnonCacheablePage(info({ pathname: "/tools/dca-backtest" }))).toBe(false);
   });
 
-  it("白名单常量与判定一致：恰好只有 / 与 /master", () => {
+  it("基金页（/funds 与 /funds/6 位代码）可缓存——爬虫抓一页不再跑 loader", () => {
+    expect(isAnonCacheablePage(info({ pathname: "/funds" }))).toBe(true);
+    expect(isAnonCacheablePage(info({ pathname: "/funds/000001" }))).toBe(true);
+  });
+
+  it("基金页的边界：查询串 / 登录态 / 非 6 位代码 / 多级路径一律旁路", () => {
+    // 搜索是 ?q= 的变体，key 空间无界，不进缓存
+    expect(isAnonCacheablePage(info({ pathname: "/funds", search: "?q=华夏" }))).toBe(false);
+    expect(isAnonCacheablePage(info({ pathname: "/funds/000001", search: "?tab=position" }))).toBe(false);
+    expect(isAnonCacheablePage(info({ pathname: "/funds/000001", hasSessionCookie: true }))).toBe(false);
+    expect(isAnonCacheablePage(info({ pathname: "/funds/00001" }))).toBe(false);
+    expect(isAnonCacheablePage(info({ pathname: "/funds/000001/extra" }))).toBe(false);
+    expect(isAnonCacheablePage(info({ pathname: "/funds/abcdef" }))).toBe(false);
+  });
+
+  it("精确白名单常量仍只有 / 与 /master（基金页走模式匹配，不混进这个集合）", () => {
     expect([...ANON_CACHEABLE_PATHS].sort()).toEqual(["/", "/master"]);
   });
 });
