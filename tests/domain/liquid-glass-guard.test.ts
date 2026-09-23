@@ -165,6 +165,12 @@ describe("液态玻璃宪法守卫", () => {
     );
     expect(figClasses.size).toBeGreaterThanOrEqual(8);
     expect([...figClasses].filter(c => !responsive.includes(c)).sort()).toEqual([]);
+
+    // 关断还必须**压得住**播放规则：motion.css 写的是 `.fp-reveal.is-play .fp-fig-*`
+    // （特异性 0,3,0），比只带 `.fp-reveal` 的 0,2,0 高一级——source-order 救不了，
+    // 必须 !important。漏了它，「页面已武装 + 用户中途开减少动态 + 元素才进视口」
+    // 这个组合下动画照样播（CodeRabbit 评审抓出来的真 bug，别再让人「顺手清理」掉）
+    expect(responsive).toMatch(/\.fp-reveal \.fp-fig-label\s*\{[^}]*animation: none !important/);
   });
 
   it("入场编排不许把「未播态」写进 SSR：闸门只在客户端挂", () => {

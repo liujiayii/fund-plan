@@ -438,7 +438,13 @@
 
   /* 图版编排（motion.css）：不是「不播动画」，而是**内容直出**——
      未播时的 opacity: 0 要一并还原，否则关掉动效等于把图藏了。
-     两段必须列全（与 motion.css 的类名一一对应），漏一个就是一张缺块的图 */
+     两段必须列全（与 motion.css 的类名一一对应），漏一个就是一张缺块的图。
+
+     ⚠️ 这里**必须 !important**，不能靠 source-order：motion.css 的播放规则写的是
+     `.fp-reveal.is-play .fp-fig-*`，特异性 (0,3,0) 比本段的 (0,2,0) 高一级，
+     排在后面也压不住。踩中的场景很具体：页面已武装、用户随后把系统调成
+     「减少动态效果」、元素此时才进视口拿到 is-play —— 动画照播，违反宪法 §5。
+     （CodeRabbit 评审抓出来的：原文只靠 source-order，我当初在注释里写错了） */
   .fp-reveal .fp-fig-aura,
   .fp-reveal .fp-fig-area,
   .fp-reveal .fp-fig-sheet,
@@ -446,16 +452,18 @@
   .fp-reveal .fp-fig-gem,
   .fp-reveal .fp-fig-late,
   .fp-reveal .fp-fig-label {
-    opacity: 1;
-    animation: none;
+    opacity: 1 !important;
+    animation: none !important;
   }
 
+  /* 同一条规则的另一半：描线路径那条的特异性本已对等（都是 0,3,0），
+     但这里也统一加 !important，免得日后有人只改一处、另一半静默失效 */
   .fp-reveal.is-play [data-fp-draw] {
-    animation: none;
+    animation: none !important;
   }
 
   /* 描线路径的 dasharray 是客户端量完写在 inline style 上的（优先级压过本文件），
-     所以这里必须 !important —— 用户中途改系统设置（页面早已武装）时靠它兜底 */
+     所以这条 !important 是冲 inline 去的 —— 用户中途改系统设置（页面早已武装）时靠它兜底 */
   [data-fp-draw] {
     stroke-dasharray: none !important;
     stroke-dashoffset: 0 !important;

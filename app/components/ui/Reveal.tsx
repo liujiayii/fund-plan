@@ -22,6 +22,11 @@ import { useEffect, useLayoutEffect, useRef } from "react";
  * 免得先空一帧。全程**不碰 React state**：这里动的是 class 与内联样式，
  * 用 state 触发重渲染会踩 `react/set-state-in-effect` 那条告警。
  */
+/**
+ * 同构的 layout effect：客户端用 useLayoutEffect（武装要赶在首次绘制之前），
+ * 服务端退回 useEffect（SSR 没有 layout 阶段，直接写会告警）。每次调用这个常量
+ * 等于每次渲染都做一次三元判断，代价可忽略。
+ */
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export interface RevealProps {

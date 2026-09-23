@@ -57,6 +57,18 @@
   }
 }
 
+/* ⚠️ 弹出（scale）的两个元素的缩放原点必须**显式**设：SVG 元素没有 CSS 布局盒，
+   `transform-origin` 的初始值是 `0 0`、`transform-box` 的初始值是 `view-box`——
+   不设的话 `fp-fig-pop` 的 scale() 是朝**画布左上角**缩：棱镜会从 (180,140) 滑到
+   约 (133,104)、宝石从 (300,70) 滑到约 (222,52)，读起来是「斜着飘进来」而不是
+   「原地收小再张开」。`fill-box` = 以元素自己的包围盒为参照，`center` = 取其中心。
+   （CodeRabbit 评审抓出来的；下面的 `.fp-fig-lens-zoom` 悬停缩放当初就设了，入场这两组漏了） */
+.fp-fig-lens,
+.fp-fig-gem {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 /* ══════════ 入场编排：未播时停在 from 态 ══════════ */
 
 /* ⚠️ 这条只作用于挂了 fp-reveal 的容器——SSR 的 HTML 里没有这个类，

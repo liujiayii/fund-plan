@@ -61,6 +61,7 @@ import {
  * 冰白弧，圆就从色块变成有厚度的玻璃片——**不用任何滤镜**（宪法 §3 禁）。
  */
 function glassArc(cx: number, cy: number, r: number, from = 205, to = 305): string {
+  /** 极坐标转屏幕坐标（角度制，y 向下） */
   const pt = (deg: number) => {
     const a = (deg * Math.PI) / 180;
     return `${(cx + r * Math.cos(a)).toFixed(1)} ${(cy + r * Math.sin(a)).toFixed(1)}`;
