@@ -1,11 +1,14 @@
 import type { Route } from "./+types/leaderboard";
 import type { LeaderboardEntry } from "~/domain/leaderboard";
-import { Space, Tabs, Tag, Typography } from "antd";
+import { message, Space, Tabs, Tag, Tooltip, Typography } from "antd";
+import { eq } from "drizzle-orm";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtRate, fmtSignedYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { user as userTable } from "~/db/schema";
 import { isOlympicPodium, splitPodium } from "~/domain/leaderboard";
 import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
@@ -29,7 +32,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     getCurrentUser(request, db),
     getLeaderboard(db),
   ]);
-  return { me, lb };
+  // 自己没开公开，排行榜上任何人名都不可点（双向开关）
+  const viewerPublic = me
+    ? (await db.query.user.findFirst({
+        where: eq(userTable.id, me.id),
+        columns: { portfolioPublic: true },
+      }))?.portfolioPublic === 1
+    : false;
+  return { me, lb, viewerPublic };
 }
 
 /** 当前榜的排序口径：英雄数字跟 tab 走，别两榜都把收益率撑成主角 */
@@ -99,7 +109,45 @@ const MEDAL: Record<number, {
   },
 };
 
-/** 涨跌色：条件类互斥，别跟 text-ink 同挂 */
+/** 点不进别人盘的原因。自己那行、以及双方都公开时返回 null */
+function portfolioHint(
+  entry: LeaderboardEntry,
+  meId: number | null,
+  viewerPublic: boolean,
+): string | null {
+  const isMe = meId !== null && entry.userId === meId;
+  if (isMe || (viewerPublic && entry.portfolioPublic))
+    return null;
+  if (!meId)
+    return "登录并打开公开后可查看";
+  if (!viewerPublic)
+    return "打开「公开我的组合」后可互相查看";
+  return "对方未公开组合";
+}
+
+/** 名字：能进就是链接，不能进就包 Tooltip。热区由整行负责，这里只渲染名字 */
+function BoardName({
+  entry,
+  meId,
+  viewerPublic,
+}: {
+  entry: LeaderboardEntry;
+  meId: number | null;
+  viewerPublic: boolean;
+}) {
+  const isMe = meId !== null && entry.userId === meId;
+  const hint = portfolioHint(entry, meId, viewerPublic);
+  const href = hint === null && !isMe && meId !== null ? `/users/${entry.userId}` : null;
+  const name = href
+    ? <Link to={href} className="text-ink hover:text-primary" onClick={e => e.stopPropagation()}>{entry.username}</Link>
+    : entry.username;
+  return (
+    <>
+      {hint ? <Tooltip title={hint}>{name}</Tooltip> : name}
+      {isMe && <Tag className="ml-1 md:ml-2">我</Tag>}
+    </>
+  );
+}
 function pnlTone(v: number): string {
   return v > 0 ? "text-rise" : v < 0 ? "text-fall" : "text-flat";
 }
@@ -141,15 +189,21 @@ function bib(rank: number): string {
 function TopSpot({
   entry,
   meId,
+  viewerPublic,
   metric,
   featured,
+  openPortfolio,
 }: {
   entry: LeaderboardEntry;
   meId: number | null;
+  viewerPublic: boolean;
   metric: RankMetric;
   featured: boolean;
+  openPortfolio: (hint: string | null, href: string | null) => void;
 }) {
   const isMe = meId !== null && entry.userId === meId;
+  const hint = portfolioHint(entry, meId, viewerPublic);
+  const href = hint === null && !isMe && meId !== null ? `/users/${entry.userId}` : null;
   const place = PLACE[entry.rank] ?? PLACE[3];
   const heroIsRate = metric === "rate";
   // 收益率榜的主角是选基收益率（null 的人已被 rankLeaderboard 排除，这里兜「—」）
@@ -160,7 +214,10 @@ function TopSpot({
 
   return (
     <div
+      onClick={() => openPortfolio(hint, href)}
       className={`flex min-w-0 flex-col gap-3 rounded-2xl border-l-4 [border-left-style:solid] ${place.bar} ${place.wash} ${
+        href || hint ? "cursor-pointer" : ""
+      } ${
         featured
           ? "px-4 py-4 md:flex-row md:items-center md:gap-5 md:px-5 md:py-5"
           : "px-4 py-3.5"
@@ -176,8 +233,7 @@ function TopSpot({
 
       <div className="min-w-0 flex-1">
         <div className={`truncate font-medium text-ink ${featured ? "text-[16px] md:text-[17px]" : "text-[15px]"}`}>
-          {entry.username}
-          {isMe && <Tag className="ml-2">我</Tag>}
+          <BoardName entry={entry} meId={meId} viewerPublic={viewerPublic} />
         </div>
         <div className="mt-0.5 font-num text-xs text-muted">
           {heroIsRate
@@ -216,12 +272,16 @@ function Podium({
   leads,
   rest,
   meId,
+  viewerPublic,
   metric,
+  openPortfolio,
 }: {
   leads: LeaderboardEntry[];
   rest: LeaderboardEntry[];
   meId: number | null;
+  viewerPublic: boolean;
   metric: RankMetric;
+  openPortfolio: (hint: string | null, href: string | null) => void;
 }) {
   if (leads.length === 0)
     return null;
@@ -236,6 +296,8 @@ function Podium({
             meId={meId}
             metric={metric}
             featured
+            viewerPublic={viewerPublic}
+            openPortfolio={openPortfolio}
           />
         ))}
         {rest.length > 0 && (
@@ -247,6 +309,8 @@ function Podium({
                 meId={meId}
                 metric={metric}
                 featured={false}
+                viewerPublic={viewerPublic}
+                openPortfolio={openPortfolio}
               />
             ))}
           </div>
@@ -307,11 +371,16 @@ function Podium({
             ? (e.investedPnlRate === null ? "—" : fmtRate(e.investedPnlRate))
             : signedYuan(e.totalPnlCents);
           const heroTone = pnlTone(heroIsRate ? (e.investedPnlRate ?? 0) : e.totalPnlCents);
+          const hint = portfolioHint(e, meId, viewerPublic);
+          const href = hint === null && !isMe && meId !== null ? `/users/${e.userId}` : null;
 
           return (
             <article
               key={e.userId}
+              onClick={() => openPortfolio(hint, href)}
               className={`relative flex w-full min-w-0 flex-col items-center rounded-2xl md:flex-1 ${
+                href || hint ? "cursor-pointer" : ""
+              } ${
                 isGold ? "fp-podium-col--gold" : isMe ? "bg-primary-bg" : "bg-well"
               } ${order} ${mobileSpan}`}
             >
@@ -324,8 +393,7 @@ function Podium({
                 {e.rank}
               </span>
               <div className="mt-1.5 w-full truncate px-2 text-center text-[13px] font-medium text-ink md:mt-2 md:text-[15px]">
-                {e.username}
-                {isMe && <Tag className="ml-1 md:ml-2">我</Tag>}
+                <BoardName entry={e} meId={meId} viewerPublic={viewerPublic} />
               </div>
               {/* 名字下的另一口径：收益率榜给收益金额，总收益榜给选基收益率。
                   移动端柱宽不够，这行让位给英雄数字 */}
@@ -360,43 +428,34 @@ function Podium({
 function LeaderRow({
   entry,
   meId,
+  viewerPublic,
   metric,
+  openPortfolio,
 }: {
   entry: LeaderboardEntry;
   meId: number | null;
+  viewerPublic: boolean;
   /** 当前榜：决定哪边是主角。跟领奖台同一套规则，别两套 UI 各说各话 */
   metric: RankMetric;
+  openPortfolio: (hint: string | null, href: string | null) => void;
 }) {
   const isMe = meId !== null && entry.userId === meId;
   const heroIsRate = metric === "rate";
+  const hint = portfolioHint(entry, meId, viewerPublic);
+  const href = hint === null && meId !== null && entry.userId !== meId
+    ? `/users/${entry.userId}`
+    : null;
   return (
-    // 自己的条目冰雾高亮：bg-primary/6 = 主色 6% 透明度
-    // ⚠️ 单边边框的正确姿势是 border-b + [border-bottom-style:solid]：
-    //   border-b 只出宽度不出 style，但千万别用 border-solid 补——它把 solid
-    //   应用到四边，没给宽度的三边走初始值 medium（=3px），整行被 3px 浅灰
-    //   框住（PR #76 上线后实测踩坑，Playwright 计算样式取证）
-    //
-    // px-4 md:px-6：跟卡片 body 的 16/24 对齐。行从卡片内容盒负边距拉满
-    // （见 ListTape），再在行内补回同样的左右 padding——左右呼吸对称，
-    // hover 高亮也能顶到玻璃内缘。旧版只有 py，右侧数字贴死右缘。
-    //
-    // 名次不再塞进 32×32 盒子居中：盒子左边的空比数字本身还宽，
-    // 视觉上就是「左边有留白、右边没有」。改成左对齐等宽数字列。
-    //
-    // hover 底色只给非本人的行：本人的 bg-primary/6 高亮若再叠 hover 底
-    // 会被盖掉（产物同优先级、后者居后），悬停自己的行不该丢自己的高亮
-    // （CodeRabbit PR #79 修正）；hover 用井底而非页面底——页面底比玻璃还深，
-    // 悬停会成黑洞（宪法 §2.6）；transition-colors 全行保留
     <div
-      className={`flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 md:px-6 [border-bottom-style:solid] transition-colors ${isMe ? "bg-primary/6" : "hover:bg-well"}`}
+      className={`flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 md:px-6 [border-bottom-style:solid] transition-colors ${isMe ? "bg-primary/6" : "hover:bg-well"} ${href || hint ? "cursor-pointer" : ""}`}
+      onClick={() => openPortfolio(hint, href)}
     >
       <span className="w-7 shrink-0 font-num text-[13px] text-muted">
         {entry.rank}
       </span>
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="font-medium text-ink">
-          {entry.username}
-          {isMe && <Tag className="ml-2">我</Tag>}
+          <BoardName entry={entry} meId={meId} viewerPublic={viewerPublic} />
         </div>
         <div className="mt-0.5 font-num text-xs text-muted">
           {/* 副值是「另一个口径」：收益率榜给收益金额（这榜上的人都买过，
@@ -426,23 +485,27 @@ function LeaderRow({
 function ListTape({
   entries,
   meId,
+  viewerPublic,
   metric,
+  openPortfolio,
 }: {
   entries: LeaderboardEntry[];
   meId: number | null;
+  viewerPublic: boolean;
   metric: RankMetric;
+  openPortfolio: (hint: string | null, href: string | null) => void;
 }) {
   if (entries.length === 0)
     return null;
   return (
     <div className="-mx-4 md:-mx-6">
-      {entries.map(e => <LeaderRow key={e.userId} entry={e} meId={meId} metric={metric} />)}
+      {entries.map(e => <LeaderRow key={e.userId} entry={e} meId={meId} viewerPublic={viewerPublic} metric={metric} openPortfolio={openPortfolio} />)}
     </div>
   );
 }
 
 export default function Leaderboard({ loaderData }: Route.ComponentProps) {
-  const { me, lb } = loaderData;
+  const { me, lb, viewerPublic } = loaderData;
   const meId = me?.id ?? null;
   // 受控 tab：「我的排名」必须看当前榜。只赎回、从未买入的人被排除在
   // 收益率榜之外，但总收益榜上有他——固定查 byRate 会把在榜的人显示成没上榜
@@ -456,86 +519,98 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
   // 切分必须在 Tabs 外做——items.children 里写 IIFE 是为了躲 lint 的副作用。
   const rateBoard = splitPodium(lb.byRate);
   const pnlBoard = splitPodium(lb.byPnl);
+  const [messageApi, holder] = message.useMessage();
+  const navigate = useNavigate();
+  function openPortfolio(hint: string | null, href: string | null) {
+    if (hint)
+      void messageApi.info(hint);
+    else if (href)
+      void navigate(href);
+  }
 
   return (
-    <Space direction="vertical" size="large" className="w-full">
-      <div>
-        <Title level={3} className="mb-1">
-          收益排行榜
-        </Title>
-        <Paragraph type="secondary" className="mb-0">
-          总收益 = 总资产 − 累计入金（初始本金 + 签到奖励）。已清仓落袋的收益也保留在榜上。
-          收益率榜只排买过基金的人；总收益榜只要成交过（含只赎回）就在。
-        </Paragraph>
-        {/* 分母必须写在页面上：选基收益率的分母是累计买入额，不是账户里的闲钱，
+    <>
+      {holder}
+      <Space direction="vertical" size="large" className="w-full">
+        <div>
+          <Title level={3} className="mb-1">
+            收益排行榜
+          </Title>
+          <Paragraph type="secondary" className="mb-0">
+            总收益 = 总资产 − 累计入金（初始本金 + 签到奖励）。已清仓落袋的收益也保留在榜上。
+            收益率榜只排买过基金的人；总收益榜只要成交过（含只赎回）就在。
+          </Paragraph>
+          {/* 分母必须写在页面上：选基收益率的分母是累计买入额，不是账户里的闲钱，
             同一笔钱来回买卖会重复计入、把比率压低（2026-09-22 撤掉账户收益率后，
             这是榜上唯一的比率，更要写清它量的是什么）。
             另：榜单只公示收益与比率，不公示任何人的总资产与余额 */}
-        <Paragraph type="secondary" className="mb-0 mt-1 text-xs">
-          选基收益率 = 总收益 ÷ 累计买入金额（分母只算真投进基金的钱；
-          同一笔钱买了再卖、卖了再买会重复计入，频繁交易会把这个比率压低）。
-          榜单只公示收益数字，不公示任何人的资产与余额。
-        </Paragraph>
-      </div>
+          <Paragraph type="secondary" className="mb-0 mt-1 text-xs">
+            选基收益率 = 总收益 ÷ 累计买入金额（分母只算真投进基金的钱；
+            同一笔钱买了再卖、卖了再买会重复计入，频繁交易会把这个比率压低）。
+            榜单只公示收益数字，不公示任何人的资产与余额。
+            想看别人的持仓，双方都要在设置里打开「公开我的组合」。
+          </Paragraph>
+        </div>
 
-      {/* animate-fade-up：区块进场淡入（首卡无延迟） */}
-      <SectionCard className="animate-fade-up">
-        {lb.byRate.length === 0
-          ? (
-              <EmptyState description="还没有人开过单">
-                <Typography.Text type="secondary" className="text-xs">
-                  注册后买第一只基金，就能上榜了
-                </Typography.Text>
-              </EmptyState>
-            )
-          : (
-              <Tabs
-                activeKey={metric}
-                onChange={key => setMetric(key as RankMetric)}
-                items={[
-                  {
-                    key: "pnl",
-                    label: "总收益榜",
-                    children: (
-                      <>
-                        <Podium leads={pnlBoard.leads} rest={pnlBoard.rest} meId={meId} metric="pnl" />
-                        <ListTape entries={pnlBoard.tape} meId={meId} metric="pnl" />
-                      </>
-                    ),
-                  },
-                  {
-                    key: "rate",
-                    label: "收益率榜",
-                    children: (
-                      <>
-                        <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} metric="rate" />
-                        <ListTape entries={rateBoard.tape} meId={meId} metric="rate" />
-                      </>
-                    ),
-                  },
-                ]}
-              />
-            )}
-      </SectionCard>
+        {/* animate-fade-up：区块进场淡入（首卡无延迟） */}
+        <SectionCard className="animate-fade-up">
+          {lb.byRate.length === 0
+            ? (
+                <EmptyState description="还没有人开过单">
+                  <Typography.Text type="secondary" className="text-xs">
+                    注册后买第一只基金，就能上榜了
+                  </Typography.Text>
+                </EmptyState>
+              )
+            : (
+                <Tabs
+                  activeKey={metric}
+                  onChange={key => setMetric(key as RankMetric)}
+                  items={[
+                    {
+                      key: "pnl",
+                      label: "总收益榜",
+                      children: (
+                        <>
+                          <Podium leads={pnlBoard.leads} rest={pnlBoard.rest} meId={meId} viewerPublic={viewerPublic} metric="pnl" openPortfolio={openPortfolio} />
+                          <ListTape entries={pnlBoard.tape} meId={meId} viewerPublic={viewerPublic} metric="pnl" openPortfolio={openPortfolio} />
+                        </>
+                      ),
+                    },
+                    {
+                      key: "rate",
+                      label: "收益率榜",
+                      children: (
+                        <>
+                          <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} viewerPublic={viewerPublic} metric="rate" openPortfolio={openPortfolio} />
+                          <ListTape entries={rateBoard.tape} meId={meId} viewerPublic={viewerPublic} metric="rate" openPortfolio={openPortfolio} />
+                        </>
+                      ),
+                    },
+                  ]}
+                />
+              )}
+        </SectionCard>
 
-      {/* 已登录且不在榜单前排（前三名）时：底部钉一行「我的排名」。
+        {/* 已登录且不在榜单前排（前三名）时：底部钉一行「我的排名」。
           前三名本身已在领奖台/条带高亮，再渲染卡片会重复出现两次；
           未上榜（没成交过）时保留引导空态，形成引导闭环。
           交错进场：第 2 卡延迟 60ms（animate-delay 写法的坑见 uno.config.ts） */}
-      {meId !== null && (mine === null || mine.rank > 3) && (
-        <SectionCard title="我的排名" className="animate-fade-up animate-delay-[60ms]">
-          {mine
-            ? (
+        {meId !== null && (mine === null || mine.rank > 3) && (
+          <SectionCard title="我的排名" className="animate-fade-up animate-delay-[60ms]">
+            {mine
+              ? (
                 // 单行卡不走 ListTape 负边距：外卡 body 自己就是左右呼吸
-                <div className="-mx-4 md:-mx-6">
-                  <LeaderRow entry={mine} meId={meId} metric={metric} />
-                </div>
-              )
-            : (
-                <EmptyState description="还没有上榜——下一单就能上榜" />
-              )}
-        </SectionCard>
-      )}
-    </Space>
+                  <div className="-mx-4 md:-mx-6">
+                    <LeaderRow entry={mine} meId={meId} viewerPublic={viewerPublic} metric={metric} openPortfolio={openPortfolio} />
+                  </div>
+                )
+              : (
+                  <EmptyState description="还没有上榜——下一单就能上榜" />
+                )}
+          </SectionCard>
+        )}
+      </Space>
+    </>
   );
 }

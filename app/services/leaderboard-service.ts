@@ -29,6 +29,7 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardView> {
     .select({
       userId: user.id,
       username: user.username,
+      portfolioPublic: user.portfolioPublic,
       cash: account.cash,
       initialCash: account.initialCash,
       totalCheckin: account.totalCheckin,
@@ -114,6 +115,7 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardView> {
       // 收益率榜据此把此人排除）
       investedCents: investedByUser.get(u.userId) ?? 0,
       hasTrades: tradedUserIds.has(u.userId),
+      portfolioPublic: u.portfolioPublic === 1,
     };
   });
 

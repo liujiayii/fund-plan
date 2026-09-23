@@ -24,6 +24,7 @@ function mk(over: Partial<Parameters<typeof computeLeaderboard>[0][number]>) {
     totalCheckinCents: 0,
     investedCents: 0,
     hasTrades: true,
+    portfolioPublic: false,
     ...over,
   };
 }
