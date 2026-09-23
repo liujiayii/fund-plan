@@ -93,6 +93,45 @@ export function nextTradingDay(date: string, knownTradingDays?: Set<string>): st
 }
 
 /**
+ * 返回严格早于 date 的上一个交易日。
+ * 最多向前找 30 天，避免节假日表异常导致死循环（与 nextTradingDay 对称）。
+ */
+export function prevTradingDay(date: string, knownTradingDays?: Set<string>): string {
+  let cursor = dayjs(date).subtract(1, "day");
+  for (let i = 0; i < 30; i++) {
+    const s = cursor.format("YYYY-MM-DD");
+    if (isTradingDay(s, knownTradingDays))
+      return s;
+    cursor = cursor.subtract(1, "day");
+  }
+  // 理论不可达；真发生说明节假日表被写坏了
+  throw new Error(`未能在 30 天内找到 ${date} 之前的交易日，请检查节假日表`);
+}
+
+/**
+ * 返回「最后一个已收盘的交易日」（北京时间口径），用于**取数窗口的右端**。
+ *
+ * 为什么需要它（2026-09-23 线上实测）：东财 push2his 在盘中会把当天的**实时价**
+ * 当作一根 K 线返回，而基准线缓存 TTL 是 7 天——盘中抓一次，那根会跳动的
+ * 盘中价就被冻结在缓存里整整一周，且与基金线末端（cron 20:30 口径）错位。
+ * 所以盘中一律把右端退到上一个交易日。
+ *
+ * 边界口径：`≥ 15:00` 即算「当天已收盘」（收盘价 15:00 整已定），
+ * 这与下单口径 `resolveConfirmDate`（15:00 整算「之后」、吃次日净值）**刻意不同**：
+ * 那是「这笔委托按哪天的净值成交」的规则，这是「哪天的行情已经定性」的事实。
+ */
+export function lastClosedTradingDay(
+  nowUtc: Date,
+  knownTradingDays?: Set<string>,
+): string {
+  const bj = toBeijing(nowUtc);
+  const today = bj.format("YYYY-MM-DD");
+  if (bj.hour() >= TRADE_CUTOFF_HOUR && isTradingDay(today, knownTradingDays))
+    return today;
+  return prevTradingDay(today, knownTradingDays);
+}
+
+/**
  * 计算订单的确认日（即成交所用净值的日期），落实真实 T+1 规则：
  *   - 交易日 15:00（北京）前下单 → 用当日净值
  *   - 交易日 15:00 及以后 / 周末 / 节假日下单 → 用下一交易日净值

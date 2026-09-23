@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { fund } from "~/db/schema";
 import { roundInt, yuanToCents } from "~/domain/money";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
+import { lastClosedTradingDay } from "~/domain/trading-calendar";
 
 /**
  * 东方财富公开接口封装：搜索、档案、历史净值、全量列表兜底。
@@ -841,6 +842,7 @@ export interface IndexNavPoint {
  * @param env Worker 环境，提供 KV
  * @param secid 如 "1.000300"（沪深300），"1.000001"（上证综指）
  * @param days 取最近多少天
+ * @param now 取数时刻（默认当前）。注入是为了覆盖「盘中 / 盘后」两种窗口
  * 失败降级顺序：陈旧兜底缓存（无 TTL 的 last-known-good）→ 空数组
  * （基准线不画，不阻塞详情页）。
  */
@@ -848,6 +850,7 @@ export async function fetchIndexNav(
   env: Env,
   secid: string,
   days: number,
+  now: Date = new Date(),
 ): Promise<IndexNavPoint[]> {
   const cacheKey = `fund:index:${secid}:${days}`;
   // 陈旧兜底 key：无过期，成功时随主缓存一起双写，只在拉取失败时救场
@@ -901,8 +904,11 @@ export async function fetchIndexNav(
   };
 
   try {
-    const ed = dayjs().format("YYYYMMDD");
-    const sd = dayjs().subtract(days, "day").format("YYYYMMDD");
+    // 右端取「最后已收盘的交易日」：盘中抓取会把当天实时价当 K 线返回，
+    // 被 7 天 TTL 冻住（2026-09-23 线上实测），且与基金线末端错位
+    const edDay = lastClosedTradingDay(now);
+    const ed = dayjs(edDay).format("YYYYMMDD");
+    const sd = dayjs(edDay).subtract(days, "day").format("YYYYMMDD");
     const url
       = `https://push2his.eastmoney.com/api/qt/stock/kline/get`
         + `?secid=${encodeURIComponent(secid)}&fields1=f1,f2,f3`

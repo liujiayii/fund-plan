@@ -654,6 +654,26 @@ describe("fetchIndexNav 沪深300", () => {
     );
     expect(await fetchIndexNav(fakeEnv(), "1.000300", 30)).toEqual([]);
   });
+
+  // 2026-09-23 新增：窗口右端不能再取「今天」——盘中抓取会把当天实时价
+  // 写进 7 天缓存并冻结。右端改用「最后已收盘的交易日」。
+  it("盘中取数：窗口右端是上一个交易日，不是今天", async () => {
+    const spy = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify(indexResp)),
+    );
+    vi.stubGlobal("fetch", spy);
+    // 2026-09-23 周三 北京 14:00（盘中）= UTC 06:00
+    await fetchIndexNav(
+      fakeEnv(),
+      "1.000300",
+      30,
+      new Date("2026-09-23T06:00:00Z"),
+    );
+    const url = String(spy.mock.calls[0][0]);
+    expect(url).toContain("end=20260922");
+    expect(url).toContain("beg=20260823");
+  });
 });
 
 // ---------------------------------------------------------------------------

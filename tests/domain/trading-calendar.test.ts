@@ -3,7 +3,9 @@ import {
   CN_HOLIDAYS,
   countDays,
   isTradingDay,
+  lastClosedTradingDay,
   nextTradingDay,
+  prevTradingDay,
   resolveConfirmDate,
   toBeijing,
 } from "~/domain/trading-calendar";
@@ -122,6 +124,57 @@ describe("trading-calendar 交易日历", () => {
     it("UTC 加 8 小时", () => {
       const b = toBeijing(new Date("2026-08-24T06:00:00Z"));
       expect(b.format("YYYY-MM-DD HH:mm")).toBe("2026-08-24 14:00");
+    });
+  });
+
+  describe("prevTradingDay 上一交易日", () => {
+    it("周一的上一个交易日是上周五（跳过周末）", () => {
+      expect(prevTradingDay("2026-08-24")).toBe("2026-08-21");
+    });
+
+    it("严格返回「之前」的日期，不返回当天", () => {
+      expect(prevTradingDay("2026-08-25")).not.toBe("2026-08-25");
+    });
+
+    it("跳过节假日（2026-09-25 中秋休市）", () => {
+      // 2026-09-26 周六往前：09-25 是中秋 → 09-24 周四
+      expect(prevTradingDay("2026-09-26")).toBe("2026-09-24");
+    });
+  });
+
+  /**
+   * 基准线取数窗口的右端。盘中抓指数会把「当天实时价」写进长 TTL 缓存
+   * 并冻结住（2026-09-23 线上实测：7 天缓存里躺着当天的盘中值），
+   * 所以窗口右端一律取「最后已收盘的交易日」。
+   */
+  describe("lastClosedTradingDay 取数窗口右端", () => {
+    it("交易日盘中 → 上一个交易日", () => {
+      // 2026-09-23 周三 北京 14:00 = UTC 06:00
+      expect(lastClosedTradingDay(new Date("2026-09-23T06:00:00Z")))
+        .toBe("2026-09-22");
+    });
+
+    it("交易日 15:00 后 → 当天（收盘价已定，取它更新鲜）", () => {
+      // 北京 15:30 = UTC 07:30
+      expect(lastClosedTradingDay(new Date("2026-09-23T07:30:00Z")))
+        .toBe("2026-09-23");
+    });
+
+    it("恰好 15:00 整 → 当天（与下单口径的「15:00 算之后」不同，见函数注释）", () => {
+      expect(lastClosedTradingDay(new Date("2026-09-23T07:00:00Z")))
+        .toBe("2026-09-23");
+    });
+
+    it("周末 → 上一个交易日（并跳过中秋）", () => {
+      // 2026-09-26 周六 北京 10:00 = UTC 02:00
+      expect(lastClosedTradingDay(new Date("2026-09-26T02:00:00Z")))
+        .toBe("2026-09-24");
+    });
+
+    it("节假日当天 → 节前最后一个交易日", () => {
+      // 2026-10-01 国庆 北京 20:00 = UTC 12:00
+      expect(lastClosedTradingDay(new Date("2026-10-01T12:00:00Z")))
+        .toBe("2026-09-30");
     });
   });
 });
