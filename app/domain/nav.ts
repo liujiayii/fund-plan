@@ -21,9 +21,9 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: "/", label: "首页" },
   { key: "/master", label: "主理人的盘" },
-  // 低估定投计划紧跟主理人的盘：两者讲的是同一个人同一批单子（那页是全景、
+  // 低估指数定投计划紧跟主理人的盘：两者讲的是同一个人同一批单子（那页是全景、
   // 这页是每周一期的实盘复盘），读者看完一个自然想看另一个
-  { key: "/plan", label: "低估定投计划" },
+  { key: "/plan", label: "低估指数定投计划" },
   { key: "/leaderboard", label: "排行榜" },
   { key: "/funds", label: "基金" },
   // 工具页也进侧栏：侧栏在每个页面都渲染，给它一个导航项等于给这一页全站内链

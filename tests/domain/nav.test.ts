@@ -63,7 +63,7 @@ describe("resolveSelectedKey", () => {
     expect(resolveSelectedKey("/tools/fee-calculator", NAV_ITEMS)).toBe("/tools/fee-calculator");
   });
 
-  it("低估定投计划挂进导航，且不吞掉「主理人的盘」的高亮", () => {
+  it("低估指数定投计划挂进导航，且不吞掉「主理人的盘」的高亮", () => {
     expect(NAV_ITEMS.some(i => i.key === "/plan")).toBe(true);
     expect(resolveSelectedKey("/plan", NAV_ITEMS)).toBe("/plan");
     // /plan 与 /master 是平级页，谁都不该是对方的前缀
