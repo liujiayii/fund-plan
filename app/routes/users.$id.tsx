@@ -53,6 +53,7 @@ export default function PublicUserPortfolio({ loaderData }: Route.ComponentProps
     <UserPortfolioReadonly
       detail={detail}
       profit={profit}
+      visibility="public"
       header={(
         <>
           <div>

@@ -30,11 +30,14 @@ export function UserPortfolioReadonly({
   detail,
   profit,
   header,
+  visibility = "private",
 }: {
   detail: Pick<AdminUserDetail, "user" | "portfolio" | "orders" | "pendingBuyCents" | "plans">;
   profit: ProfitDetailView;
   /** 标题区（用户名、说明、返回按钮）。盘面本身不猜是 admin 还是公开页 */
   header: ReactNode;
+  /** public 时总览卡不展示总资产与可用余额（排行榜承诺不公示这两项） */
+  visibility?: "private" | "public";
 }) {
   const { user, portfolio, orders, pendingBuyCents, plans } = detail;
   const { summary, holdings } = portfolio;
@@ -66,6 +69,7 @@ export function UserPortfolioReadonly({
           totalDepositedCents={profit.totalDepositedCents}
           investedCents={profit.investedCents}
           pendingBuyCents={pendingBuyCents}
+          visibility={visibility}
         />
       </SectionCard>
 
