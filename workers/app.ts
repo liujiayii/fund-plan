@@ -2,9 +2,9 @@ import { createContext, createRequestHandler, RouterContextProvider } from "reac
 import { getDb } from "../app/db/client";
 import {
   ANON_CACHE_STALE_MAX_SEC,
-  ANON_CACHEABLE_PATHS,
   anonCacheFreshness,
   isAnonCacheablePage,
+  isAnonCacheablePath,
 } from "../app/domain/anon-page-cache";
 import { pageCacheControl } from "../app/domain/page-cache-header";
 import { isPageVisit, parseVisitorId, visitorCookie } from "../app/domain/visit";
@@ -237,11 +237,11 @@ export default {
       return existingVid ? response : withCookie(response, visitorCookie(vid));
     }
 
-    // 非页面导航的白名单 GET（curl / 监控 / 爬虫 / 17ce 探测节点）：
+    // 非页面导航的可缓存 GET（curl / 监控 / 爬虫 / 17ce 探测节点）：
     // 匿名页同样走边缘缓存——它们要的 HTML 与游客视角一模一样，
     // 直连实时 SSR 会被多节点并发压垮 D1，探测结果也失真
     const url = new URL(request.url);
-    if (request.method === "GET" && ANON_CACHEABLE_PATHS.has(url.pathname)) {
+    if (request.method === "GET" && isAnonCacheablePath(url.pathname)) {
       return serveAnonCached(request, env, ctx);
     }
 

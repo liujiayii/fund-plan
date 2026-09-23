@@ -30,6 +30,7 @@ import {
   ensureFund,
   fetchAssetAllocation,
   fetchBonusHistory,
+  fetchFundBasic,
   fetchFundDetail,
   fetchFundPosition,
   fetchIndexNav,
@@ -141,7 +142,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // 沪深300 基准线：拉不到返回空数组，组件内传 undefined 即不画基准线（彩蛋，可砍）
   // 稳健档新增：资产配置 / 历史分红 / 基金经理详情 / 投资风格
   // （fund-data.ts 里有各接口字段名的实测注记）
-  const [detail, position, indexNav, allocation, bonus, manager, investStyle, siblings] = await Promise.all([
+  //
+  // 赎回状态单独从档案（fetchFundBasic）取：它只有 FundMNNBasicInformation 有，
+  // 而 detail 是 7 天档、basic 是 3 天档——塞进 detail 会与旁边的「申购状态」
+  // （来自 D1）时间差对不上。这里基本必命中 ensureFund 刚写下的缓存，不多打网络。
+  const [detail, position, indexNav, allocation, bonus, manager, investStyle, basic, siblings] = await Promise.all([
     fetchFundDetail(env, code),
     fetchFundPosition(env, code),
     fetchIndexNav(env, "1.000300", 400),
@@ -149,6 +154,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     fetchBonusHistory(env, code),
     fetchManagerInfo(env, code),
     fetchInvestStyle(env, code),
+    fetchFundBasic(env, code),
     // 同类基金内链：爬虫顺着它走到其它基金页，也给用户"接着看"的出口。
     // 与东财那批并行（一条 D1 查询，不额外占关键路径）
     listSiblingFunds(db, { code, type: f.type, limit: 6 }),
@@ -185,6 +191,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     periodReturns,
     backtest,
     detail,
+    redeemStatus: basic?.redeemStatus ?? "",
     position,
     indexNav,
     allocation,
@@ -386,7 +393,7 @@ export default function FundDetail({ loaderData }: Route.ComponentProps) {
           {/* 投资风格：FundMNTagList 换源后的真文本（补-1）；detail.investStyle
               恒空串，留在兜底链里无妨 */}
           <DataRow label="投资风格" value={loaderData.investStyle || loaderData.detail.investStyle || "—"} />
-          <DataRow label="赎回状态" value={loaderData.detail.redeemStatus || "—"} />
+          <DataRow label="赎回状态" value={loaderData.redeemStatus || "—"} />
           <DataRow label="基金公司" value={loaderData.detail.company || "—"} />
           <DataRow label="成立日期" value={loaderData.detail.estabDate || "—"} />
           <DataRow
