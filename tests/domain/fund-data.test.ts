@@ -1111,8 +1111,8 @@ describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
     ]);
     const env = fakeEnv(kv);
     // 与 funds.$code loader 同序：ensureFund 先落档案（fetchFundBasic），再并发拉各卡。
-    // ⚠️ 别改成一把并发——fetchFundDetail 内部也会调 fetchFundBasic，并发冷启动会把
-    // 同一个 basic key 写两遍（顺序是写次数的一部分）
+    // 并发段里的 fetchFundBasic（页面为「赎回状态」额外取一次）会命中上面刚写下的
+    // 缓存，不再额外写 basic key——所以下面那条 key 列表断言是 7 个而不是 8 个
     await fetchFundBasic(env, "000001");
     await Promise.all([
       fetchFundDetail(env, "000001"),
@@ -1121,6 +1121,7 @@ describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
       fetchBonusHistory(env, "000001"),
       fetchManagerInfo(env, "000001"),
       fetchInvestStyle(env, "000001"),
+      fetchFundBasic(env, "000001"),
       fetchIndexNav(env, "1.000300", 400),
     ]);
     return kv._puts;
