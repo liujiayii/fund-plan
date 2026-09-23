@@ -270,6 +270,28 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 的 postinstall（不放行则二进制不下载、git 钩子装不上）。`trustPolicyExclude`
 豁免了 `semver@6.3.1`（pnpm 误判，考证见 `docs/development.md`）。
 
+### 边缘拉东财：降级路径的纪律（2026-09-23 实测）
+
+`push2his`（沪深300 基准线）从 CF 边缘**基本打不通**：线上实测单发 HTTP 成功率
+**~4%**（7 个批次 6 败 1 成），失败是快速连接重置；本机直连 >98%。`lsjz`（基金
+净值）的失败形态不同——是**我们自己的 8s 超时**（`AbortError`）。
+
+⇒ **重试救不了它**（4 次重试只把一轮抬到 ~14%），`fetchIndexNav` 的 stale 兜底
+是必需品而非保险；要根治得换源或离线预抓写 KV（尚未做）。改相关代码的三条纪律：
+
+- **HTTP 200 但 `data` 为空 = 失败**，与抛异常走同一条兜底；日志分层（有兜底 →
+  `warn`，无兜底 → `error`）。注意 `console.error(msg, err)` 会被 CF 日志管线
+  **丢掉 err 的 message、只留 stack**，关键原因要 `String(err)` 拼进模板。
+- 长历史回填有闸门 `fund.nav_backfilled_at`（`domain/nav-backfill`，记 6 小时）：
+  光看「行数 < 60」对**上市不足 60 个交易日的新基金**永久成立（实测 028439
+  上游仅 50 行），会退化成每次访问都拉 3 页东财。基金页 loader 已改调
+  `ensureNavHistory`，别再写内联副本。
+- 基准线取数窗口右端用 `lastClosedTradingDay`（见下节节假日表的消费方）：
+  盘中抓到的当天实时价会被 7 天 TTL 冻在缓存里。
+
+详细实测表、探针手法与坑（KV 60s 边缘读缓存、`wrangler tail` 本机不通且会留下
+孤儿子进程）见 `docs/development.md` 的「边缘拉东财」一节。
+
 ## 代码风格
 
 `@antfu/eslint-config`，**双引号 + 分号 + 2 空格缩进**。
@@ -320,8 +342,10 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 ## 交易日历需每年更新
 
 `app/domain/trading-calendar.ts` 的 `CN_HOLIDAYS` 是硬编码节假日表，每年需人工更新。
-**消费方有两处**：撮合（`resolveConfirmDate` 算 T+1 确认日）与定投（`nextRunDate`
-算下次执行日——2026-09-07 起定投执行日也校准到交易日，周末/节假日不再下单）。
+**消费方有三处**：撮合（`resolveConfirmDate` 算 T+1 确认日）、定投（`nextRunDate`
+算下次执行日——2026-09-07 起定投执行日也校准到交易日，周末/节假日不再下单）、
+基准线取数窗口（`lastClosedTradingDay` 算「最后已收盘的交易日」，做
+`fetchIndexNav` 的窗口右端；口径与撮合刻意不同，见函数注释）。
 表漏了某天会导致定投在该日多生成一单（会在下个交易日被撮合）。
 兜底：撮合时把 `fund_nav` 的净值日期序列作为 `knownTradingDays` 传入——
 有净值的那天必然是交易日，可反向校正遗漏（定投的 `nextRunDate` 目前未接
