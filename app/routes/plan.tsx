@@ -6,6 +6,7 @@ import { PlanBuysCard } from "~/components/PlanBuysCard";
 import { MethodCurve, TriVenn } from "~/components/PlanDiagrams";
 import { AdminNotReady } from "~/components/PortfolioView";
 import { NavButton } from "~/components/ui/NavButton";
+import { Reveal } from "~/components/ui/Reveal";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { buildPlanMeta, pageMeta } from "~/domain/seo";
 import { toBeijing } from "~/domain/trading-calendar";
@@ -116,6 +117,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
  *      左栏自然剩下三百多像素空白；这次是两块**同构内容**并排，谁也不比谁空。
  *      移动端仍是一列（UnoCSS 的 md 断点，见 responsive 约定）
  *
+ * 2026-09-23 主人三选一定稿「光学玻璃」画法：图框从内井（`bg-well`）换成**图版**
+ * （`.fp-plate`，宪法 §2.6）——材料更深、多一道顶边内高光，图从玻璃卡上「沉下去」
+ * 一层。同一块图版兼作入场编排的闸门（`Reveal`）与悬停微动的宿主（`fp-plate-hover`）。
+ *
  * 间距用 className 从外面给：并排时两列靠 grid 的 gap，堆叠时才要 mt-*，
  * 间距是版式的事，组件自己不该替调用方决定。
  */
@@ -140,15 +145,19 @@ function PhilosophyBlock({
     <div className={`flex flex-col ${className ?? ""}`}>
       <div className="mb-2 text-[16px] font-semibold text-ink">{title}</div>
       <p className="mt-0 mb-3 flex-1 text-[14px] leading-relaxed text-muted">{children}</p>
-      <div
+      {/* 图版（宪法 §2.6 的 .fp-plate）：比内井更沉的一级材料，图从玻璃卡上「沉下去」一层。
+          它同时是入场编排的闸门（Reveal）——服务端出来的 HTML 里没有闸门类，
+          爬虫与无 JS 用户读到的就是画好的图。
+          fp-plate-hover 是悬停微动（宪法 §5）：只提亮与 3% 缩放，不位移 */}
+      <Reveal
         className={
           wide
-            ? "mx-auto w-full max-w-[692px] rounded-[12px] bg-well p-4"
-            : "mx-auto w-full max-w-[552px] rounded-[12px] bg-well p-4"
+            ? "fp-plate fp-plate-hover mx-auto w-full max-w-[692px] p-4"
+            : "fp-plate fp-plate-hover mx-auto w-full max-w-[552px] p-4"
         }
       >
         {diagram}
-      </div>
+      </Reveal>
     </div>
   );
 }

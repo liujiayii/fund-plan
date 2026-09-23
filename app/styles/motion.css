@@ -1,0 +1,140 @@
+/**
+ * 图版编排动效（宪法 §5 的「图版入场编排」与「图版悬停微动」的唯一落地处）。
+ *
+ * 为什么单独一份文件：它是**动效层**，不是材料层。混进 liquid-glass.css 会让那份
+ * 文件名不副实（那是「玻璃材料」的宪法原文落地处）；与 podium.css 同类——工具类
+ * 扛不住的专门场景各自成文。import 顺序见 root.tsx：必须排在 responsive.css **之前**，
+ * 因为 §7「动效无障碍」的 prefers-reduced-motion 关断要靠 source-order 赢平局。
+ *
+ * 消费方只有一个：`app/components/ui/Reveal.tsx`（挂 `fp-reveal` / `is-play`）
+ * 与 `app/components/PlanDiagrams.tsx`（图上的 fp-fig-* 类）。
+ *
+ * 三条纪律（宪法 §5 原文，别在这里破）：
+ *   1. 只动 opacity / transform / stroke-dashoffset —— 合成层友好，不碰 filter 与布局
+ *   2. 一次性：进视口播一次、播完解除观察，不循环（循环的只有色雾）
+ *   3. **入场只碰 opacity / transform**，悬停就只碰 stroke-opacity 与内层包裹组的
+ *      transform —— 两个动效抢同一个属性，CSS 会静默吃掉其中一个（动画胜过普通声明）
+ *
+ * 交错延迟写在组件的 inline style 上（`animationDelay`）：inline 优先级高过本文件里
+ * `animation` 简写对 delay 的重置，这也是 uno.config.ts 那条 `animate-delay-[Nms]`
+ * 注释里踩过的坑——简写会把 delay 抹成 0。
+ */
+
+/* ══════════ keyframes ══════════ */
+
+/* 浮起：透明度 + 上移 7 用户单位。与 uno 的 fade-up 同款度量（8px 是页面级、
+   图内用 7 单位 ≈ 图上 9px），语义上更「贴在自己的位置上浮起来」 */
+@keyframes fp-fig-rise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 弹出：棱镜与宝石用「收小再张开」，比淡入更有「被点亮」的意味 */
+@keyframes fp-fig-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.74);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 描线：从整条隐藏到完整画出。dasharray / dashoffset 的初值由 Reveal 组件在
+   客户端量出路径长度后写到 inline style 上（浏览器量，不手算贝塞尔） */
+@keyframes fp-fig-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ══════════ 入场编排：未播时停在 from 态 ══════════ */
+
+/* ⚠️ 这条只作用于挂了 fp-reveal 的容器——SSR 的 HTML 里没有这个类，
+   所以爬虫与无 JS 用户看到的是**画好的图**（宪法 §5 第 2 条） */
+.fp-reveal .fp-fig-aura,
+.fp-reveal .fp-fig-area,
+.fp-reveal .fp-fig-sheet,
+.fp-reveal .fp-fig-lens,
+.fp-reveal .fp-fig-gem,
+.fp-reveal .fp-fig-late,
+.fp-reveal .fp-fig-label {
+  opacity: 0;
+}
+
+/* ⚠️ fill-mode 一律 both（不是 forwards）：延迟那段时间元素必须停在 from 态，
+   否则它会先以原样闪一下、等延迟到了再从 0 重播（第一版就是这样，逐帧截图抓到的） */
+.fp-reveal.is-play .fp-fig-aura {
+  animation: fp-fig-rise 900ms var(--fp-ease) both;
+}
+
+.fp-reveal.is-play .fp-fig-area {
+  animation: fp-fig-rise 700ms var(--fp-ease) 100ms both;
+}
+
+.fp-reveal.is-play .fp-fig-sheet {
+  animation: fp-fig-rise 620ms var(--fp-ease) both;
+}
+
+.fp-reveal.is-play [data-fp-draw] {
+  animation: fp-fig-draw 1100ms var(--fp-ease) 200ms both;
+}
+
+.fp-reveal.is-play .fp-fig-lens {
+  animation: fp-fig-pop 520ms var(--fp-ease) 560ms both;
+}
+
+.fp-reveal.is-play .fp-fig-label {
+  animation: fp-fig-rise 620ms var(--fp-ease) 820ms both;
+}
+
+.fp-reveal.is-play .fp-fig-gem {
+  animation: fp-fig-pop 460ms var(--fp-ease) 1000ms both;
+}
+
+.fp-reveal.is-play .fp-fig-late {
+  animation: fp-fig-rise 620ms var(--fp-ease) 1240ms both;
+}
+
+/* ══════════ 悬停微动（宪法 §5：240ms，只碰入场不碰的属性）══════════ */
+
+/* 三片玻璃的软辉光提亮一档。**不写静止值**——静止值来自 SVG 的 strokeOpacity，
+   两种画法（实心雾圈 / 描边圈）本该不同，写死就把它抹平了；
+   悬停值取一个比两者都亮的数，读起来都是「亮起来了」 */
+.fp-plate-hover .fp-fig-glow {
+  transition: stroke-opacity var(--fp-duration-base) var(--fp-ease);
+}
+
+.fp-plate-hover:hover .fp-fig-glow {
+  stroke-opacity: 0.3;
+}
+
+/* 标签胶囊的描边提亮 */
+.fp-plate-hover .fp-fig-pill {
+  transition: stroke-opacity var(--fp-duration-base) var(--fp-ease);
+}
+
+.fp-plate-hover:hover .fp-fig-pill {
+  stroke-opacity: 0.6;
+}
+
+/* 棱镜放大 3%：包一层专职缩放的 <g>（transform-box: fill-box 让原点落在它自己的
+   包围盒中心），这样既不与入场的 pop 抢 transform，也与 animate-float 的位移互不干扰 */
+.fp-plate-hover .fp-fig-lens-zoom {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform var(--fp-duration-base) var(--fp-ease);
+}
+
+.fp-plate-hover:hover .fp-fig-lens-zoom {
+  transform: scale(1.03);
+}

@@ -133,4 +133,47 @@ describe("液态玻璃宪法守卫", () => {
 
     expect([...used].filter(v => !defined.has(v)).sort()).toEqual([]);
   });
+
+  it("图版（宪法 §2.6）落地在 liquid-glass.css，且必须是扁的", () => {
+    // 2026-09-23 新增的材料档：装「一整块图」的深底 + 顶边内高光。
+    // 它是**扁材料**——没有 backdrop-filter，因此不计入 §6 的玻璃节点预算；
+    // 一旦有人给它加模糊，这条会红（那会同时打破 §2.6 与 §6 两条）
+    const css = readFileSync(GLASS_CSS, "utf8");
+    expect(css).toContain(".fp-plate {");
+    const start = css.indexOf(".fp-plate {");
+    const block = css.slice(start, css.indexOf("}", start));
+    expect(block).not.toMatch(/backdrop-filter/);
+  });
+
+  it("图版编排动效（宪法 §5）：动效在 motion.css、关断在 responsive.css、一处不漏", () => {
+    const motion = readFileSync(path.join(APP_DIR, "styles/motion.css"), "utf8");
+    // 三条 keyframe + 未播态的闸门 + 播放态
+    expect(motion).toContain("@keyframes fp-fig-rise");
+    expect(motion).toContain("@keyframes fp-fig-pop");
+    expect(motion).toContain("@keyframes fp-fig-draw");
+    expect(motion).toContain(".fp-reveal .fp-fig-aura");
+    expect(motion).toContain(".fp-reveal.is-play .fp-fig-sheet");
+    // 动效层不许出现模糊材料（那是 liquid-glass.css 的特权，§7 的 import 顺序也是为此）
+    expect(motion).not.toMatch(/backdrop-filter/);
+
+    // 最要紧的一条不变量：motion.css 里出现的**每一个动效类**都必须在
+    // responsive.css 的减动效块里有对应关断——漏一个，用户关掉动效后
+    // 那一块就会永远停在 opacity: 0（图缺一块，而且看着像渲染 bug）
+    const responsive = readFileSync(path.join(APP_DIR, "styles/responsive.css"), "utf8");
+    const figClasses = new Set(
+      [...motion.matchAll(/\.(fp-fig-[a-z-]+)/g)].map(m => m[1]!),
+    );
+    expect(figClasses.size).toBeGreaterThanOrEqual(8);
+    expect([...figClasses].filter(c => !responsive.includes(c)).sort()).toEqual([]);
+  });
+
+  it("入场编排不许把「未播态」写进 SSR：闸门只在客户端挂", () => {
+    // 这一页的 SEO 是刻意做到首屏 HTML 里的：若 fp-reveal 出现在服务端渲染的
+    // 标签里，爬虫与无 JS 用户看到的就是三张空图。约束落在组件内部
+    // （classList 只在 useLayoutEffect 里加），这里钉住「它确实是这么写的」
+    const reveal = readFileSync(path.join(APP_DIR, "components/ui/Reveal.tsx"), "utf8");
+    expect(reveal).toContain("useIsoLayoutEffect");
+    expect(reveal).not.toMatch(/className=\{[^}]*fp-reveal/);
+    expect(reveal).not.toMatch(/className=\{[^}]*is-play/);
+  });
 });

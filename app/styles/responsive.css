@@ -435,6 +435,42 @@
   .fp-podium-drop {
     animation: none;
   }
+
+  /* 图版编排（motion.css）：不是「不播动画」，而是**内容直出**——
+     未播时的 opacity: 0 要一并还原，否则关掉动效等于把图藏了。
+     两段必须列全（与 motion.css 的类名一一对应），漏一个就是一张缺块的图 */
+  .fp-reveal .fp-fig-aura,
+  .fp-reveal .fp-fig-area,
+  .fp-reveal .fp-fig-sheet,
+  .fp-reveal .fp-fig-lens,
+  .fp-reveal .fp-fig-gem,
+  .fp-reveal .fp-fig-late,
+  .fp-reveal .fp-fig-label {
+    opacity: 1;
+    animation: none;
+  }
+
+  .fp-reveal.is-play [data-fp-draw] {
+    animation: none;
+  }
+
+  /* 描线路径的 dasharray 是客户端量完写在 inline style 上的（优先级压过本文件），
+     所以这里必须 !important —— 用户中途改系统设置（页面早已武装）时靠它兜底 */
+  [data-fp-draw] {
+    stroke-dasharray: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+
+  /* 悬停微动：缩放不动（尺寸变化在晕动症下最难受），提亮保留但去掉过渡（瞬时变色不产生运动错觉） */
+  .fp-plate-hover .fp-fig-glow,
+  .fp-plate-hover .fp-fig-pill,
+  .fp-plate-hover .fp-fig-lens-zoom {
+    transition: none;
+  }
+
+  .fp-plate-hover:hover .fp-fig-lens-zoom {
+    transform: none;
+  }
 }
 
 /* ══════════ 9. 登录/注册分屏（visual-refresh spec §6.3）══════════ */
