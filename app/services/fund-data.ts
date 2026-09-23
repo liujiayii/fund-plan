@@ -60,30 +60,46 @@ export interface NavRow {
   growthRate: number;
 }
 
-/** KV 缓存时长（秒） */
+/**
+ * KV 缓存时长（秒）。
+ *
+ * ⚠️ 这里的每个 key 都是**一次 KV 写**，而免费版只有 1000 次写/天（读有 10 万次），
+ * 是全站最紧的一环。基金详情页对**每一只基金**写 7 个 key，所以这些 TTL 直接决定
+ * 「一天能承接多少只基金」：7 个 1 天档时约 137 只/天就把额度写满，而线上库已有
+ * 113 只基金、sitemap 又把它们全量投给爬虫——2026-09-23 收到了 CF 的 50% 告警。
+ *
+ * 分档原则：**按数据自身的变动频率**分，不按页面上的重要性分：
+ *  - 1 天档：档案（费率/申赎状态会随公告变，且与 ensureFund 的 1 天节奏同源）、
+ *    搜索词（key 空间无界，每个词一条）、排行榜（用户直接看数字，要新鲜）
+ *  - 7 天档：季度级披露（重仓股、资产配置、规模）与几乎只增不改的历史
+ *    （分红、基金经理、投资风格）
+ *
+ * 改动后的写量预算由 `tests/domain/fund-data.test.ts` 的「写入预算守卫」钉住：
+ * 单只基金冷启动的均摊成本必须 ≤ 2 次/天。
+ */
 const CACHE_TTL = {
-  /** 搜索结果缓存 1 天 */
+  /** 搜索结果缓存 1 天（key 空间无界：一个搜索词一条，别把存量垃圾也拉长） */
   search: 86400,
-  /** 基金档案缓存 1 天 */
+  /** 基金档案缓存 1 天：费率/申赎状态最易变，且与 ensureFund 的 1 天过期判断同节奏 */
   basic: 86400,
   /** 全量列表缓存 7 天 */
   fundList: 604800,
-  /** 排行榜缓存 1 天（按 类型×周期 组合，12 key/天） */
+  /** 排行榜缓存 1 天（按 类型×周期 组合，12 key/天——量小，且用户直接看数字） */
   rank: 86400,
-  /** 基金详情（经理/规模/成立日）缓存 1 天 */
-  detail: 86400,
-  /** 重仓股缓存 1 天（position:v2 三视图共用） */
-  position: 86400,
+  /** 基金详情（经理/规模/成立日）缓存 7 天：规模按季披露 */
+  detail: 604800,
+  /** 重仓股缓存 7 天（position:v2 三视图共用）：按季披露 */
+  position: 604800,
   /** 指数净值（沪深300）缓存 7 天（400 天序列做基准线，旧几天无妨） */
   index: 604800,
-  /** 资产配置缓存 1 天 */
-  alloc: 86400,
-  /** 历史分红缓存 1 天 */
-  bonus: 86400,
-  /** 基金经理详情缓存 1 天 */
-  manager: 86400,
-  /** 投资风格缓存 1 天 */
-  style: 86400,
+  /** 资产配置缓存 7 天：按季披露 */
+  alloc: 604800,
+  /** 历史分红缓存 7 天：只增量追加 */
+  bonus: 604800,
+  /** 基金经理详情缓存 7 天：换人极少见 */
+  manager: 604800,
+  /** 投资风格缓存 7 天：几乎不变 */
+  style: 604800,
 } as const;
 
 /**
@@ -179,6 +195,29 @@ async function fetchWithRetry(
 }
 
 /**
+ * KV「尽力而为」写入：缓存是旁路，写失败绝不能连累已经抓到的数据。
+ *
+ * 2026-09-23 收到 CF「Workers KV 操作数接近每日上限」告警后加固。额度打满时
+ * KV 的 put 会 429 抛错，而原先 put 与抓取共用同一个 try/catch ——写缓存失败
+ * 被当成抓取失败，页面把已经到手的数据全丢了：详情页 7 张卡集体变空、库里还没有
+ * 的基金直接 404。写不进去最多是下次再回源，不该是这个后果。
+ */
+async function safePut(
+  env: Env,
+  key: string,
+  value: string,
+  options?: KVNamespacePutOptions,
+): Promise<void> {
+  try {
+    await env.KV.put(key, value, options);
+  }
+  catch (err) {
+    // 留痕：额度打满与上游挂掉是两回事，线上要能一眼区分
+    console.error(`[fund-data] KV 写入 ${key} 失败（缓存本轮不落盘，数据照常返回）：`, err);
+  }
+}
+
+/**
  * 百分比字符串 → 万分之整数。
  * 支持 "1.50%"、"1.5"、"--"（异常回退 0）。
  */
@@ -250,7 +289,7 @@ export async function searchFunds(
         type: d.FundBaseInfo?.FTYPE ?? "",
       }));
 
-    await env.KV.put(cacheKey, JSON.stringify(items), {
+    await safePut(env, cacheKey, JSON.stringify(items), {
       expirationTtl: CACHE_TTL.search,
     });
     return items;
@@ -318,7 +357,7 @@ export async function fetchFundBasic(
       redeemStatus: d.SHZT ?? "",
     };
 
-    await env.KV.put(cacheKey, JSON.stringify(basic), {
+    await safePut(env, cacheKey, JSON.stringify(basic), {
       expirationTtl: CACHE_TTL.basic,
     });
     return basic;
@@ -522,7 +561,7 @@ export async function fetchAllFunds(env: Env): Promise<FundSearchItem[]> {
     const text = await resp.text();
     const list = parseFundListJs(text);
     if (list.length > 0) {
-      await env.KV.put(cacheKey, JSON.stringify(list), {
+      await safePut(env, cacheKey, JSON.stringify(list), {
         expirationTtl: CACHE_TTL.fundList,
       });
     }
@@ -656,7 +695,7 @@ export async function fetchFundRank(
     }
 
     if (items.length > 0) {
-      await env.KV.put(cacheKey, JSON.stringify(items), {
+      await safePut(env, cacheKey, JSON.stringify(items), {
         expirationTtl: CACHE_TTL.rank,
       });
     }
@@ -743,7 +782,7 @@ export async function fetchFundDetail(
       // 稳健档新增（2026-09-08 实测）：
       // 评级字段是 RLEVEL_SZ（上证星级，"--" 或 "1"~"5"；移动端 H5 的
       // fundGrade 就是读它拼「上证X星评级」），计划预期的 JJPJ 不存在；
-      // 拉不到给 0，页面显示 —，缓存 1 天后自然刷新带上真值。
+      // 拉不到给 0，页面显示 —，缓存到期后自然刷新带上真值（7 天档，见 CACHE_TTL）。
       // 钳到 0~5（CodeRabbit 评审）：负数会让 "★".repeat 在渲染期抛
       // RangeError 白屏，超界值会把概况卡撑破——钳在解析处，消费方全保护
       rating: Math.min(5, Math.max(0, Number(d.RLEVEL_SZ) || 0)),
@@ -754,7 +793,7 @@ export async function fetchFundDetail(
       redeemStatus: basic?.redeemStatus ?? "",
     };
 
-    await env.KV.put(cacheKey, JSON.stringify(detail), {
+    await safePut(env, cacheKey, JSON.stringify(detail), {
       expirationTtl: CACHE_TTL.detail,
     });
     return detail;
@@ -808,7 +847,7 @@ export async function fetchFundPosition(
 ): Promise<FundPositionView> {
   // v2：返回形状从裸 FundStock[] 改为 {stocks,bonds,industries}——
   // 旧缓存（fund:position:{code}）存的是数组，形状不兼容必须换 key；
-  // 旧 key 一天后 TTL 自然过期，无需清理
+  // 旧 key 到期后 TTL 自然过期，无需清理（7 天档，见 CACHE_TTL）
   const cacheKey = `fund:position:v2:${code}`;
   const cached = await env.KV.get(cacheKey);
   if (cached) {
@@ -892,7 +931,7 @@ export async function fetchFundPosition(
 
     const view: FundPositionView = { stocks, bonds, industries };
     if (stocks.length + bonds.length + industries.length > 0) {
-      await env.KV.put(cacheKey, JSON.stringify(view), {
+      await safePut(env, cacheKey, JSON.stringify(view), {
         expirationTtl: CACHE_TTL.position,
       });
     }
@@ -1027,10 +1066,10 @@ export async function fetchIndexNav(
 
     // 双写：主缓存（带 TTL）+ 陈旧兜底（无过期）。
     // KV 无原子批量，两笔分开写最坏差一拍，兜底旧一个周期而已，无害
-    await env.KV.put(cacheKey, JSON.stringify(rows), {
+    await safePut(env, cacheKey, JSON.stringify(rows), {
       expirationTtl: CACHE_TTL.index,
     });
-    await env.KV.put(staleKey, JSON.stringify(rows));
+    await safePut(env, staleKey, JSON.stringify(rows));
     return rows;
   }
   catch (err) {
@@ -1097,7 +1136,7 @@ export async function fetchAssetAllocation(
         alloc = null;
     }
 
-    await env.KV.put(cacheKey, JSON.stringify(alloc), {
+    await safePut(env, cacheKey, JSON.stringify(alloc), {
       expirationTtl: CACHE_TTL.alloc,
     });
     return alloc;
@@ -1164,7 +1203,7 @@ export async function fetchBonusHistory(
       }));
 
     // 空列表也写缓存：防止无分红基金每次访问都打网络
-    await env.KV.put(cacheKey, JSON.stringify(items), {
+    await safePut(env, cacheKey, JSON.stringify(items), {
       expirationTtl: CACHE_TTL.bonus,
     });
     return items;
@@ -1243,7 +1282,7 @@ export async function fetchManagerInfo(
     // 空列表也写缓存（"[]" 哨兵）：无现任经理的基金（如指数基金）不写的话
     // 每次访问都实打东财，违背顶注「全部走 KV 缓存」铁律
     // （评审修正，与 bonus/style 的空哨兵范式对齐）
-    await env.KV.put(cacheKey, JSON.stringify(items), {
+    await safePut(env, cacheKey, JSON.stringify(items), {
       expirationTtl: CACHE_TTL.manager,
     });
     return items;
@@ -1301,8 +1340,8 @@ export async function fetchInvestStyle(
     const style = styles.length > 0 ? styles.join(" / ") : null;
     // 无风格也写缓存：JSON.stringify(null) 就是 "null"，作哨兵——不写的话
     // 这类基金每次访问都实打东财，违背顶注「全部走 KV 缓存」铁律。
-    // TTL 1 天：次日缓存过期有一次重试拿真值的机会（哨兵方案的附带优点）
-    await env.KV.put(cacheKey, JSON.stringify(style), {
+    // TTL 7 天：到期后有一次重试拿真值的机会（哨兵方案的附带优点）
+    await safePut(env, cacheKey, JSON.stringify(style), {
       expirationTtl: CACHE_TTL.style,
     });
     return style;

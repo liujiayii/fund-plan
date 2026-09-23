@@ -24,22 +24,55 @@ import {
  * 字段名与结构与线上一致。
  */
 
-/** 造一个假的 KV，行为足够真：存得进、取得出、能过期 */
-function fakeKV() {
+/** 假 KV 的一次写：留档 key 与选项，写预算守卫要靠它检查 TTL */
+interface FakePut {
+  key: string;
+  value: string;
+  options?: KVNamespacePutOptions;
+}
+
+/**
+ * 造一个假的 KV，行为足够真：存得进、取得出、能过期。
+ *
+ * `putFails` 模拟额度打满（免费版 1000 写/天，超了与 API 均返回 429 并抛错）——
+ * 用来钉死「写缓存失败绝不能连累已经抓到的数据」。
+ */
+function fakeKV(opts: { putFails?: boolean } = {}) {
   const store = new Map<string, string>();
+  const puts: FakePut[] = [];
   return {
     async get(key: string) {
       return store.get(key) ?? null;
     },
-    async put(key: string, value: string) {
+    async put(key: string, value: string, options?: KVNamespacePutOptions) {
+      if (opts.putFails)
+        throw new Error("KV PUT failed: 429 Too Many Requests");
       store.set(key, value);
+      puts.push({ key, value, options });
     },
     _store: store,
-  } as unknown as KVNamespace & { _store: Map<string, string> };
+    _puts: puts,
+  } as unknown as KVNamespace & { _store: Map<string, string>; _puts: FakePut[] };
 }
 
 function fakeEnv(kv = fakeKV()) {
   return { KV: kv } as unknown as Env;
+}
+
+/**
+ * 按 URL 关键字路由的 fetch 桩：一个测试要同时喂多个接口时用
+ * （基金页一次并发打 7 个东财接口，每个响应形状都不同）。
+ */
+function stubRoutedFetch(routes: [match: string, payload: unknown][]) {
+  const spy = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const hit = routes.find(([match]) => url.includes(match));
+    if (!hit)
+      throw new Error(`未打桩的 URL：${url}`);
+    return new Response(JSON.stringify(hit[1]));
+  });
+  vi.stubGlobal("fetch", spy);
+  return spy;
 }
 
 afterEach(() => {
@@ -986,5 +1019,112 @@ describe("fetchInvestStyle 投资风格", () => {
       }),
     );
     expect(await fetchInvestStyle(fakeEnv(), "000001")).toBeNull();
+  });
+});
+
+/**
+ * KV 写入预算守卫。
+ *
+ * 背景（2026-09-23）：收到 CF「Workers KV 操作数接近每日上限」告警。免费版写额度
+ * 只有 1000 次/天（读是 10 万），而基金详情页对**每一只基金**要写 7 个缓存 key；
+ * 线上库已有 113 只基金、sitemap 又把它们全量投给爬虫——单只基金当天被访问一次
+ * 就是 113 × 7 ≈ 791 次写（79% 额度）。所以把「季度级变动」的那几个 key 统一挪到
+ * 7 天档（见 CACHE_TTL 注释），把成本摊成「每只基金每天 ≤ 2 次写」。
+ *
+ * 这条守卫的作用：以后新增缓存 key、或把某个 TTL 改回 1 天，写量会重新爬上去，
+ * 这里先红——逼一次有意识的额度核算，而不是等下一封告警邮件。
+ */
+describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
+  /** 冷启动一次基金页：7 个缓存接口全走一遍，收集各自写下的 key 与 TTL */
+  async function coldStartPuts(): Promise<FakePut[]> {
+    const kv = fakeKV();
+    stubRoutedFetch([
+      ["FundMNNBasicInformation", { Datas: { FCODE: "000001", SHORTNAME: "华夏成长混合", FTYPE: "混合型-灵活", RATE: "0.15%", MINSG: "10", RISKLEVEL: "3", SGZT: "开放申购", SHZT: "开放赎回" } }],
+      ["FundMNDetailInformation", { Datas: { FCODE: "000001", JJJL: "张三" } }],
+      // 重仓股与指数 kline：空数据不落缓存（写了读的时候也是白读），所以给真数据
+      ["FundMNInverstPosition", { Datas: { fundStocks: [{ GPDM: "600519", GPJC: "贵州茅台", JZBL: "9.50" }] } }],
+      ["FundMNSectorAllocation", { Datas: [] }],
+      ["push2his.eastmoney.com", { data: { klines: ["2026-09-22,3900.00,3910.50"] } }],
+      // 以下四个「无数据也落哨兵」，正是它们让无数据基金不必每次访问都打东财
+      ["FundMNAssetAllocationNew", { Datas: null }],
+      ["FundMNBonusDetail", { Datas: null }],
+      ["FundMNMangerList", { Datas: null }],
+      ["FundMNTagList", { Datas: null }],
+    ]);
+    const env = fakeEnv(kv);
+    // 与 funds.$code loader 同序：ensureFund 先落档案（fetchFundBasic），再并发拉各卡。
+    // ⚠️ 别改成一把并发——fetchFundDetail 内部也会调 fetchFundBasic，并发冷启动会把
+    // 同一个 basic key 写两遍（顺序是写次数的一部分）
+    await fetchFundBasic(env, "000001");
+    await Promise.all([
+      fetchFundDetail(env, "000001"),
+      fetchFundPosition(env, "000001"),
+      fetchAssetAllocation(env, "000001"),
+      fetchBonusHistory(env, "000001"),
+      fetchManagerInfo(env, "000001"),
+      fetchInvestStyle(env, "000001"),
+      fetchIndexNav(env, "1.000300", 400),
+    ]);
+    return kv._puts;
+  }
+
+  it("单只基金冷启动一次：7 个 key 各写一遍，均摊到每天 ≤ 2 次", async () => {
+    const puts = await coldStartPuts();
+    // 指数是全局 key（所有基金共用一份序列），不按基金计
+    const perFund = puts.filter(p => !p.key.startsWith("fund:index:"));
+    expect(perFund.map(p => p.key).sort()).toEqual([
+      "fund:alloc:000001",
+      "fund:basic:000001",
+      "fund:bonus:000001",
+      "fund:detail:000001",
+      "fund:manager:000001",
+      "fund:position:v2:000001",
+      "fund:style:000001",
+    ]);
+
+    // 每写一次 key，均摊成本 = 1 / TTL 天数。无 TTL（永久 key）会算出 NaN 让断言
+    // 直接红——永久缓存是个设计决定，得先来改这条守卫、再改代码
+    const perDay = perFund.reduce(
+      (sum, p) => sum + 1 / ((p.options?.expirationTtl ?? 0) / 86400),
+      0,
+    );
+    expect(perDay).toBeLessThanOrEqual(2);
+  });
+});
+
+/**
+ * 写失败不能丢数据（额度打满的现场）。
+ *
+ * 免费版额度用尽后 KV 的 put 会 429 抛错。原先 put 与「抓东财」共用同一个 try/catch，
+ * 写缓存失败被当成抓取失败：详情页 7 张卡集体变空、库里没有的基金直接 404——
+ * 明明数据已经到手了。缓存是旁路，写不进去最多下次再回源。
+ */
+describe("KV 写入失败（额度打满 429）不影响返回的数据", () => {
+  const basicResp = { Datas: { FCODE: "000001", SHORTNAME: "华夏成长混合", FTYPE: "混合型-灵活", RATE: "0.15%", MINSG: "10", RISKLEVEL: "3", SGZT: "开放申购", SHZT: "开放赎回" } };
+
+  it("fetchFundBasic 仍返回档案（否则新基金页会 404）", async () => {
+    stubRoutedFetch([["FundMNNBasicInformation", basicResp]]);
+    const basic = await fetchFundBasic(fakeEnv(fakeKV({ putFails: true })), "000001");
+    expect(basic?.name).toBe("华夏成长混合");
+    expect(basic?.purchaseRate).toBe(15);
+  });
+
+  it("fetchFundDetail 仍返回详情（否则概况卡整张空）", async () => {
+    stubRoutedFetch([
+      ["FundMNNBasicInformation", basicResp],
+      ["FundMNDetailInformation", { Datas: { FCODE: "000001", JJJL: "张三", JJGS: "华夏基金" } }],
+    ]);
+    const detail = await fetchFundDetail(fakeEnv(fakeKV({ putFails: true })), "000001");
+    expect(detail?.manager).toBe("张三");
+    expect(detail?.company).toBe("华夏基金");
+  });
+
+  it("写失败留一条日志（线上能一眼看出是额度问题、不是东财挂了）", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    stubRoutedFetch([["FundMNNBasicInformation", basicResp]]);
+    await fetchFundBasic(fakeEnv(fakeKV({ putFails: true })), "000001");
+    const logged = errSpy.mock.calls.map(c => String(c[0])).join("\n");
+    errSpy.mockRestore();
+    expect(logged).toContain("KV 写入");
   });
 });
