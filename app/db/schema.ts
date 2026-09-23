@@ -52,6 +52,12 @@ export const fund = sqliteTable("fund", {
    * （不论成败都记，失败基金也不该被每个访客反复重试）。
    */
   navBackfilledAt: integer("nav_backfilled_at"),
+  /**
+   * 上次回填尝试针对的行数目标（即当时的 minRows）；NULL = 迁移前的旧戳。
+   * 存在的理由：基金页要 60 行、回测页要 250 行，共用一只基金——只看时间戳
+   * 会让基金页那次尝试把回测页连坐 6 小时（回测静默按短窗口算）。
+   */
+  navBackfilledTarget: integer("nav_backfilled_target"),
 });
 
 /** 历史净值（撮合与画图的数据底座；所有用户共用一份） */

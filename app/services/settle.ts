@@ -56,13 +56,24 @@ export interface SettleResult {
   failed: number;
 }
 
-/** syncNav 的结果：synced 是行数，funds/empty 是基金数（供判定「整轮是否全灭」） */
+/**
+ * 一轮净值同步的总预算。
+ *
+ * cron 的墙钟硬顶是 **15 分钟**（官方 limits），同一次 invocation 里还要跑
+ * 撮合与清理会话。超预算就收手，剩余基金留给 21:30 那轮幂等重跑——
+ * 宁可让几只基金顺延，也别让整次 invocation 被砍、连撮合都跑不成。
+ */
+export const NAV_SYNC_BUDGET_MS = 8 * 60 * 1000;
+
+/** syncNav 的结果：synced 是行数，funds/attempted/empty 是基金数（供判定「整轮是否全灭」） */
 export interface SyncNavResult {
   /** 实际写入的净值行数 */
   synced: number;
-  /** 本轮涉及的基金数 */
+  /** 本轮清单里的基金数 */
   funds: number;
-  /** 其中一条净值都没拉到的基金数 */
+  /** 真正尝试过（进入循环）的基金数；超预算提前收手时 < funds */
+  attempted: number;
+  /** 尝试过的基金里，一条净值都没拉到的只数 */
   empty: number;
 }
 
@@ -71,11 +82,13 @@ export interface SyncNavResult {
  * @param db Drizzle 实例
  * @param env Worker 环境（取 KV 与网络）
  * @param fundCodes 指定基金；不传则同步所有「有持仓或有待确认订单」的基金
+ * @param budgetMs 总时间预算，超出即收手（测试可注入 0 来验证短路）
  */
 export async function syncNav(
   db: Db,
   env: Env,
   fundCodes?: string[],
+  budgetMs = NAV_SYNC_BUDGET_MS,
 ): Promise<SyncNavResult> {
   let codes = fundCodes;
 
@@ -98,7 +111,18 @@ export async function syncNav(
 
   let synced = 0;
   let empty = 0;
+  let attempted = 0;
+  const startedAt = Date.now();
   for (const code of codes) {
+    // 超预算就收手：剩余基金留给 21:30 那轮幂等重跑，别把 15 分钟墙钟耗光
+    // （用 >= 而非 >：预算给 0 时也要立刻收手，便于测试与「禁用同步」的语义）
+    if (Date.now() - startedAt >= budgetMs) {
+      console.warn(
+        `[settle] 净值同步超出 ${Math.round(budgetMs / 1000)}s 预算，本轮中止（剩余基金留给下一次触发）`,
+      );
+      break;
+    }
+    attempted++;
     // 用「没人等」档的超时：跨境 lsjz 单页实测 7~8s，正贴着默认的 8s 线，
     // 一页被掐断就是今晚订单整晚顺延。cron 没有用户在等，给足余量
     const rows = await fetchNavHistory(env, code, 30, NAV_FETCH_TIMEOUT_BACKGROUND_MS);
@@ -133,13 +157,15 @@ export async function syncNav(
   // 整轮全灭：订单会整体顺延到次日，而 per-fund 的 warn 埋在细节里看不出后果。
   // 这是**钱路**上的失败（撮合靠它拿当日净值），必须给一条 error 级的汇总信号
   // （2026-09-23 补；跨境链路不稳时真有这种夜晚）。
-  if (codes.length > 0 && empty === codes.length) {
+  // 口径是「尝试过的全拉空」，且带上代码——别把「我们库里代码不对」误诊成
+  // 「东财挂了」，也别对原因下断言。
+  if (attempted > 0 && empty === attempted) {
     console.error(
-      `[settle] 本轮 ${codes.length} 只基金净值全部拉空——今晚订单会全部顺延，请确认东财接口可用性`,
+      `[settle] 本轮尝试的 ${attempted} 只基金净值全部拉空——今晚订单会全部顺延（基金：${codes.slice(0, attempted).join("、")}）`,
     );
   }
 
-  return { synced, funds: codes.length, empty };
+  return { synced, funds: codes.length, attempted, empty };
 }
 
 /**

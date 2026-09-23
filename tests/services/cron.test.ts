@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "~/db/client";
 import {
   account,
@@ -60,6 +60,13 @@ async function seedFund(code = "000001") {
 }
 
 beforeEach(resetAll);
+
+// console spy 必须在每个用例后收掉：断言先炸时 mockRestore 不会执行，
+// 静音的 console 会泄漏给同文件后续用例（2026-09-23 对抗 review 指出）
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("Cron：定投扫描 → 撮合 全链路", () => {
   it("定投扫描生成的单子，能被当晚撮合确认", async () => {
@@ -270,6 +277,33 @@ describe("Cron：定投扫描 → 撮合 全链路", () => {
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("全部拉空"));
 
     errSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("超出总预算就收手：剩余基金留给下一次触发，不把整次 invocation 耗光", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const { placeBuyOrder } = await import("~/services/trade");
+    await placeBuyOrder(db, env, {
+      userId: reg.id,
+      fundCode: "000001",
+      amountCents: 100000,
+      now: new Date("2026-08-24T06:00:00Z"),
+    });
+
+    const spy = vi.fn(async () => {
+      throw new Error("should not be called");
+    });
+    vi.stubGlobal("fetch", spy);
+
+    // 预算给 0：进循环前就该判定超预算，一次上游都不打
+    const s = await syncNav(db, env, undefined, 0);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(s.attempted).toBe(0);
+    expect(s.empty).toBe(0);
+
     vi.unstubAllGlobals();
   });
 

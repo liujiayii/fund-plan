@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "765f150d-c78f-4563-b6dd-bc7e6da2f8c0",
+  "id": "5558b001-58c1-4dd9-b67c-3300254775b5",
   "prevId": "13bf1088-b337-4b30-ba13-394d3f08250e",
   "tables": {
     "account": {
@@ -364,6 +364,13 @@
         },
         "nav_backfilled_at": {
           "name": "nav_backfilled_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "nav_backfilled_target": {
+          "name": "nav_backfilled_target",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,

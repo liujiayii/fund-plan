@@ -21,6 +21,7 @@ import { StatBig } from "~/components/ui/StatBig";
 import { account } from "~/db/schema";
 import { DCA_BACKTEST_AMOUNT_CENTS, runDcaBacktest, toBacktestSeries } from "~/domain/dca-backtest";
 import { navToDisplay, rateToPercent } from "~/domain/money";
+import { NAV_BACKFILL_MIN_ROWS } from "~/domain/nav-backfill";
 import { calcPeriodReturns } from "~/domain/performance";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { buildFundBreadcrumbJsonLd, buildFundMeta, pageMeta } from "~/domain/seo";
@@ -35,6 +36,7 @@ import {
   fetchInvestStyle,
   fetchManagerInfo,
   NAV_FETCH_TIMEOUT_BACKGROUND_MS,
+  NAV_PAGE_BACKFILL_MAX_ROWS,
 } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
 import { ensureNavHistory, getDcaPlans, getHoldingBrief, getNavSeries } from "~/services/portfolio-service";
@@ -78,26 +80,27 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw new Response(`没找到基金 ${code}`, { status: 404 });
   }
 
-  // 净值：历史残缺就回填一批（首访 400 天，覆盖近 1 年阶段涨幅）。
-  // 口径与闸门全在 ensureNavHistory：除了「少于 60 条」，还带一道
-  // `fund.nav_backfilled_at` 记忆化——否则**上市不足 60 个交易日的新基金**
-  // 每次访问都会白拉 3 页东财（实测 028439）。别再往这里塞内联副本。
-  //
-  // 分两档（2026-09-23 实测边缘打 lsjz 单页要 7~8s，不该让访客替全网付）：
+  // 净值：历史残缺（< 60 条）才值得补一批。口径与闸门全在 ensureNavHistory
+  // （阈值 + `fund.nav_backfilled_at/target` 记忆化）；这里只决定「等不等」：
   //   库里一行都没有 → 这一页没数据就是废页（爬虫只来一次），等它拉完；
   //   有数据但残缺   → 现有序列先渲染，回填丢 waitUntil（下次访问/爬虫就齐了）。
+  //
+  // 两档都用**一次翻页波**的行数上限 + 没人等档的超时：实测边缘打 lsjz 单页
+  // 7~8s，而平台给 waitUntil 的预算是**响应后 30 秒**（同请求内共享，超时直接
+  // 掐死且什么都没写），400 行 = 20 页 = 5 个串行阶段 ≈ 35~60s 必然超；
+  // 长历史回填留给回测页（用户主动等）与后续 cron/队列（见 NAV_PAGE_BACKFILL_MAX_ROWS）。
   let series = await getNavSeries(db, code);
-  if (series.length === 0) {
-    series = await ensureNavHistory(db, env, code);
-  }
-  else {
-    ctx.waitUntil(
-      ensureNavHistory(db, env, code, {
-        timeoutMs: NAV_FETCH_TIMEOUT_BACKGROUND_MS,
-      }).catch(err =>
-        console.error(`[funds] ${code} 后台回填净值失败：`, err)),
-    );
-  }
+  const backfillOpts = {
+    maxRows: NAV_PAGE_BACKFILL_MAX_ROWS,
+    timeoutMs: NAV_FETCH_TIMEOUT_BACKGROUND_MS,
+  };
+  // hadSeries 取「await 之前」的状态：库里本来为空时上面那次 await 已经把活干完，
+  // 不该再挂一个多余的后台任务（闸门会拦住，但白跑两次 D1 读）
+  const hadSeries = series.length > 0;
+  if (!hadSeries)
+    series = await ensureNavHistory(db, env, code, backfillOpts);
+  // 历史完整（线上 106/113 只）就别白发任务：那会白跑两次 D1 读才发现闸门不放行
+  const backgroundBackfill = hadSeries && series.length < NAV_BACKFILL_MIN_ROWS;
 
   // 登录用户才需要：现金（买入抽屉）、自选态、已持有速览（顶部标识与两格统计）、
   // 该基金定投计划（定投抽屉）——四查互相独立，一波并行
@@ -150,6 +153,16 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     // 与东财那批并行（一条 D1 查询，不额外占关键路径）
     listSiblingFunds(db, { code, type: f.type, limit: 6 }),
   ]);
+
+  // 后台回填注册在 8 路东财请求**之后**：免费版并发出站连接只有 6 个
+  // （第 7 个排队，不是在等响应头就算），提前注册会让回填的翻页波和页面
+  // 自己的 8 路抢连接，把回填推向 30s 预算边界
+  if (backgroundBackfill) {
+    ctx.waitUntil(
+      ensureNavHistory(db, env, code, backfillOpts).catch(err =>
+        console.error(`[funds] ${code} 后台回填净值失败：`, err)),
+    );
+  }
 
   return {
     fund: {

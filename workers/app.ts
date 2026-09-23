@@ -284,7 +284,7 @@ export default {
       try {
         const s = await syncNav(db, env);
         console.log(
-          `[cron] 净值同步完成：写入 ${s.synced} 条（${s.funds} 只基金，拉空 ${s.empty} 只）`,
+          `[cron] 净值同步完成：写入 ${s.synced} 条（尝试 ${s.attempted}/${s.funds} 只，拉空 ${s.empty} 只）`,
         );
       }
       catch (err) {

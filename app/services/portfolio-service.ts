@@ -14,7 +14,11 @@ import {
   shareLot,
   transactions,
 } from "~/db/schema";
-import { NAV_BACKFILL_MIN_ROWS, shouldBackfillNav } from "~/domain/nav-backfill";
+import {
+  NAV_BACKFILL_MIN_ROWS,
+  navBackfillStamp,
+  shouldBackfillNav,
+} from "~/domain/nav-backfill";
 import {
 
   costBasisNavScaled,
@@ -424,13 +428,14 @@ export async function ensureNavHistory(
 
   const f = await db.query.fund.findFirst({
     where: eq(fund.code, fundCode),
-    columns: { navBackfilledAt: true },
+    columns: { navBackfilledAt: true, navBackfilledTarget: true },
   });
   const now = Date.now();
   if (
     !shouldBackfillNav({
       rowCount: series.length,
       backfilledAt: f?.navBackfilledAt ?? null,
+      backfilledTarget: f?.navBackfilledTarget ?? null,
       now,
       minRows,
     })
@@ -438,37 +443,61 @@ export async function ensureNavHistory(
     return series;
   }
 
-  // 先记账再拉：中途崩了也不会让下一个访客接着重试（代价只是少拉一次，
-  // 下个窗口自会再试）。失败也记——「上游拉不到」不该退化成按访问次数重试
-  await db
-    .update(fund)
-    .set({ navBackfilledAt: now })
-    .where(eq(fund.code, fundCode));
+  /** 记一笔尝试：成功记满间隔，失败只记短冷却（见 domain/nav-backfill 的论证） */
+  const stamp = async (succeeded: boolean) => {
+    const s = navBackfillStamp({ now, minRows, succeeded });
+    await db
+      .update(fund)
+      .set({ navBackfilledAt: s.at, navBackfilledTarget: s.target })
+      .where(eq(fund.code, fundCode));
+  };
 
-  const rows = await fetchNavHistory(env, fundCode, maxRows, timeoutMs);
+  let rows: Awaited<ReturnType<typeof fetchNavHistory>> = [];
+  try {
+    rows = await fetchNavHistory(env, fundCode, maxRows, timeoutMs);
+  }
+  catch (err) {
+    // 回填是「锦上添花」，绝不该把页面或后台任务打成异常
+    console.error(`[nav] 基金 ${fundCode} 回填净值异常：`, err);
+  }
+
   if (rows.length === 0) {
-    // 东财拉不到（节假日抖动/接口挂了）就把现有的还给调用方，别把页面打成 500
+    // 东财拉不到（节假日抖动/链路慢）：把现有的还给调用方，并只锁短冷却——
+    // 拉取失败不写任何数据，若按成功档锁满 6 小时就成了「数据停一天」
+    await stamp(false);
     return series;
   }
-  // 400 行走 batch 一次提交：逐条 await 是 400 次 D1 往返（约 1.2s），
-  // 会把触发回填的那次页面访问拖到超时边缘。onConflictDoNothing 保持
-  // 「已存在的日期不动」语义（与 cron 的 upsert 覆盖策略不同——回填只补洞，
-  // 不覆盖 cron 已写的当日新值）
-  await runBatch(
-    db,
-    rows.map(r =>
-      db
-        .insert(fundNav)
-        .values({
-          fundCode,
-          navDate: r.navDate,
-          unitNav: r.unitNav,
-          accNav: r.accNav,
-          growthRate: r.growthRate,
-        })
-        .onConflictDoNothing(),
-    ),
-  );
+
+  try {
+    // 400 行走 batch 一次提交：逐条 await 是 400 次 D1 往返（约 1.2s），
+    // 会把触发回填的那次页面访问拖到超时边缘。onConflictDoNothing 保持
+    // 「已存在的日期不动」语义（与 cron 的 upsert 覆盖策略不同——回填只补洞，
+    // 不覆盖 cron 已写的当日新值）
+    await runBatch(
+      db,
+      rows.map(r =>
+        db
+          .insert(fundNav)
+          .values({
+            fundCode,
+            navDate: r.navDate,
+            unitNav: r.unitNav,
+            accNav: r.accNav,
+            growthRate: r.growthRate,
+          })
+          .onConflictDoNothing(),
+      ),
+    );
+  }
+  catch (err) {
+    // 落库失败：不记账（下次访问再试一遍，拉取是幂等的）
+    console.error(`[nav] 基金 ${fundCode} 回填落库失败：`, err);
+    return series;
+  }
+
+  // 记账放在真正成功之后（2026-09-23 对抗 review 修正：原先「先记账再拉」
+  // 会在平台掐死后台任务/链路抖动时把闸门白烧 6 小时）
+  await stamp(true);
   return getNavSeries(db, fundCode);
 }
 

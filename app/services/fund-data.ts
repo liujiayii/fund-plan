@@ -123,6 +123,18 @@ export const NAV_FETCH_TIMEOUT_MS = 8000;
  */
 export const NAV_FETCH_TIMEOUT_BACKGROUND_MS = 12000;
 
+/**
+ * 页面侧回填的行数上限 = **一次翻页波**（CONCURRENCY × PAGE_SIZE = 5 × 20）。
+ *
+ * 2026-09-23 对抗 review 修正：原先基金页在 `ctx.waitUntil` 里做 400 行回填
+ * （20 页 = 首页 + 4 波 ≈ 5 个串行阶段），而平台硬顶是 **响应发出后 30 秒**
+ * （所有 waitUntil 共享）、CPU 还与 SSR 共享 Free 档的 10ms——实测 lsjz 单页
+ * 7~8s ⇒ 35~60s，会被平台**掐死且什么都没写**（闸门却已经烧掉）。
+ * 所以页面只补「最近一段」（≤100 行，够补齐新鲜度），长历史（400 行）
+ * 不在请求里做——留给回测页（用户主动等）与后续的 cron/队列任务。
+ */
+export const NAV_PAGE_BACKFILL_MAX_ROWS = 100;
+
 /** 带超时的 fetch，避免 Worker 被慢接口拖死 */
 async function fetchWithTimeout(
   url: string,
@@ -902,7 +914,10 @@ export async function fetchIndexNav(
    * err 的 message、只留 stack（2026-09-23 线上日志实测），那样排障时分不清
    * 「连接被重置」和「我们自己的 8s 超时」。
    */
-  const fallbackToStale = async (reason: string): Promise<IndexNavPoint[]> => {
+  const fallbackToStale = async (
+    reason: string,
+    err?: unknown,
+  ): Promise<IndexNavPoint[]> => {
     let stale: string | null = null;
     try {
       stale = await env.KV.get(staleKey);
@@ -922,8 +937,10 @@ export async function fetchIndexNav(
         /* 兜底也损坏，落到下面报 error */
       }
     }
+    // 原因进模板（CF 日志管线可能只留 stack），原始 err 仍作第二参传下去（保 stack）
     console.error(
       `[fund-data] 指数 ${secid} ${reason}；无兜底数据，本次不画基准线`,
+      err,
     );
     return [];
   };
@@ -942,9 +959,9 @@ export async function fetchIndexNav(
     // "Network connection lost" 且自带 retryable:true），单发必抖。
     // 重试 3 次 + 间隔递增，本地实测把成功率抬到 >98%；
     // 但从 Cloudflare 海外边缘访问时基本打不通（东财对海外数据中心 IP
-    // 不友好）：2026-09-23 线上实测单次 HTTP 成功率仅 ~4%（7 个批次
-    // 6 败 1 成），4 次重试只能把一轮抬到 ~14%——重试救不了它，只是
-    // 让失败别直接砸在访客身上。根治要换源或离线预抓（见开发文档）。
+    // 不友好）：2026-09-23 线上实测**单次 HTTP 成功率仅 ~4%**（7 个批次里
+    // 6 败 1 成反推；4 次重试把一轮抬到 ~14%——两个量纲别混）。重试救不了它，
+    // 只是让失败别直接砸在访客身上；根治要换源或离线预抓（见开发文档）。
     // 所以失败后还要走 stale 兜底。
     const resp = await fetchWithRetry(
       url,
@@ -981,7 +998,7 @@ export async function fetchIndexNav(
   }
   catch (err) {
     // 拉取全灭：退而求其次用上次成功的数据画基准线；冷启动（兜底也没有）才报 error
-    return await fallbackToStale(`拉取失败：${String(err)}`);
+    return await fallbackToStale(`拉取失败：${String(err)}`, err);
   }
 }
 

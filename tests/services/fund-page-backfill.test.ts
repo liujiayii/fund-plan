@@ -38,14 +38,21 @@ function callLoader(code: string, bag: { tasks: Promise<unknown>[] }) {
   } as never);
 }
 
-/** lsjz 可注入延迟与行数；其余东财接口一律回空（页面照常降级渲染） */
+interface StubState {
+  lsjzDone: boolean;
+  lsjzCalls: number;
+}
+
+/** lsjz 可注入延迟/行数/TotalCount；其余东财接口一律回空（页面照常降级渲染） */
 function stubEastmoney(
-  opts: { lsjzDelayMs?: number; navs?: number; state?: { lsjzDone: boolean } } = {},
+  opts: { lsjzDelayMs?: number; navs?: number; totalCount?: number; state?: StubState } = {},
 ) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
       if (url.includes("/f10/lsjz")) {
+        if (opts.state)
+          opts.state.lsjzCalls++;
         if (opts.lsjzDelayMs)
           await new Promise(r => setTimeout(r, opts.lsjzDelayMs));
         if (opts.state)
@@ -53,7 +60,7 @@ function stubEastmoney(
         const n = opts.navs ?? 3;
         return new Response(
           JSON.stringify({
-            TotalCount: n,
+            TotalCount: opts.totalCount ?? n,
             Data: {
               LSJZList: Array.from({ length: n }, (_, i) => ({
                 FSRQ: `2026-09-${String(20 - i).padStart(2, "0")}`,
@@ -118,8 +125,8 @@ describe("基金详情页回填：访客不被回填挡住", () => {
     await seedNavs("028439", ["2026-09-10", "2026-09-11"]);
     // 用「lsjz 什么时候回」这个事实做断言，而不是墙钟阈值——
     // loader 在 lsjz 还没回来时就该已经返回了（真网络下那要等 7~8s）
-    const state = { lsjzDone: false };
-    stubEastmoney({ lsjzDelayMs: 800, state });
+    const state = { lsjzDone: false, lsjzCalls: 0 };
+    stubEastmoney({ lsjzDelayMs: 1500, state });
 
     const bag = { tasks: [] as Promise<unknown>[] };
     const data = (await callLoader("028439", bag)) as { series: unknown[] };
@@ -147,5 +154,46 @@ describe("基金详情页回填：访客不被回填挡住", () => {
 
     expect(data.series).toHaveLength(2);
     expect(bag.tasks).toHaveLength(0);
+  });
+
+  // 2026-09-23 对抗 review 修正的两个钉子（平台硬顶：waitUntil 30s / CPU 10ms）
+  it("历史完整（≥60 行）：连任务都不注册，也不打上游", async () => {
+    await seedFund();
+    await seedNavs(
+      "028439",
+      Array.from({ length: 60 }, (_, i) =>
+        new Date(Date.UTC(2026, 5, 1 + i)).toISOString().slice(0, 10)),
+    );
+    const state = { lsjzDone: false, lsjzCalls: 0 };
+    stubEastmoney({ state });
+
+    const bag = { tasks: [] as Promise<unknown>[] };
+    await callLoader("028439", bag);
+
+    // 线上 106/113 只基金属于这一档：不该白发任务、更不该白读两次 D1
+    expect(bag.tasks).toHaveLength(0);
+    expect(state.lsjzCalls).toBe(0);
+  });
+
+  it("后台回填只翻一波的页数：400 行的长历史不在请求里做", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    await seedNavs("028439", ["2026-09-10", "2026-09-11"]);
+    // 上游声称 400 行 ⇒ 不设上限就会翻 20 页（≈35~60s > waitUntil 的 30s 预算）
+    const state = { lsjzDone: false, lsjzCalls: 0 };
+    stubEastmoney({ navs: 20, totalCount: 400, state });
+
+    const bag = { tasks: [] as Promise<unknown>[] };
+    await callLoader("028439", bag);
+    await Promise.all(bag.tasks);
+
+    // maxRows = NAV_PAGE_BACKFILL_MAX_ROWS(100) ⇒ maxPages = 5 ⇒ 首页 + 一波 4 页
+    expect(state.lsjzCalls).toBeLessThanOrEqual(5);
+    // 后台那波确实落库了（不是「跑了什么都没写」）
+    const rows = await db
+      .select()
+      .from(fundNav)
+      .where(eq(fundNav.fundCode, "028439"));
+    expect(rows.length).toBeGreaterThan(2);
   });
 });
