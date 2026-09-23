@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "~/db/client";
 import { fund, fundNav } from "~/db/schema";
 import {
@@ -64,6 +64,10 @@ async function seedNavs(code: string, dates: string[]) {
 
 describe("ensureNavHistory 回填闸门", () => {
   beforeEach(resetAll);
+  // 下述用例会 stub fetch（部分成功那条），别让它漏给后面的用例
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("记忆新鲜：不碰网络也不插行，直接返回现有序列", async () => {
     const db = getDb(env.DB);
@@ -103,5 +107,90 @@ describe("ensureNavHistory 回填闸门", () => {
     expect(at).toBeGreaterThan(
       before - NAV_BACKFILL_INTERVAL_MS + NAV_BACKFILL_FAILURE_COOLDOWN_MS - 5000,
     );
+  });
+
+  // 2026-09-23 CodeRabbit 评审：原先只判 rows.length === 0，于是「首页 20 行
+  // 到手、后面整波全败」这种部分成功会被记成成功档，把闸门锁满 6 小时——
+  // 库里明明才二十来行，回测页却 6 小时内没人再补
+
+  it("部分成功（中途整波全败）：行照常落库，但只记短冷却", async () => {
+    const db = getDb(env.DB);
+    const code = "123456";
+    await seedFund(code, null);
+    await seedNavs(code, ["2026-09-21"]);
+
+    // 首页 20 行成功、后续整波全败——对应 2026-09-23 实测的跨境链路抖动
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        if (idx > 1)
+          throw new Error("Network connection lost");
+        return new Response(
+          JSON.stringify({
+            TotalCount: 400,
+            Data: {
+              LSJZList: Array.from({ length: 20 }, (_, i) => ({
+                FSRQ: `2026-08-${String(i + 1).padStart(2, "0")}`,
+                DWJZ: "1.0000",
+                LJJZ: "1.0000",
+                JZZZL: "0.5",
+              })),
+            },
+          }),
+        );
+      }),
+    );
+
+    const before = Date.now();
+    await ensureNavHistory(db, env, code);
+
+    // 已到手的部分行照常入库（不完整的只是「没拉全」，不是「数据不可用」）
+    const navRows = await db.select().from(fundNav).where(eq(fundNav.fundCode, code));
+    expect(navRows.length).toBeGreaterThan(1);
+
+    // 但记账走失败档：时间戳被往回拨（成功档记的是 now），只锁 30 分钟
+    const after = await db.query.fund.findFirst({ where: eq(fund.code, code) });
+    expect(after?.navBackfilledTarget).toBe(NAV_BACKFILL_MIN_ROWS);
+    const at = after?.navBackfilledAt ?? 0;
+    expect(at).toBeLessThan(before);
+    expect(at).toBeGreaterThan(
+      before - NAV_BACKFILL_INTERVAL_MS + NAV_BACKFILL_FAILURE_COOLDOWN_MS - 5000,
+    );
+  });
+
+  it("完整拉取：按成功档记账（时间戳记 now，6 小时内不再试）", async () => {
+    const db = getDb(env.DB);
+    const code = "654321";
+    await seedFund(code, null);
+    await seedNavs(code, ["2026-09-21"]);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        return new Response(
+          JSON.stringify({
+            TotalCount: 400,
+            Data: {
+              LSJZList: Array.from({ length: 20 }, (_, i) => ({
+                FSRQ: `2026-0${idx}-${String(i + 1).padStart(2, "0")}`,
+                DWJZ: "1.0000",
+                LJJZ: "1.0000",
+                JZZZL: "0.5",
+              })),
+            },
+          }),
+        );
+      }),
+    );
+
+    // 只想拉 40 行 ⇒ 2 页拉完即完整（完整度与「拉了多少行」无关）
+    await ensureNavHistory(db, env, code, { maxRows: 40 });
+
+    const after = await db.query.fund.findFirst({ where: eq(fund.code, code) });
+    const at = after?.navBackfilledAt ?? 0;
+    // 成功档：时间戳就是「现在」（失败档会被往回拨近 6 小时）
+    expect(Date.now() - at).toBeLessThan(5000);
   });
 });

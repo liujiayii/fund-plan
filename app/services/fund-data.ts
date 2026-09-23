@@ -330,7 +330,24 @@ export async function fetchFundBasic(
 }
 
 /**
- * 拉取历史净值序列（按日期倒序，最新在前）。
+ * 长历史拉取的结果：行 + 「完整度」信号。
+ *
+ * 为什么需要 complete（2026-09-23 CodeRabbit 评审）：翻页中途**一整波全败**时
+ * 会收手并返回已到手的部分行——首页那 20 行也算「非空」。调用方若只看
+ * `rows.length !== 0` 就记「拉取成功」，记忆化闸门就会锁满 6 小时
+ * （NAV_BACKFILL_INTERVAL_MS），而库里其实只有二十来行：回测页这 6 小时里
+ * 静默按短窗口计算。拉取失败只锁短冷却，部分成功同理。
+ *
+ * 完整 = 计划内的页都拿到了（翻完、TotalCount 取尽，或遇到短页 = 上游没有更多）。
+ * 不完整 = 首屏失败，或中途一整波全败。
+ */
+export interface NavHistoryFetch {
+  rows: NavRow[];
+  complete: boolean;
+}
+
+/**
+ * 拉取历史净值序列（按日期倒序，最新在前）+ 完整度信号。
  *
  * ⚠️ 东财 2026 年起对 lsjz 接口加了钳制：**单页最多 20 行**——pageSize 填
  * 30~200 也只回 20 条，≥400 直接回空 `Data`。所以要拿长历史必须翻页：
@@ -345,12 +362,12 @@ export async function fetchFundBasic(
  * `timeoutMs` 是单页超时：有人等着的路径用默认值（失败要快），
  * cron / 页面后台回填传 NAV_FETCH_TIMEOUT_BACKGROUND_MS。
  */
-export async function fetchNavHistory(
+export async function fetchNavHistoryDetailed(
   env: Env,
   code: string,
   wantRows = 60,
   timeoutMs = NAV_FETCH_TIMEOUT_MS,
-): Promise<NavRow[]> {
+): Promise<NavHistoryFetch> {
   /** 接口单页实际上限（实测值；写大无效，写 ≥400 直接回空） */
   const PAGE_SIZE = 20;
   /** 翻页并发波次宽度：一口气全并发容易触发风控（push2his 的教训） */
@@ -396,8 +413,10 @@ export async function fetchNavHistory(
   try {
     // 第 1 页先单独拉：拿 TotalCount 决定还要翻几页
     const first = await fetchPage(1);
+    // 首屏就空：可能上游挂了，也可能这只基金确实没有历史。两种都拿不到
+    // 计划内的页，一律算不完整（调用方按 rows.length === 0 分支）
     if (first.rows.length === 0)
-      return first.rows;
+      return { rows: first.rows, complete: false };
 
     // 需要的总页数：目标条数与接口存量取小（TotalCount 缺失时按首页行数估）
     const total = first.totalCount ?? first.rows.length;
@@ -407,6 +426,8 @@ export async function fetchNavHistory(
     );
 
     const collected = [...first.rows];
+    // 默认完整；只有「中途整波全败」才翻成 false（遇到短页是上游没数据了，仍算完整）
+    let complete = true;
     // 剩余页按波次并发（每波 CONCURRENCY 页），拉完为止
     const restPages: number[] = [];
     for (let p = 2; p <= maxPages; p++)
@@ -427,17 +448,33 @@ export async function fetchNavHistory(
       }
       // 一整波全败 = 上游此刻不可用（跨境链路抖动）。继续翻页只会把超时
       // 一笔笔重复付掉，把 cron / 后台任务的时间预算耗光——收手
-      if (fulfilled === 0)
+      if (fulfilled === 0) {
+        complete = false;
         break;
+      }
       if (shortPage)
         break;
     }
-    return collected;
+    return { rows: collected, complete };
   }
   catch (err) {
     console.error(`[fund-data] 拉取基金 ${code} 净值失败：`, err);
-    return [];
+    return { rows: [], complete: false };
   }
+}
+
+/**
+ * 只要行的薄包装：撮合 cron 等「拉不到就顺延」的调用方用这个
+ * （完整度对它们没有意义）。需要区分「部分成功」的调用方
+ * ——回填闸门——请直接用 fetchNavHistoryDetailed。
+ */
+export async function fetchNavHistory(
+  env: Env,
+  code: string,
+  wantRows = 60,
+  timeoutMs = NAV_FETCH_TIMEOUT_MS,
+): Promise<NavRow[]> {
+  return (await fetchNavHistoryDetailed(env, code, wantRows, timeoutMs)).rows;
 }
 
 /**

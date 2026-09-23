@@ -10,6 +10,7 @@ import {
   fetchInvestStyle,
   fetchManagerInfo,
   fetchNavHistory,
+  fetchNavHistoryDetailed,
   parseFundListJs,
   percentToRate,
   searchFunds,
@@ -340,6 +341,89 @@ describe("fetchNavHistory 历史净值", () => {
     expect(rows).toHaveLength(20); // 首页已到手的照常返回
     // 首页 + 第一波 5 页；之后收手（修前会把剩下 14 页也打完）
     expect(calls).toBe(6);
+  });
+
+  // 2026-09-23 CodeRabbit 评审：调用方必须能分辨「部分成功」——
+  // 否则回填闸门会把「库里只有首页那 20 行」记成「拉取成功」而锁满 6 小时
+
+  /** 造一页 20 行的响应（东财单页上限） */
+  const pageOf20 = (month: string) =>
+    Array.from({ length: 20 }, (_, i) => ({
+      FSRQ: `2026-${month}-${String(i + 1).padStart(2, "0")}`,
+      DWJZ: "1.0000",
+      LJJZ: "1.0000",
+      JZZZL: "0.5",
+    }));
+
+  it("整波全败：返回已到手的部分行，但 complete=false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        if (idx > 1)
+          throw new Error("Network connection lost");
+        return new Response(
+          JSON.stringify({ TotalCount: 400, Data: { LSJZList: pageOf20("03") } }),
+        );
+      }),
+    );
+
+    const r = await fetchNavHistoryDetailed(fakeEnv(), "000001", 400);
+
+    expect(r.rows).toHaveLength(20);
+    expect(r.complete).toBe(false);
+  });
+
+  it("翻完计划页数：complete=true", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        return new Response(
+          JSON.stringify({
+            TotalCount: 400,
+            Data: { LSJZList: pageOf20(String(idx).padStart(2, "0")) },
+          }),
+        );
+      }),
+    );
+
+    const r = await fetchNavHistoryDetailed(fakeEnv(), "000001", 60);
+
+    expect(r.rows).toHaveLength(60);
+    expect(r.complete).toBe(true);
+  });
+
+  it("遇到短页（上游没有更多数据）：仍算完整", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        // 第 2 页只有 10 行 = 后面没数据了（TotalCount 不准时的兜底）
+        const list = idx === 2 ? pageOf20("02").slice(0, 10) : pageOf20("03");
+        return new Response(
+          JSON.stringify({ TotalCount: 400, Data: { LSJZList: list } }),
+        );
+      }),
+    );
+
+    const r = await fetchNavHistoryDetailed(fakeEnv(), "000001", 60);
+
+    expect(r.complete).toBe(true);
+  });
+
+  it("首屏就失败：空行 + complete=false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    );
+
+    const r = await fetchNavHistoryDetailed(fakeEnv(), "000001");
+
+    expect(r.rows).toEqual([]);
+    expect(r.complete).toBe(false);
   });
 
   it("要的条数超过单页上限时自动翻页拼齐（东财 lsjz 单页钳 20 行）", async () => {

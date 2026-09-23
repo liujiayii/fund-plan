@@ -26,7 +26,7 @@ import {
   valuatePortfolio,
 } from "~/domain/portfolio";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
-import { fetchNavHistory, NAV_FETCH_TIMEOUT_MS } from "./fund-data";
+import { fetchNavHistoryDetailed, NAV_FETCH_TIMEOUT_MS } from "./fund-data";
 
 /**
  * 组合读取与估值编排。把 D1 数据喂给领域层的纯函数，产出页面要的视图模型。
@@ -452,14 +452,19 @@ export async function ensureNavHistory(
       .where(eq(fund.code, fundCode));
   };
 
-  let rows: Awaited<ReturnType<typeof fetchNavHistory>> = [];
+  let fetched: Awaited<ReturnType<typeof fetchNavHistoryDetailed>> = {
+    rows: [],
+    complete: false,
+  };
   try {
-    rows = await fetchNavHistory(env, fundCode, maxRows, timeoutMs);
+    // 要「完整度」：整波全败时只拿到部分行，不能按成功档记账（见 fetchNavHistoryDetailed）
+    fetched = await fetchNavHistoryDetailed(env, fundCode, maxRows, timeoutMs);
   }
   catch (err) {
     // 回填是「锦上添花」，绝不该把页面或后台任务打成异常
     console.error(`[nav] 基金 ${fundCode} 回填净值异常：`, err);
   }
+  const { rows, complete } = fetched;
 
   if (rows.length === 0) {
     // 东财拉不到（节假日抖动/链路慢）：把现有的还给调用方，并只锁短冷却——
@@ -496,8 +501,11 @@ export async function ensureNavHistory(
   }
 
   // 记账放在真正成功之后（2026-09-23 对抗 review 修正：原先「先记账再拉」
-  // 会在平台掐死后台任务/链路抖动时把闸门白烧 6 小时）
-  await stamp(true);
+  // 会在平台掐死后台任务/链路抖动时把闸门白烧 6 小时）。
+  // 部分成功（中途一整波全败，只拿到首页那 20 行）同样只锁短冷却——否则库里
+  // 明明才二十来行，回测页却要等满 6 小时才有人再补
+  // （2026-09-23 CodeRabbit 评审：原先只判 rows.length === 0，部分结果被记成成功）
+  await stamp(complete);
   return getNavSeries(db, fundCode);
 }
 
