@@ -46,8 +46,11 @@ export interface FundBasic {
   /**
    * 赎回状态（SHZT，如「开放赎回」）。加法字段：旧 KV 缓存缺省为 undefined。
    * 2026-09-08 实测：SHZT 只在 FundMNNBasicInformation 响应里
-   * （FundMNDetailInformation 没有这个键），所以赎回状态从这里产出，
-   * fetchFundDetail 复用本函数取值。
+   * （FundMNDetailInformation 没有这个键），所以赎回状态从这里产出。
+   *
+   * ⚠️ 它曾经被顺手塞进 7 天档的 detail 缓存里，于是「赎回状态」（冻 7 天）与旁边的
+   * 「申购状态」（来自 D1，3 天档）时间差对不上。现在由基金页 loader 直接读本函数
+   * （2026-09-23 对抗式 review 修正）。
    */
   redeemStatus: string;
 }
@@ -797,8 +800,6 @@ export interface FundDetail {
   rating: number;
   /** 投资风格（如「大盘成长型」）。加法字段，同上 */
   investStyle: string;
-  /** 赎回状态（SHZT，如「开放赎回」）。加法字段，同上 */
-  redeemStatus: string;
 }
 
 export async function fetchFundDetail(
@@ -820,13 +821,7 @@ export async function fetchFundDetail(
     const url
       = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNDetailInformation`
         + `?FCODE=${encodeURIComponent(code)}&deviceid=Wap&plat=Wap&product=EFund&version=6.2.8`;
-    // SHZT（赎回状态）2026-09-08 实测在 FundMNNBasicInformation 而非本接口——
-    // 复用 fetchFundBasic（自带 fund:basic KV，1 天 TTL）补齐。详情页 loader 的
-    // ensureFund 前脚刚刷过它，这里几乎必命中缓存，不新增 KV key 也不多打网络
-    const [resp, basic] = await Promise.all([
-      fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS }),
-      fetchFundBasic(env, code),
-    ]);
+    const resp = await fetchWithTimeout(url, { headers: EM_MOBILE_HEADERS });
     const json = (await resp.json()) as { Datas?: Record<string, string> | null };
     const d = json.Datas;
     if (!d || !d.FCODE)
@@ -852,7 +847,6 @@ export async function fetchFundDetail(
       // 「投资风格」九宫格是一张静态图片，移动端 API 家族无文本源）——
       // 保留两个解析位兜底，当前恒为空串，页面显示 —
       investStyle: d.FUNDINVESTSTYLE ?? d.INVESTSTYLE ?? "",
-      redeemStatus: basic?.redeemStatus ?? "",
     };
 
     await safePut(env, cacheKey, JSON.stringify(detail), {

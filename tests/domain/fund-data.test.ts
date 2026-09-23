@@ -261,7 +261,8 @@ describe("fetchFundBasic 基金档案", () => {
     expect(r!.minPurchaseCents).toBe(1000); // 10 元 → 1000 分
     expect(r!.riskLevel).toBe(4);
     expect(r!.status).toBe("开放申购");
-    expect(r!.redeemStatus).toBe("开放赎回"); // SHZT：2026-09-08 起 FundDetail 复用它
+    // SHZT 是赎回状态的唯一来源；FundDetail 已不含此字段（基金页直接读本函数）
+    expect(r!.redeemStatus).toBe("开放赎回");
   });
 
   it("RATE 缺失时回退用 SOURCERATE", async () => {
@@ -665,30 +666,8 @@ describe("fetchFundDetail 基金详情", () => {
       RLEVEL_SZ: "3",
     },
   };
-  // SHZT（赎回状态）实测在 BasicInformation 响应里，fetchFundDetail 会并发
-  // 复用 fetchFundBasic 补齐——stub 按域名分路喂两份响应
-  const basicResp = {
-    Datas: {
-      FCODE: "000001",
-      SHORTNAME: "华夏成长混合",
-      FTYPE: "混合型-灵活",
-      SOURCERATE: "1.50%",
-      RATE: "0.15%",
-      MINSG: "10",
-      RISKLEVEL: "4",
-      SGZT: "开放申购",
-      SHZT: "开放赎回",
-    },
-  };
-
-  it("解析经理/公司/成立日/规模/基准/费率/评级/赎回状态", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) =>
-        url.includes("FundMNNBasicInformation")
-          ? new Response(JSON.stringify(basicResp))
-          : new Response(JSON.stringify(detailResp))),
-    );
+  it("解析经理/公司/成立日/规模/基准/费率/评级", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(detailResp))));
     const r = await fetchFundDetail(fakeEnv(), "000001");
     expect(r).not.toBeNull();
     expect(r!.manager).toBe("郑晓辉,刘睿聪");
@@ -699,7 +678,18 @@ describe("fetchFundDetail 基金详情", () => {
     expect(r!.mgmtFeeRate).toBe(120); // 1.20% → 万分之 120
     expect(r!.trustFeeRate).toBe(20);
     expect(r!.rating).toBe(3); // RLEVEL_SZ → 上证三星
-    expect(r!.redeemStatus).toBe("开放赎回"); // 取自档案接口的 SHZT
+  });
+
+  it("不再顺带读 basic（赎回状态改由页面直接取档案）：只写自己的 detail key", async () => {
+    const kv = fakeKV();
+    stubRoutedFetch([
+      // basic 的响应必须也给上：否则未打桩的 URL 会抛错、basic 根本写不进去，
+      // 这条用例就成了「假绿」（第一版就是踩了这个坑）
+      ["FundMNNBasicInformation", { Datas: { FCODE: "000001", SHORTNAME: "华夏成长混合", SGZT: "开放申购", SHZT: "开放赎回" } }],
+      ["FundMNDetailInformation", detailResp],
+    ]);
+    await fetchFundDetail(fakeEnv(kv), "000001");
+    expect([...kv._store.keys()]).toEqual(["fund:detail:000001"]);
   });
 
   it("规模 '--' 时 scaleYuan 为 null", async () => {
@@ -715,10 +705,7 @@ describe("fetchFundDetail 基金详情", () => {
     const stubWith = (rlvel: string) =>
       vi.stubGlobal(
         "fetch",
-        vi.fn(async (url: string) =>
-          url.includes("FundMNNBasicInformation")
-            ? new Response(JSON.stringify(basicResp))
-            : new Response(JSON.stringify({ Datas: { ...detailResp.Datas, RLEVEL_SZ: rlvel } }))),
+        vi.fn(async () => new Response(JSON.stringify({ Datas: { ...detailResp.Datas, RLEVEL_SZ: rlvel } }))),
       );
     stubWith("-2");
     expect((await fetchFundDetail(fakeEnv(), "000001"))!.rating).toBe(0);
@@ -1084,13 +1071,15 @@ describe("fetchInvestStyle 投资风格", () => {
 /**
  * 基金页 loader 会调用的全部取数函数（注册表）。
  *
- * 9 个里：7 个各写一个 per-fund key；`ensureFund` 内部写 `fund:basic`（夹具用直接调
- * `fetchFundBasic` 模拟它的效果）；`fetchNavHistory` 只读写 D1、不碰 KV。
+ * 10 个里：7 个各写一个 per-fund key；`ensureFund` 与并发段里的 `fetchFundBasic`
+ * 都指向 `fund:basic`（后者基本必命中前者的缓存，夹具只用直接调 `fetchFundBasic`
+ * 模拟一次写）；`fetchNavHistory` 只读写 D1、不碰 KV。
  */
 const FUND_PAGE_FETCHERS = [
   "ensureFund",
   "fetchAssetAllocation",
   "fetchBonusHistory",
+  "fetchFundBasic",
   "fetchFundDetail",
   "fetchFundPosition",
   "fetchIndexNav",
