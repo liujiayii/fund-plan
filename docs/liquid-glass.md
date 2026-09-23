@@ -162,8 +162,18 @@ antd 的 `colorTextDescription` / `colorTextLabel` 必须钉到 `textSecondary`�
 | `elevated` | `rgba(10, 26, 40, 0.92)` | **不透明浮面**：Tooltip / Popover / G2 tooltip / 降级玻璃。这些面积小、生命期短、常压在图表或文字上，模糊反而看不清 |
 | `upBg` / `downBg` / `pendingBg` | 对应语义色 16% 透明 | 涨跌/待办胶囊浅底，日历格底 |
 | 遮罩 | `rgba(3, 10, 16, 0.55)` | Modal / Drawer mask（antd `colorBgMask`） |
+| **图版** `.fp-plate` | 底 `rgba(3, 10, 16, 0.5)` + 描边 `1px rgba(255,255,255,0.08)` + 顶边内高光 `inset 0 1px 0 rgba(255,255,255,0.10)` + 圆角 12px | **理念示意图的容器**（`/plan` 三张图）。它比内井更沉、再压一道顶边高光，图就从玻璃卡上「沉下去」一层。2026-09-23 主人选定「光学玻璃」画法时一并定下的 |
 
 `well` 与 `border` 是纯白透明度，压在任何雾色上都成立——这就是为什么内井不需要按雾色调色。
+
+**图版（`.fp-plate`，2026-09-23 新增）**：手艺写在 `liquid-glass.css`，**扁材料**（不模糊、不投影、不是玻璃）。
+它与内井的分工是：内井装「同一张卡里并列的小块」，图版装「一整块图」。三条禁令：
+
+- **只许装图**，不许当卡片壳、不许装表格/表单（那是 `SectionCard` + 内井的活）
+- 里面**不许再起第二层 `backdrop-filter`**（图版本身就是扁的，图是 SVG）
+- 它不计入 §6 的玻璃节点预算（没有模糊），但**不许因此到处铺**：它靠与内井的
+  **对比**立住分量，不靠数量。一页只用在一类内容上（`/plan` 三张理念图各一块，
+  共三块），**别再拿它装第二类东西**——一页上出现两种用法，对比就变成噪音了
 
 ---
 
@@ -248,11 +258,31 @@ antd 浮层挂在 portal 里，tsx 拿不到它的根节点，`.fp-glass` 材料
 | 色雾循环 | 14s ease-in-out infinite |
 | 镜面高光 | 8s cubic-bezier(0.4, 0, 0.2, 1) infinite（与 §2.3 / liquid-glass.css 同值） |
 
-允许：色雾漂移、门面高光扫过、卡片 hover 抬 2px（仅 `md:` 以上，触屏不加位移）、进场 `fade-up`、总资产 count-up（已有）。
+允许：色雾漂移、门面高光扫过、卡片 hover 抬 2px（仅 `md:` 以上，触屏不加位移）、进场 `fade-up`、总资产 count-up（已有）、**图版入场编排**、**图版悬停微动**（后两条 2026-09-23 新增，见下）。
 
 禁止：路由切换转场、数字闪烁、主按钮 scale（会挤邻居）、全站每张卡都扫高光。
 
-`prefers-reduced-motion: reduce`：色雾冻住、高光动画关、fade-up / count-up / hover 位移关。模糊和描边保留。
+**图版入场编排（2026-09-23 新增）**——`/plan` 三张理念图的亮相。四条硬约束：
+
+1. **一次性**：进视口播一次、播完解除观察，不来回抖、不循环（循环留给色雾）
+2. **SSR 出终态**：服务端 HTML 里必须是**画好的图**，`fp-reveal` / `is-play` 这类类名只在客户端挂上。
+   不然爬虫与无 JS 用户看到的是一张空图，而 `/plan` 的 SEO 是刻意做到首屏 HTML 里的。
+   范式照 `app/components/ui/count-up.ts`：**服务端出终值、客户端才播**
+3. **`prefers-reduced-motion` 下不播**，直接停在终态（关断写进 `responsive.css` §7「动效无障碍」）
+4. 只动 `opacity` / `transform` / `stroke-dashoffset` 三个属性（合成层友好）；
+   **不许**动 `filter`、`blur`、`width/height`（会重排、会有滤镜开销）
+
+**图版悬停微动（2026-09-23 新增）**：240ms（`--fp-duration-base`），只改 `stroke-opacity` 与
+`transform: scale(1.03)`。**不许位移**（禁令里「主按钮 scale 会挤邻居」说的是布局位移，
+图内部缩放不动别人），**也不许与入场动画抢同一个属性**——入场只碰 `opacity`/`transform`，
+所以悬停碰的是 `stroke-opacity` 与内层包裹组的 `transform`（棱镜外面套一层专职缩放的 `<g>`）。
+
+**keyframe 住在哪**：工具类消费的（`fade-up` / `float`）住在 `uno.config.ts` 的 animation theme；
+图版编排的（`fp-fig-rise` / `fp-fig-pop` / `fp-fig-draw`）住在 `app/styles/motion.css`，
+两者都**必须**在 `responsive.css` §8 里有关断。
+
+`prefers-reduced-motion: reduce`：色雾冻住、高光动画关、fade-up / count-up / hover 位移关、
+**图版编排不播（直接终态）、悬停缩放不改尺寸**。模糊和描边保留。
 
 ---
 
@@ -281,7 +311,10 @@ antd 浮层挂在 portal 里，tsx 拿不到它的根节点，`.fp-glass` 材料
 ## 7. 与现有基建的关系
 
 - **唯一色值出处仍是 `app/theme.ts`。** 本文件的 hex 是规范，落地时抄进 `COLOR`，uno 映射自动跟进。不准在组件里写第二份。
-- Uno 工具类优先；`.fp-glass` / `.fp-glass-specular` / 色雾层 是少数必须手写的 CSS，放 `app/styles/liquid-glass.css`，在 `root.tsx` 里排在 `virtual:uno.css` 之后、`responsive.css` 之前。
+- Uno 工具类优先；`.fp-glass` / `.fp-glass-specular` / 色雾层 / **图版 `.fp-plate`** 是少数必须手写的 CSS，放 `app/styles/liquid-glass.css`，在 `root.tsx` 里排在 `virtual:uno.css` 之后、`responsive.css` 之前。
+- **图版编排动效**（§5 那两条新动效）单独放 `app/styles/motion.css`：它是**动效层**不是材料层，混进 `liquid-glass.css` 会让那份文件名不副实（与 `podium.css` 同类——工具类扛不住的专门场景各自成文）。`root.tsx` 的 import 顺序是
+  `antd reset → virtual:uno.css → liquid-glass.css → podium.css → motion.css → responsive.css`——
+  **`responsive.css` 必须最后**，因为 §7「动效无障碍」的 `prefers-reduced-motion` 关断要与编排规则打平局时靠 source-order 取胜。
 - 不启用 `presetAttributify`，不写自定义提取器，`preflights.reset: false` 保持。
 - antd 切 **`theme.darkAlgorithm`**（root.tsx 引；`theme.ts` 仍零 import）。默认算法在暗底上派生的是白容器、浅灰边、深字——每个组件都要手改，改不完。暗色算法把 Tag / Alert / Table / Segmented / Dropdown 的中性色一次派生对，`ANTD_TOKEN` 只钉品牌与材料：
   - seed：`colorPrimary` `colorInfo` = `primary`；`colorBgLayout` = `bg`；`colorBgBase` = `bg`（暗色算法从它派生全部中性面）；`colorTextBase` = `textPrimary`；`borderRadius` 12；`controlHeight` 36

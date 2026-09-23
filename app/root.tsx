@@ -43,6 +43,10 @@ import "./styles/liquid-glass.css";
 // 工具类扛不住，独立文件、不进玻璃材料层。排在 glass 之后、responsive 之前——
 // §7 减动效才能压过本文件的 animation
 import "./styles/podium.css";
+// 图版编排动效（/plan 三张图的入场编排与悬停微动，宪法 §5）：
+// 动效层，不是材料层，所以不并进 liquid-glass.css。同样排在 responsive 之前——
+// §7 的 prefers-reduced-motion 关断靠 source-order 赢平局
+import "./styles/motion.css";
 // 期五移动端适配：唯一的媒体查询出处，必须排在 UnoCSS 之后
 // 才能覆盖工具类与 antd 组件类（顺序理由见该文件头注释）
 import "./styles/responsive.css";
