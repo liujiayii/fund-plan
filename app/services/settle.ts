@@ -15,7 +15,7 @@ import {
 } from "~/db/schema";
 import { calcPurchase } from "~/domain/purchase";
 import { calcRedeem, DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
-import { toBeijing } from "~/domain/trading-calendar";
+import { lastClosedTradingDay, toBeijing } from "~/domain/trading-calendar";
 import { fetchNavHistory, NAV_FETCH_TIMEOUT_BACKGROUND_MS } from "./fund-data";
 
 /**
@@ -78,6 +78,31 @@ export interface SyncNavResult {
 }
 
 /**
+ * 挑出「指定交易日已经有净值」的基金代码。
+ *
+ * 为什么要分批：inArray 会把每个代码变成一个 SQL 参数，而清单是「所有持仓基金」
+ * （线上量级上百只），一次塞进去会顶到参数上限。50 个一批，多几次查询对每天
+ * 只跑两次的 cron 无所谓。
+ */
+async function codesWithNavOn(
+  db: Db,
+  codes: string[],
+  navDate: string,
+): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (let i = 0; i < codes.length; i += 50) {
+    const batch = codes.slice(i, i + 50);
+    const rows = await db
+      .selectDistinct({ code: fundNav.fundCode })
+      .from(fundNav)
+      .where(and(inArray(fundNav.fundCode, batch), eq(fundNav.navDate, navDate)));
+    for (const r of rows)
+      found.add(r.code);
+  }
+  return found;
+}
+
+/**
  * 同步基金净值到 fund_nav 表。
  * @param db Drizzle 实例
  * @param env Worker 环境（取 KV 与网络）
@@ -98,14 +123,32 @@ export async function syncNav(
       .selectDistinct({ code: orders.fundCode })
       .from(orders)
       .where(eq(orders.status, "pending"));
+    const pendingCodes = fromOrders.map(r => r.code);
     const fromHoldings = await db
       .selectDistinct({ code: holding.fundCode })
       .from(holding);
+    const holdingCodes = fromHoldings
+      .map(r => r.code)
+      .filter(c => !pendingCodes.includes(c));
+
+    // 清单顺序 = 预算优先级（2026-09-23 CodeRabbit 评审）：
+    // 1. 有待确认订单的基金——撮合今晚就要用当日净值，缺它整批顺延；
+    // 2. 持仓基金里**还缺「最后已收盘交易日」净值**的——同步的主要目的；
+    // 3. 已经有当日的——有预算余量再幂等重刷，顺带补上游迟发的行。
+    //
+    // 为什么是排序而不是「硬跳过已有当日的基金」：上游偶尔迟发某一天的净值，
+    // 那时它的**最新行已经在库里**，而我们恰恰要把缺的那一行拉回来——硬跳过
+    // 会让这个洞永远补不上。排序只是把有限预算先花在真正需要它的基金上；
+    // 预算不够时，排在后面的自然留给了下一次触发。
+    const freshCodes = await codesWithNavOn(
+      db,
+      holdingCodes,
+      lastClosedTradingDay(new Date()),
+    );
     codes = [
-      ...new Set([
-        ...fromOrders.map(r => r.code),
-        ...fromHoldings.map(r => r.code),
-      ]),
+      ...pendingCodes,
+      ...holdingCodes.filter(c => !freshCodes.has(c)),
+      ...holdingCodes.filter(c => freshCodes.has(c)),
     ];
   }
 

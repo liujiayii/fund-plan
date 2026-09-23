@@ -16,6 +16,7 @@ import {
   user,
 } from "~/db/schema";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
+import { lastClosedTradingDay } from "~/domain/trading-calendar";
 import { registerUser } from "~/services/auth";
 import { createDcaPlan } from "~/services/dca-service";
 import { settlePendingOrders, syncNav } from "~/services/settle";
@@ -343,6 +344,116 @@ describe("Cron：定投扫描 → 撮合 全链路", () => {
     expect(errSpy).not.toHaveBeenCalledWith(expect.stringContaining("全部拉空"));
 
     errSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  // 2026-09-23 CodeRabbit 评审：成功结算的基金退出 pending 查询、但仍会从
+  // holding 进来，于是「已同步到当日」的基金会陪着重跑，把 8 分钟预算吃掉，
+  // 让真正缺净值的基金本轮没被尝试。按「需求」排序即可（不硬跳过，见 settle 注释）
+
+  it("预算紧张时先同步「还缺当日净值」的持仓基金（已有当日的排后面）", async () => {
+    const db = getDb(env.DB);
+    await seedFund("000001");
+    await seedFund("110022");
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    // 两只都进清单：走持仓（不是待确认单，免得「钱路优先」掩盖排序本身）
+    await db.insert(holding).values([
+      { userId: reg.id, fundCode: "000001", totalShares: 1_000_000, totalCost: 100_000 },
+      { userId: reg.id, fundCode: "110022", totalShares: 1_000_000, totalCost: 100_000 },
+    ]);
+    // 000001 已有「最后已收盘交易日」的净值，110022 缺
+    const lastDay = lastClosedTradingDay(new Date());
+    await db.insert(fundNav).values({
+      fundCode: "000001",
+      navDate: lastDay,
+      unitNav: 15000,
+      accNav: 15000,
+      growthRate: 0,
+    });
+
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        fetched.push(String(url));
+        // 每次拉取都超过预算 ⇒ 只可能尝试第一只
+        await new Promise(r => setTimeout(r, 60));
+        return new Response(
+          JSON.stringify({
+            TotalCount: 1,
+            Data: {
+              LSJZList: [
+                { FSRQ: lastDay, DWJZ: "1.5000", LJJZ: "1.5000", JZZZL: "0" },
+              ],
+            },
+          }),
+        );
+      }),
+    );
+
+    const s = await syncNav(db, env, undefined, 40);
+
+    expect(s.attempted).toBe(1);
+    expect(fetched).toHaveLength(1);
+    expect(fetched[0]).toContain("fundCode=110022"); // 缺当日的先来
+    expect(fetched[0]).not.toContain("fundCode=000001");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("有待确认订单的基金永远排最前（哪怕它已有当日净值）", async () => {
+    const db = getDb(env.DB);
+    await seedFund("000001");
+    await seedFund("110022");
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    // 110022：持仓、缺当日净值
+    await db.insert(holding).values({
+      userId: reg.id,
+      fundCode: "110022",
+      totalShares: 1_000_000,
+      totalCost: 100_000,
+    });
+    // 000001：有待确认订单（撮合今晚要它的当日净值），且**已有**当日净值
+    const { placeBuyOrder } = await import("~/services/trade");
+    await placeBuyOrder(db, env, {
+      userId: reg.id,
+      fundCode: "000001",
+      amountCents: 100000,
+      now: new Date("2026-08-24T06:00:00Z"),
+    });
+    const lastDay = lastClosedTradingDay(new Date());
+    await db.insert(fundNav).values({
+      fundCode: "000001",
+      navDate: lastDay,
+      unitNav: 15000,
+      accNav: 15000,
+      growthRate: 0,
+    });
+
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        fetched.push(String(url));
+        await new Promise(r => setTimeout(r, 60));
+        return new Response(
+          JSON.stringify({
+            TotalCount: 1,
+            Data: {
+              LSJZList: [
+                { FSRQ: lastDay, DWJZ: "1.5000", LJJZ: "1.5000", JZZZL: "0" },
+              ],
+            },
+          }),
+        );
+      }),
+    );
+
+    await syncNav(db, env, undefined, 40);
+
+    expect(fetched).toHaveLength(1);
+    expect(fetched[0]).toContain("fundCode=000001");
+
     vi.unstubAllGlobals();
   });
 });
