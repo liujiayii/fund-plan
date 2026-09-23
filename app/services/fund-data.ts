@@ -84,7 +84,7 @@ export interface NavRow {
  * 是 2.0，会被拦下）；该守卫另有一条源码断言盯着基金页的取数函数清单，绕不过去。
  */
 const CACHE_TTL = {
-  /** 搜索结果缓存 1 天（key 空间无界：一个搜索词一条，别把存量垃圾也拉长） */
+  /** 搜索结果缓存 1 天（key 空间无界：一个词一条，别把存量垃圾也拉长；空结果不落缓存） */
   search: 86400,
   /** 基金档案缓存 1 天：费率/申赎状态最易变，且与 ensureFund 的 1 天过期判断同节奏 */
   basic: 86400,
@@ -254,14 +254,29 @@ function navToScaled(v: string | number | null | undefined): number | null {
 }
 
 /**
+ * 搜索关键词归一化：折叠空白 + 统一小写 + 截断到 32 字符。
+ *
+ * 关键词直接进 KV key（`fund:search:{词}`），而 key 空间是**无界**的——用户与爬虫
+ * 都能随手造新词。前两件事把「同一意图的不同写法」收成一个 key（少写一次），
+ * 截断则堵住超长串把 key 撑爆（KV key 上限 512 字节，超了 put 直接抛错）。
+ * 归一化后的词同时用于上游查询：基金代码是数字、名称是中文，这两类占绝大多数输入，
+ * 本来就不受大小写与空白影响。
+ */
+const SEARCH_KEY_MAX_LEN = 32;
+function normalizeSearchKeyword(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ").toLowerCase().slice(0, SEARCH_KEY_MAX_LEN);
+}
+
+/**
  * 基金搜索。命中 KV 缓存则不打网络；网络异常时回退缓存；
  * 都没有就返回空数组（页面显示「无结果」，不白屏）。
+ * **空结果不落缓存**——理由见函数体内注释（搜索是无界的写通道）。
  */
 export async function searchFunds(
   env: Env,
   keyword: string,
 ): Promise<FundSearchItem[]> {
-  const key = keyword.trim();
+  const key = normalizeSearchKeyword(keyword);
   if (key === "")
     return [];
 
@@ -295,9 +310,15 @@ export async function searchFunds(
         type: d.FundBaseInfo?.FTYPE ?? "",
       }));
 
-    await safePut(env, cacheKey, JSON.stringify(items), {
-      expirationTtl: CACHE_TTL.search,
-    });
+    // 空结果不落缓存：搜索是目前**唯一无界**的写通道（每个新关键词一个 key），
+    // 一个遍历 ?q=<随机词> 的爬虫一轮就能造出上千次写、把当日 1000 次额度吃光。
+    // 代价是空结果每次回源——上游是廉价的搜索接口（不像 lsjz 对海外 IP 敌对），
+    // 拿它换掉这个悬崖很划算（2026-09-23 对抗式 review 的结论）。
+    if (items.length > 0) {
+      await safePut(env, cacheKey, JSON.stringify(items), {
+        expirationTtl: CACHE_TTL.search,
+      });
+    }
     return items;
   }
   catch (err) {

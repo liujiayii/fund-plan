@@ -146,6 +146,46 @@ describe("searchFunds 基金搜索", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
+  it("空结果不写 KV——搜索是唯一无界的写通道，别让随机词把它刷爆", async () => {
+    const kv = fakeKV();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ Datas: [] }))),
+    );
+    const env = fakeEnv(kv);
+
+    expect(await searchFunds(env, "查无此基")).toEqual([]);
+    expect(kv._puts).toHaveLength(0);
+    // 空结果每次回源：上游是廉价的搜索接口，比「额度被遍历的词吃光」划算得多
+    expect(await searchFunds(env, "查无此基")).toEqual([]);
+    expect(kv._puts).toHaveLength(0);
+  });
+
+  it("关键词归一化：首尾空白 / 大小写 / 连续空白折叠成同一个 key", async () => {
+    const kv = fakeKV();
+    const spy = vi.fn(async () => new Response(JSON.stringify(searchResponse)));
+    vi.stubGlobal("fetch", spy);
+    const env = fakeEnv(kv);
+
+    await searchFunds(env, "  CSI  300 ");
+    await searchFunds(env, "csi 300");
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect([...kv._store.keys()]).toEqual(["fund:search:csi 300"]);
+  });
+
+  it("超长关键词截断到 32 字符（key 长度不被长串撑爆）", async () => {
+    const kv = fakeKV();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(searchResponse))),
+    );
+
+    await searchFunds(fakeEnv(kv), "长".repeat(200));
+
+    expect([...kv._store.keys()]).toEqual([`fund:search:${"长".repeat(32)}`]);
+  });
+
   it("网络异常时回退缓存而不是崩溃", async () => {
     const kv = fakeKV();
     const env = fakeEnv(kv);
