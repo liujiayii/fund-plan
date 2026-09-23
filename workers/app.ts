@@ -283,7 +283,9 @@ export default {
       // （漏派发 / 东财净值晚发布都能在这一轮补上）
       try {
         const s = await syncNav(db, env);
-        console.log(`[cron] 净值同步完成：写入 ${s.synced} 条`);
+        console.log(
+          `[cron] 净值同步完成：写入 ${s.synced} 条（${s.funds} 只基金，拉空 ${s.empty} 只）`,
+        );
       }
       catch (err) {
         console.error("[cron] 净值同步异常：", err);

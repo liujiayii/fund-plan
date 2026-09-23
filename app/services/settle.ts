@@ -56,6 +56,16 @@ export interface SettleResult {
   failed: number;
 }
 
+/** syncNav 的结果：synced 是行数，funds/empty 是基金数（供判定「整轮是否全灭」） */
+export interface SyncNavResult {
+  /** 实际写入的净值行数 */
+  synced: number;
+  /** 本轮涉及的基金数 */
+  funds: number;
+  /** 其中一条净值都没拉到的基金数 */
+  empty: number;
+}
+
 /**
  * 同步基金净值到 fund_nav 表。
  * @param db Drizzle 实例
@@ -66,7 +76,7 @@ export async function syncNav(
   db: Db,
   env: Env,
   fundCodes?: string[],
-): Promise<{ synced: number }> {
+): Promise<SyncNavResult> {
   let codes = fundCodes;
 
   if (!codes) {
@@ -87,9 +97,11 @@ export async function syncNav(
   }
 
   let synced = 0;
+  let empty = 0;
   for (const code of codes) {
     const rows = await fetchNavHistory(env, code, 30);
     if (rows.length === 0) {
+      empty++;
       console.warn(`[settle] 基金 ${code} 净值拉取为空，跳过`);
       continue;
     }
@@ -116,7 +128,16 @@ export async function syncNav(
     synced += rows.length;
   }
 
-  return { synced };
+  // 整轮全灭：订单会整体顺延到次日，而 per-fund 的 warn 埋在细节里看不出后果。
+  // 这是**钱路**上的失败（撮合靠它拿当日净值），必须给一条 error 级的汇总信号
+  // （2026-09-23 补；跨境链路不稳时真有这种夜晚）。
+  if (codes.length > 0 && empty === codes.length) {
+    console.error(
+      `[settle] 本轮 ${codes.length} 只基金净值全部拉空——今晚订单会全部顺延，请确认东财接口可用性`,
+    );
+  }
+
+  return { synced, funds: codes.length, empty };
 }
 
 /**
