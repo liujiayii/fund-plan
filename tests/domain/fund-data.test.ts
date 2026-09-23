@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchAssetAllocation,
@@ -1034,6 +1036,25 @@ describe("fetchInvestStyle 投资风格", () => {
  * 这条守卫的作用：以后新增缓存 key、或把某个 TTL 改回 1 天，写量会重新爬上去，
  * 这里先红——逼一次有意识的额度核算，而不是等下一封告警邮件。
  */
+
+/**
+ * 基金页 loader 会调用的全部取数函数（注册表）。
+ *
+ * 9 个里：7 个各写一个 per-fund key；`ensureFund` 内部写 `fund:basic`（夹具用直接调
+ * `fetchFundBasic` 模拟它的效果）；`fetchNavHistory` 只读写 D1、不碰 KV。
+ */
+const FUND_PAGE_FETCHERS = [
+  "ensureFund",
+  "fetchAssetAllocation",
+  "fetchBonusHistory",
+  "fetchFundDetail",
+  "fetchFundPosition",
+  "fetchIndexNav",
+  "fetchInvestStyle",
+  "fetchManagerInfo",
+  "fetchNavHistory",
+] as const;
+
 describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
   /** 冷启动一次基金页：7 个缓存接口全走一遍，收集各自写下的 key 与 TTL */
   async function coldStartPuts(): Promise<FakePut[]> {
@@ -1082,13 +1103,35 @@ describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
       "fund:style:000001",
     ]);
 
-    // 每写一次 key，均摊成本 = 1 / TTL 天数。无 TTL（永久 key）会算出 NaN 让断言
-    // 直接红——永久缓存是个设计决定，得先来改这条守卫、再改代码
+    // 每写一次 key，均摊成本 = 1 / TTL 天数。无 TTL（永久 key）会算出 Infinity 让
+    // 断言直接红——永久缓存是个设计决定，得先来改这条守卫、再改代码（指数那两个
+    // key 已在上面按前缀排除，正常路径走不到无 TTL 分支）
     const perDay = perFund.reduce(
       (sum, p) => sum + 1 / ((p.options?.expirationTtl ?? 0) / 86400),
       0,
     );
-    expect(perDay).toBeLessThanOrEqual(2);
+    // 严格小于：留出余量——再加一个 7 天档 key 正好是 2.0，会被这条拦下
+    expect(perDay).toBeLessThan(2);
+  });
+
+  /**
+   * 夹具是「手抄的 loader」：与真实页面是两份实现，页面上新增取数调用时夹具不会自动
+   * 跟上（2026-09-23 对抗式 review 指出的空头承诺）。所以这里直接读源码对账：基金页
+   * 里出现的取数函数必须与注册表一致，多一个少一个都红——逼一次显式登记，顺带想清楚
+   * 它带来的写量。
+   */
+  it("基金页 loader 的取数函数清单与注册表一致（新增一个就红）", () => {
+    const pageSrc = readFileSync(
+      path.resolve(import.meta.dirname, "../../app/routes/funds.$code.tsx"),
+      "utf8",
+    );
+    const called = pageSrc
+      .split("\n")
+      // 跳过注释行：只是「提到」某个函数名不该让守卫红
+      .filter(line => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
+      // 用后行断言只要函数名本身（m[0]），不用捕获组取
+      .flatMap(line => [...line.matchAll(/\b(?:fetch[A-Z]\w+|ensureFund)(?=\s*\()/g)].map(m => m[0]));
+    expect([...new Set(called)].sort()).toEqual([...FUND_PAGE_FETCHERS].sort());
   });
 });
 
@@ -1126,5 +1169,23 @@ describe("KV 写入失败（额度打满 429）不影响返回的数据", () => 
     const logged = errSpy.mock.calls.map(c => String(c[0])).join("\n");
     errSpy.mockRestore();
     expect(logged).toContain("KV 写入");
+  });
+
+  it("fetchIndexNav 仍返回新抓到的序列（旧行为会退回兜底缓存或空）", async () => {
+    stubRoutedFetch([
+      ["push2his.eastmoney.com", { data: { klines: ["2026-09-22,3900.00,3910.50"] } }],
+    ]);
+    const rows = await fetchIndexNav(fakeEnv(fakeKV({ putFails: true })), "1.000300", 400);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.close).toBe(3910.5);
+  });
+
+  it("searchFunds 仍返回新搜到的结果（旧行为会退回旧缓存或空）", async () => {
+    stubRoutedFetch([
+      ["fundsuggest.eastmoney.com", { Datas: [{ CODE: "000001", NAME: "华夏成长混合", FundBaseInfo: { FTYPE: "混合型-灵活" } }] }],
+    ]);
+    const items = await searchFunds(fakeEnv(fakeKV({ putFails: true })), "华夏");
+    expect(items).toHaveLength(1);
+    expect(items[0]?.code).toBe("000001");
   });
 });
