@@ -13,6 +13,8 @@ import { flatRoutes } from "@react-router/fs-routes";
  *   公开页（游客可见）：/ /master /plan /leaderboard /funds /funds/:code
  *     /tools/* /login /register
  *   需登录页：/me 系列（loader 里 requireUser 把门）
+ *   公开组合：/users/:id（requireUser，且双方都打开「公开我的组合」才 200；
+ *     不是游客页，不要进边缘缓存）
  *   管理页：/admin 系列（loader 里 requireAdmin 把门，非 admin 一律 403）
  *   爬虫资源：robots[.]txt.ts → /robots.txt；sitemap[.]xml.ts → /sitemap.xml
  *     （方括号让点号进路径而不是嵌套，flat routes 的转义约定）

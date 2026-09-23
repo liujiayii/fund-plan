@@ -42,6 +42,8 @@ export interface LeaderboardEntryInput {
   investedCents: number;
   /** 是否有过 confirmed 订单（上榜门槛） */
   hasTrades: boolean;
+  /** 该用户是否打开了「公开我的组合」。排行榜据此决定能不能点进去 */
+  portfolioPublic: boolean;
 }
 
 /** 计算完口径的条目。rank 由 rankLeaderboard 填，compute 出来时恒为 0 */

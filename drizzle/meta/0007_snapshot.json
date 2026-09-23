@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "51ee8635-c281-4997-ab43-bbf549d98636",
-  "prevId": "baa378a3-1933-4675-bf0a-c1489e9c6167",
+  "id": "baa378a3-1933-4675-bf0a-c1489e9c6167",
+  "prevId": "13bf1088-b337-4b30-ba13-394d3f08250e",
   "tables": {
     "account": {
       "name": "account",
@@ -360,20 +360,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "nav_backfilled_at": {
-          "name": "nav_backfilled_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "nav_backfilled_target": {
-          "name": "nav_backfilled_target",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },

@@ -52,9 +52,16 @@
       "breakpoints": true
     },
     {
+      "idx": 7,
+      "version": "6",
+      "when": 1790142988468,
+      "tag": "0007_jazzy_spencer_smythe",
+      "breakpoints": true
+    },
+    {
       "idx": 8,
       "version": "6",
-      "when": 1790150642265,
+      "when": 1790151277155,
       "tag": "0008_fund_nav_backfill_cols",
       "breakpoints": true
     }

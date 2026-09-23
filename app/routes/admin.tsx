@@ -1,7 +1,8 @@
 import type { TableProps } from "antd";
 import type { Route } from "./+types/admin";
 import type { UserOverview } from "~/services/admin-service";
-import { Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Input, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { fmtInt, fmtYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
@@ -33,51 +34,22 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export default function AdminIndex({ loaderData }: Route.ComponentProps) {
   const { stats, users } = loaderData;
+  const [nameQuery, setNameQuery] = useState("");
+  const filtered = useMemo(() => {
+    const q = nameQuery.trim().toLowerCase();
+    if (!q)
+      return users;
+    return users.filter(u => u.username.toLowerCase().includes(q));
+  }, [users, nameQuery]);
 
   // 用 TableProps[...]["columns"] 收紧行类型，render 的 (value, record) 自动推断
+  // 列序：先资产与订单（排查时最常对的数），现金 / 入金 / 角色靠后
   const columns: TableProps<UserOverview>["columns"] = [
     {
       title: "用户",
       dataIndex: "username",
-      // 用户名即详情页入口（Task 5 落地前点击为 404，属预期）
+      // 用户名即详情页入口
       render: (_, r) => <Link to={`/admin/users/${r.id}`}>{r.username}</Link>,
-    },
-    {
-      title: "角色",
-      dataIndex: "role",
-      width: 90,
-      render: role =>
-        role === "admin" ? <Tag>主理人</Tag> : <Tag>用户</Tag>,
-    },
-    {
-      title: "现金",
-      dataIndex: "cashCents",
-      align: "right",
-      render: (v, r) =>
-        // 有在途时标出来：pending 买单的钱已从现金扣、尚未变成份额，
-        // 不标的话排查「现金为什么对不上」时会漏掉这一笔
-        r.inFlightCents > 0
-          ? (
-              <Tooltip title={`另有申购中在途 ${fmtYuan(r.inFlightCents)} 元（已冻结，待撮合）`}>
-                <span>{fmtYuan(v)}</span>
-              </Tooltip>
-            )
-          : fmtYuan(v),
-    },
-    {
-      // 总收益的对照基准（收益 = 总资产 − 累计入金）。
-      // 它不再是收益率的分母——比率看的是右边「累计买入」
-      title: "累计入金",
-      dataIndex: "depositedCents",
-      align: "right",
-      render: v => fmtYuan(v),
-    },
-    {
-      // 与排行榜「总资产」同口径（市值 + 现金 + 在途）
-      title: "总资产",
-      dataIndex: "totalAssetCents",
-      align: "right",
-      render: v => fmtYuan(v),
     },
     {
       // 选基收益率的分母。与「账户收益」并排，才能核对比率是不是
@@ -110,6 +82,43 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
       align: "right",
       width: 80,
       render: v => fmtInt(v),
+    },
+    {
+      // 与排行榜「总资产」同口径（市值 + 现金 + 在途）
+      title: "总资产",
+      dataIndex: "totalAssetCents",
+      align: "right",
+      render: v => fmtYuan(v),
+    },
+    {
+      title: "现金",
+      dataIndex: "cashCents",
+      align: "right",
+      render: (v, r) =>
+        // 有在途时标出来：pending 买单的钱已从现金扣、尚未变成份额，
+        // 不标的话排查「现金为什么对不上」时会漏掉这一笔
+        r.inFlightCents > 0
+          ? (
+              <Tooltip title={`另有申购中在途 ${fmtYuan(r.inFlightCents)} 元（已冻结，待撮合）`}>
+                <span>{fmtYuan(v)}</span>
+              </Tooltip>
+            )
+          : fmtYuan(v),
+    },
+    {
+      // 总收益的对照基准（收益 = 总资产 − 累计入金）。
+      // 它不再是收益率的分母——比率看的是「累计买入」
+      title: "累计入金",
+      dataIndex: "depositedCents",
+      align: "right",
+      render: v => fmtYuan(v),
+    },
+    {
+      title: "角色",
+      dataIndex: "role",
+      width: 90,
+      render: role =>
+        role === "admin" ? <Tag>主理人</Tag> : <Tag>用户</Tag>,
     },
     {
       title: "注册时间",
@@ -176,11 +185,23 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
       </SectionCard>
 
       {/* 交错进场：第 2 卡延迟 60ms（animate-delay 写法的坑见 uno.config.ts） */}
-      <SectionCard title={`用户（${users.length}）`} className="animate-fade-up animate-delay-[60ms]">
+      <SectionCard
+        title={`用户（${filtered.length}${filtered.length === users.length ? "" : ` / ${users.length}`}）`}
+        className="animate-fade-up animate-delay-[60ms]"
+        extra={(
+          <Input.Search
+            allowClear
+            placeholder="按用户名筛选"
+            value={nameQuery}
+            onChange={e => setNameQuery(e.target.value)}
+            className="w-[200px]"
+          />
+        )}
+      >
         <Table
           rowKey="id"
           columns={columns}
-          dataSource={users}
+          dataSource={filtered}
           pagination={false}
           size="middle"
           scroll={{ x: 1560 }}

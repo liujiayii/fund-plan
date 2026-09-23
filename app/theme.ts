@@ -184,5 +184,15 @@ export const ANTD_TOKEN = {
       gradientFromColor: "rgba(255, 255, 255, 0.06)",
       gradientToColor: "rgba(255, 255, 255, 0.14)",
     },
+    // Tooltip 默认走 colorBgSpotlight，暗色算法把它派生成浅底，深字在上面看不清。
+    // 钉回不透明浮面 + 月白字，和 Popover 同一套材料
+    Tooltip: {
+      colorBgSpotlight: COLOR.elevated,
+      colorTextLightSolid: COLOR.textPrimary,
+    },
+    // message 是独立浮层，主题 token 盖不住它的实色底，样式在 liquid-glass.css
+    Message: {
+      contentBg: COLOR.elevated,
+    },
   },
 };
