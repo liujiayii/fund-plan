@@ -16,7 +16,7 @@ import {
 import { calcPurchase } from "~/domain/purchase";
 import { calcRedeem, DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { toBeijing } from "~/domain/trading-calendar";
-import { fetchNavHistory } from "./fund-data";
+import { fetchNavHistory, NAV_FETCH_TIMEOUT_BACKGROUND_MS } from "./fund-data";
 
 /**
  * 撮合引擎：净值同步 + T+1 确认。
@@ -99,7 +99,9 @@ export async function syncNav(
   let synced = 0;
   let empty = 0;
   for (const code of codes) {
-    const rows = await fetchNavHistory(env, code, 30);
+    // 用「没人等」档的超时：跨境 lsjz 单页实测 7~8s，正贴着默认的 8s 线，
+    // 一页被掐断就是今晚订单整晚顺延。cron 没有用户在等，给足余量
+    const rows = await fetchNavHistory(env, code, 30, NAV_FETCH_TIMEOUT_BACKGROUND_MS);
     if (rows.length === 0) {
       empty++;
       console.warn(`[settle] 基金 ${code} 净值拉取为空，跳过`);

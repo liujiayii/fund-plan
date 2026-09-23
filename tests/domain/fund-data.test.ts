@@ -289,6 +289,59 @@ describe("fetchNavHistory 历史净值", () => {
     expect(await fetchNavHistory(fakeEnv(), "000001")).toEqual([]);
   });
 
+  // 2026-09-23 新增：边缘打 lsjz 实测单页要 7~8s，正贴着我们 8s 的超时线
+  // （4 次探针访问 TTFB 6.8~8.5s）。所以超时必须可注入——
+  // cron 与页面后台回填没人等，给它们更宽的余量。
+  it("超时可注入：挂住的接口按注入值放弃，不等默认的 8s", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("The operation was aborted", "AbortError")));
+          }),
+      ),
+    );
+    const t0 = Date.now();
+    const rows = await fetchNavHistory(fakeEnv(), "000001", 60, 30);
+    expect(rows).toEqual([]);
+    expect(Date.now() - t0).toBeLessThan(3000);
+    // 15s 上限：修前会等默认的 8s，别被 vitest 的 5s 默认值提前掐断
+  }, 15_000);
+
+  it("某一波翻页全失败就收手，不把剩余波次一路打完", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls++;
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        if (idx > 1)
+          throw new Error("Network connection lost");
+        return new Response(
+          JSON.stringify({
+            TotalCount: 400,
+            Data: {
+              LSJZList: Array.from({ length: 20 }, (_, i) => ({
+                FSRQ: `2026-01-${String(i + 1).padStart(2, "0")}`,
+                DWJZ: "1.0000",
+                LJJZ: "1.0000",
+                JZZZL: "0",
+              })),
+            },
+          }),
+        );
+      }),
+    );
+
+    const rows = await fetchNavHistory(fakeEnv(), "000001", 400);
+
+    expect(rows).toHaveLength(20); // 首页已到手的照常返回
+    // 首页 + 第一波 5 页；之后收手（修前会把剩下 14 页也打完）
+    expect(calls).toBe(6);
+  });
+
   it("要的条数超过单页上限时自动翻页拼齐（东财 lsjz 单页钳 20 行）", async () => {
     // 东财 2026 年起对 lsjz 单页钳制 20 行（pageSize 填大了也只回 20，
     // ≥400 直接回空）——要 400 天必须翻 20 页。这里 mock 三页拼 60 条。

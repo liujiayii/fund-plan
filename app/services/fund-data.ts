@@ -109,6 +109,20 @@ const EM_MOBILE_HEADERS = {
   Referer: "https://fundf10.eastmoney.com/",
 };
 
+/**
+ * 单页普通请求超时（毫秒）。默认档给「有人等着」的路径用：失败要快。
+ */
+export const NAV_FETCH_TIMEOUT_MS = 8000;
+
+/**
+ * 没人等的路径（撮合 cron、页面后台回填）的超时。
+ *
+ * 2026-09-23 实测：从 CF 边缘打 lsjz 单页要 7~8s（4 次探针 TTFB 6.8~8.5s），
+ * 正贴着默认的 8s 线——偶尔一页被掐断就是「今晚订单整晚顺延」或
+ * 「基准线/历史缺一段」。这些路径没有用户等着，给足余量。
+ */
+export const NAV_FETCH_TIMEOUT_BACKGROUND_MS = 12000;
+
 /** 带超时的 fetch，避免 Worker 被慢接口拖死 */
 async function fetchWithTimeout(
   url: string,
@@ -313,12 +327,17 @@ export async function fetchFundBasic(
  *
  * 失败时返回空数组——撮合任务据此让订单保持 pending 顺延到下个交易日，
  * 绝不能把「拉不到净值」误判成「订单失败」。翻页中途某页失败不炸整体
- * （allSettled 保留成功页），第一页就失败才返回空。
+ * （allSettled 保留成功页），**某一波全败就收手**（上游此刻不可用，继续翻页
+ * 只是把超时一笔笔重复付掉），第一页就失败才返回空。
+ *
+ * @param timeoutMs 单页超时。有人等着的路径用默认值（失败要快），
+ * cron / 页面后台回填传 NAV_FETCH_TIMEOUT_BACKGROUND_MS。
  */
 export async function fetchNavHistory(
   env: Env,
   code: string,
   wantRows = 60,
+  timeoutMs = NAV_FETCH_TIMEOUT_MS,
 ): Promise<NavRow[]> {
   /** 接口单页实际上限（实测值；写大无效，写 ≥400 直接回空） */
   const PAGE_SIZE = 20;
@@ -332,7 +351,7 @@ export async function fetchNavHistory(
     const url
       = `https://api.fund.eastmoney.com/f10/lsjz`
         + `?fundCode=${encodeURIComponent(code)}&pageIndex=${pageIndex}&pageSize=${PAGE_SIZE}`;
-    const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS });
+    const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS }, timeoutMs);
     const json = (await resp.json()) as {
       TotalCount?: number;
       Data?: {
@@ -384,14 +403,20 @@ export async function fetchNavHistory(
       const wave = restPages.slice(i, i + CONCURRENCY);
       const settled = await Promise.allSettled(wave.map(p => fetchPage(p)));
       let shortPage = false;
+      let fulfilled = 0;
       for (const s of settled) {
         if (s.status !== "fulfilled")
           continue; // 单页失败不炸整体：已到手的页照常入库
+        fulfilled++;
         collected.push(...s.value.rows);
         // 不满一页说明后面没有更多数据了（TotalCount 不准时的兜底）
         if (s.value.rows.length < PAGE_SIZE)
           shortPage = true;
       }
+      // 一整波全败 = 上游此刻不可用（跨境链路抖动）。继续翻页只会把超时
+      // 一笔笔重复付掉，把 cron / 后台任务的时间预算耗光——收手
+      if (fulfilled === 0)
+        break;
       if (shortPage)
         break;
     }
