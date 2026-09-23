@@ -1,7 +1,9 @@
+import type { Db } from "~/db/client";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ensureFund,
   fetchAssetAllocation,
   fetchBonusHistory,
   fetchFundBasic,
@@ -1150,7 +1152,8 @@ describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
       (sum, p) => sum + 1 / ((p.options?.expirationTtl ?? 0) / 86400),
       0,
     );
-    // 严格小于：留出余量——再加一个 7 天档 key 正好是 2.0，会被这条拦下
+    // 严格小于 2：当前 ≈ 1.19（basic 3 天 + 6 个 7 天档），留了余量。阈值只是粗线，
+    // 精确的锁是上面的 key 集合断言与源码守卫——新增一个 1 天档 key 会直接冲过 2
     expect(perDay).toBeLessThan(2);
   });
 
@@ -1172,6 +1175,68 @@ describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
       // 用后行断言只要函数名本身（m[0]），不用捕获组取
       .flatMap(line => [...line.matchAll(/\b(?:fetch[A-Z]\w+|ensureFund)(?=\s*\()/g)].map(m => m[0]));
     expect([...new Set(called)].sort()).toEqual([...FUND_PAGE_FETCHERS].sort());
+  });
+});
+
+/**
+ * `ensureFund` 的档案新鲜度窗口必须与 `CACHE_TTL.basic` **同节奏**。
+ *
+ * DB 侧比 KV 侧短 → 「每天刷一次、每次都拿到同一份缓存」，白写一次 D1；比 KV 长 →
+ * 档案永远不刷新。这就把窗口钉成 3 天：2 天前的不许刷（窗口 > 2 天），3 天前零 1 分钟
+ * 的必须刷（窗口 ≤ 3 天）。改 `CACHE_TTL.basic` 的人会被这里拦住，逼一次同步。
+ */
+describe("ensureFund 档案新鲜度窗口（3 天，与 KV 缓存同节奏）", () => {
+  const DAY = 86_400_000;
+
+  /** 最小 D1 桩：只实现 ensureFund 用到的方法（findFirst / insert().values().onConflictDoUpdate） */
+  function fakeDbWithProfile(updatedAt: number) {
+    const row = {
+      code: "000001",
+      name: "华夏成长混合",
+      type: "混合型-灵活",
+      purchaseRate: 15,
+      redeemTiers: [],
+      minPurchase: 1000,
+      riskLevel: 3,
+      status: "开放申购",
+      updatedAt,
+    };
+    const upserts: unknown[] = [];
+    const db = {
+      query: { fund: { findFirst: async () => row } },
+      insert: () => ({
+        values: (v: unknown) => ({
+          onConflictDoUpdate: async () => {
+            upserts.push(v);
+          },
+        }),
+      }),
+      _upserts: upserts,
+    };
+    return db as unknown as Db & { _upserts: unknown[] };
+  }
+
+  it("窗口内的档案不刷新：不打东财也不 upsert", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const db = fakeDbWithProfile(Date.now() - 2 * DAY);
+
+    await ensureFund(db, fakeEnv(), "000001");
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(db._upserts).toHaveLength(0);
+  });
+
+  it("超过窗口（3 天零 1 分钟）就拉一次东财并 upsert 落库", async () => {
+    const spy = stubRoutedFetch([
+      ["FundMNNBasicInformation", { Datas: { FCODE: "000001", SHORTNAME: "华夏成长混合", FTYPE: "混合型-灵活", RATE: "0.15%", MINSG: "10", RISKLEVEL: "3", SGZT: "开放申购", SHZT: "开放赎回" } }],
+    ]);
+    const db = fakeDbWithProfile(Date.now() - 3 * DAY - 60_000);
+
+    await ensureFund(db, fakeEnv(), "000001");
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(db._upserts).toHaveLength(1);
   });
 });
 

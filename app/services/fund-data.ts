@@ -80,14 +80,19 @@ export interface NavRow {
  *    （分红、基金经理、投资风格）
  *
  * 改动后的写量预算由 `tests/domain/fund-data.test.ts` 的「写入预算守卫」钉住：
- * 单只基金冷启动的均摊成本必须 **< 2 次/天**（严格小于——再加一个 7 天档 key 正好
- * 是 2.0，会被拦下）；该守卫另有一条源码断言盯着基金页的取数函数清单，绕不过去。
+ * 单只基金冷启动的均摊成本必须 **< 2 次/天**（当前 ≈ 1.19）。阈值只是粗线，精确的
+ * 锁是另外两条：key 集合断言（新增 key 必须显式登记）与源码守卫（基金页新增取数
+ * 调用就红）。
  */
 const CACHE_TTL = {
   /** 搜索结果缓存 1 天（key 空间无界：一个词一条，别把存量垃圾也拉长；空结果不落缓存） */
   search: 86400,
-  /** 基金档案缓存 1 天：费率/申赎状态最易变，且与 ensureFund 的 1 天过期判断同节奏 */
-  basic: 86400,
+  /**
+   * 基金档案缓存 3 天：费率与起购金额**会**参与下单（试算与起购校验，见 trade.ts），
+   * 只是这两项都是公告级变动、不常改；申赎状态目前只展示。窗口与 ensureFund 绑定
+   * （FUND_PROFILE_FRESH_MS），改这里要一起改。
+   */
+  basic: 259200,
   /** 全量列表缓存 7 天 */
   fundList: 604800,
   /** 排行榜缓存 1 天（按 类型×周期 组合，12 key/天——量小，且用户直接看数字） */
@@ -107,6 +112,15 @@ const CACHE_TTL = {
   /** 投资风格缓存 7 天：几乎不变 */
   style: 604800,
 } as const;
+
+/**
+ * 基金档案的新鲜度窗口（毫秒）：与 `CACHE_TTL.basic` **同一个节奏**。
+ *
+ * `ensureFund` 过了这个窗口就去调 `fetchFundBasic`，而后者只在 KV 缓存过期时才真的
+ * 打东财——两边若不同步，就会出现「每天刷一次、但每次都拿到同一份三天前的缓存」，
+ * 白写一次 D1（2026-09-23 对抗式 review 的发现，守卫测试钉住了这个窗口）。
+ */
+const FUND_PROFILE_FRESH_MS = CACHE_TTL.basic * 1000;
 
 /**
  * 各接口所需的请求头——实测结论，别乱改：
@@ -601,7 +615,8 @@ export async function fetchAllFunds(env: Env): Promise<FundSearchItem[]> {
 }
 
 /**
- * 确保基金档案在库里且不过期：没有或超过 1 天就拉东财 `fetchFundBasic` 落库。
+ * 确保基金档案在库里且不过期：没有、或超过 `FUND_PROFILE_FRESH_MS`（=KV 缓存 TTL）
+ * 就拉东财 `fetchFundBasic` 落库。
  *
  * 抽自 `funds.$code` loader 此前的内联逻辑，供详情页与自选两处复用——
  * 自选时用户可能没访问过详情页，`fund` 表里还没这只基金，需先落档案。
@@ -615,7 +630,7 @@ export async function ensureFund(
   code: string,
 ): Promise<FundRow | null> {
   let f = await db.query.fund.findFirst({ where: eq(fund.code, code) });
-  const stale = !f || Date.now() - f.updatedAt > 86_400_000;
+  const stale = !f || Date.now() - f.updatedAt > FUND_PROFILE_FRESH_MS;
 
   if (stale) {
     const basic = await fetchFundBasic(env, code);
