@@ -11,13 +11,16 @@ import { lastClosedTradingDay } from "~/domain/trading-calendar";
 /**
  * 东方财富公开接口封装：搜索、档案、历史净值、全量列表兜底。
  *
- * 三条铁律：
+ * 四条铁律：
  *  1. 全部走 KV 缓存，降低对东财的压力（免费版额度也有限）——
  *     空结果同样要写（"null"/"[]" 哨兵，见 fetchInvestStyle 的论证），
  *     否则无数据的基金每次访问都实打东财；瞬时故障除外，不落盘；
  *  2. 任何异常都不抛给上层——回退缓存，再不行返回空值，
  *     页面宁可少数据也不能白屏；
- *  3. 净值/费率一律在这里转成整数，再往上走。
+ *  3. 净值/费率一律在这里转成整数，再往上走；
+ *  4. **KV 自身不可用不算业务失败**：读走 safeGet（当未命中，继续回源），
+ *     写走 safePut（只记日志）。缓存是旁路，它挂了只该让页面变慢，
+ *     不该让页面变空或 500。
  */
 
 /** 搜索结果条目 */
@@ -238,6 +241,23 @@ async function safePut(
 }
 
 /**
+ * KV 读取的容错包装（与 safePut 对称）。
+ *
+ * 「读不到缓存」与「缓存里没有」对调用方应该是同一个结果：回源。原先 `env.KV.get`
+ * 全在 try 之外，KV 一侧抖动或 5xx 就会把异常一路抛到 loader——基金页整页 500，
+ * 而缓存本来就是旁路（2026-09-23 对抗式 review 指出读写不对称）。
+ */
+async function safeGet(env: Env, key: string): Promise<string | null> {
+  try {
+    return await env.KV.get(key);
+  }
+  catch (err) {
+    console.error(`[fund-data] KV 读取 ${key} 失败（当作未命中，照常回源）：`, err);
+    return null;
+  }
+}
+
+/**
  * 百分比字符串 → 万分之整数。
  * 支持 "1.50%"、"1.5"、"--"（异常回退 0）。
  */
@@ -295,7 +315,7 @@ export async function searchFunds(
     return [];
 
   const cacheKey = `fund:search:${key}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundSearchItem[];
@@ -359,7 +379,7 @@ export async function fetchFundBasic(
   code: string,
 ): Promise<FundBasic | null> {
   const cacheKey = `fund:basic:${code}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundBasic;
@@ -583,7 +603,7 @@ export function parseFundListJs(js: string): FundSearchItem[] {
  */
 export async function fetchAllFunds(env: Env): Promise<FundSearchItem[]> {
   const cacheKey = "fund:list:all";
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundSearchItem[];
@@ -684,7 +704,7 @@ export async function fetchFundRank(
   periodCol: number,
 ): Promise<FundRankItem[]> {
   const cacheKey = `fund:rank:${ft}:${sc}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundRankItem[];
@@ -786,7 +806,7 @@ export async function fetchFundDetail(
   code: string,
 ): Promise<FundDetail | null> {
   const cacheKey = `fund:detail:${code}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundDetail;
@@ -891,7 +911,7 @@ export async function fetchFundPosition(
   // 旧缓存（fund:position:{code}）存的是数组，形状不兼容必须换 key；
   // 旧 key 到期后 TTL 自然过期，无需清理（7 天档，见 CACHE_TTL）
   const cacheKey = `fund:position:v2:${code}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundPositionView;
@@ -1013,7 +1033,7 @@ export async function fetchIndexNav(
   // （2026-09-14 实测：边缘节点打 push2his 失败率远高于本地的 <2%，
   // 线上 24h 刷了 14 条拉取失败日志，缓存过期窗口内基准线整段消失）
   const staleKey = `${cacheKey}:stale`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as IndexNavPoint[];
@@ -1036,13 +1056,8 @@ export async function fetchIndexNav(
     reason: string,
     err?: unknown,
   ): Promise<IndexNavPoint[]> => {
-    let stale: string | null = null;
-    try {
-      stale = await env.KV.get(staleKey);
-    }
-    catch {
-      /* KV 也炸了，只能认空 */
-    }
+    // 读兜底缓存：KV 自己炸了也不能连累页面（safeGet 内部吞异常并留日志）
+    const stale = await safeGet(env, staleKey);
     if (stale) {
       try {
         const rows = JSON.parse(stale) as IndexNavPoint[];
@@ -1139,7 +1154,7 @@ export async function fetchAssetAllocation(
   code: string,
 ): Promise<AssetAllocation | null> {
   const cacheKey = `fund:alloc:${code}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       // 命中哨兵 "null" 时 JSON.parse 天然还原 null（非空串判真，链路自洽）
@@ -1212,7 +1227,7 @@ export async function fetchBonusHistory(
   code: string,
 ): Promise<FundBonus[] | null> {
   const cacheKey = `fund:bonus:${code}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundBonus[];
@@ -1288,7 +1303,7 @@ export async function fetchManagerInfo(
   code: string,
 ): Promise<FundManager[] | null> {
   const cacheKey = `fund:manager:${code}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached) as FundManager[];
@@ -1354,7 +1369,7 @@ export async function fetchInvestStyle(
   code: string,
 ): Promise<string | null> {
   const cacheKey = `fund:style:${code}`;
-  const cached = await env.KV.get(cacheKey);
+  const cached = await safeGet(env, cacheKey);
   if (cached) {
     try {
       // 命中哨兵 "null" 时 JSON.parse 天然还原 null（非空串判真，链路自洽）

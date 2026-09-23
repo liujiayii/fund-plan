@@ -41,11 +41,13 @@ interface FakePut {
  * `putFails` 模拟额度打满（免费版 1000 写/天，超了与 API 均返回 429 并抛错）——
  * 用来钉死「写缓存失败绝不能连累已经抓到的数据」。
  */
-function fakeKV(opts: { putFails?: boolean } = {}) {
+function fakeKV(opts: { putFails?: boolean; getFails?: boolean } = {}) {
   const store = new Map<string, string>();
   const puts: FakePut[] = [];
   return {
     async get(key: string) {
+      if (opts.getFails)
+        throw new Error("KV GET failed: 500");
       return store.get(key) ?? null;
     },
     async put(key: string, value: string, options?: KVNamespacePutOptions) {
@@ -1292,5 +1294,39 @@ describe("KV 写入失败（额度打满 429）不影响返回的数据", () => 
     const items = await searchFunds(fakeEnv(fakeKV({ putFails: true })), "华夏");
     expect(items).toHaveLength(1);
     expect(items[0]?.code).toBe("000001");
+  });
+});
+
+/**
+ * 读失败也不能砸页面（与写对称）。
+ *
+ * `env.KV.get` 原先全在 try 之外：KV 侧一旦抖动或返回 5xx，异常会一路冒到 loader，
+ * 基金页整页 500。但「读不到缓存」与「缓存里没有」对调用方应该是同一个结果——回源。
+ */
+describe("KV 读取失败（API 抖动）不影响返回的数据", () => {
+  const basicResp = { Datas: { FCODE: "000001", SHORTNAME: "华夏成长混合", FTYPE: "混合型-灵活", RATE: "0.15%", MINSG: "10", RISKLEVEL: "3", SGZT: "开放申购", SHZT: "开放赎回" } };
+
+  it("fetchFundBasic 当作未命中，照常回源返回档案", async () => {
+    stubRoutedFetch([["FundMNNBasicInformation", basicResp]]);
+    const basic = await fetchFundBasic(fakeEnv(fakeKV({ getFails: true })), "000001");
+    expect(basic?.name).toBe("华夏成长混合");
+  });
+
+  it("fetchFundDetail 同样照常返回详情", async () => {
+    stubRoutedFetch([
+      ["FundMNNBasicInformation", basicResp],
+      ["FundMNDetailInformation", { Datas: { FCODE: "000001", JJJL: "张三" } }],
+    ]);
+    const detail = await fetchFundDetail(fakeEnv(fakeKV({ getFails: true })), "000001");
+    expect(detail?.manager).toBe("张三");
+  });
+
+  it("读失败留一条日志（与「缓存未命中」区分开）", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    stubRoutedFetch([["FundMNNBasicInformation", basicResp]]);
+    await fetchFundBasic(fakeEnv(fakeKV({ getFails: true })), "000001");
+    const logged = errSpy.mock.calls.map(c => String(c[0])).join("\n");
+    errSpy.mockRestore();
+    expect(logged).toContain("KV 读取");
   });
 });
