@@ -1073,10 +1073,15 @@ describe("fetchInvestStyle 投资风格", () => {
  *
  * 10 个里：7 个各写一个 per-fund key；`ensureFund` 与并发段里的 `fetchFundBasic`
  * 都指向 `fund:basic`（后者基本必命中前者的缓存，夹具只用直接调 `fetchFundBasic`
- * 模拟一次写）；`fetchNavHistory` 只读写 D1、不碰 KV。
+ * 模拟一次写）；`ensureNavHistory` 是净值回填（D1 + 东财，不碰 KV）。
+ *
+ * ⚠️ 与 fix/fund-data-degradation 合并后这里从 `fetchNavHistory` 换成了
+ * `ensureNavHistory`（回填逻辑收进 portfolio-service）——rebase 时正是这条守卫报的
+ * 红，说明它确实盯着基金页真实的取数面，不是摆设。
  */
 const FUND_PAGE_FETCHERS = [
   "ensureFund",
+  "ensureNavHistory",
   "fetchAssetAllocation",
   "fetchBonusHistory",
   "fetchFundBasic",
@@ -1085,7 +1090,6 @@ const FUND_PAGE_FETCHERS = [
   "fetchIndexNav",
   "fetchInvestStyle",
   "fetchManagerInfo",
-  "fetchNavHistory",
 ] as const;
 
 describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
@@ -1163,8 +1167,9 @@ describe("KV 写入预算守卫（免费版 1000 写/天）", () => {
       .split("\n")
       // 跳过注释行：只是「提到」某个函数名不该让守卫红
       .filter(line => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
-      // 用后行断言只要函数名本身（m[0]），不用捕获组取
-      .flatMap(line => [...line.matchAll(/\b(?:fetch[A-Z]\w+|ensureFund)(?=\s*\()/g)].map(m => m[0]));
+      // 用后行断言只要函数名本身（m[0]），不用捕获组取；ensure 家族
+      // （ensureFund / ensureNavHistory）也算取数函数，一起登记
+      .flatMap(line => [...line.matchAll(/\b(?:fetch[A-Z]\w+|ensure[A-Z]\w+)(?=\s*\()/g)].map(m => m[0]));
     expect([...new Set(called)].sort()).toEqual([...FUND_PAGE_FETCHERS].sort());
   });
 });
