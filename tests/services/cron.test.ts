@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "~/db/client";
 import {
   account,
@@ -16,6 +16,7 @@ import {
   user,
 } from "~/db/schema";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
+import { lastClosedTradingDay } from "~/domain/trading-calendar";
 import { registerUser } from "~/services/auth";
 import { createDcaPlan } from "~/services/dca-service";
 import { settlePendingOrders, syncNav } from "~/services/settle";
@@ -60,6 +61,13 @@ async function seedFund(code = "000001") {
 }
 
 beforeEach(resetAll);
+
+// console spy 必须在每个用例后收掉：断言先炸时 mockRestore 不会执行，
+// 静音的 console 会泄漏给同文件后续用例（2026-09-23 对抗 review 指出）
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("Cron：定投扫描 → 撮合 全链路", () => {
   it("定投扫描生成的单子，能被当晚撮合确认", async () => {
@@ -231,6 +239,220 @@ describe("Cron：定投扫描 → 撮合 全链路", () => {
       .where(eq(fundNav.fundCode, "000001"));
     expect(rows).toHaveLength(1); // 没产生重复行
     expect(rows[0].unitNav).toBe(16000); // 值被覆盖为最新
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * 2026-09-23 新增：**一轮下来所有基金都拉空**必须有 error 级汇总信号。
+   *
+   * 场景很实际：edge→东财的跨境链路不稳（实测 push2his 单发成功率 ~4%），
+   * 万一某晚所有基金都拉空，订单会整体顺延到次日——而原先只有 per-fund 的
+   * warn，翻日志才看得出「今晚什么都没撮合」。钱路的失败要能报警。
+   */
+  it("全部拉空：打 error 级汇总日志，并如实报数", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const { placeBuyOrder } = await import("~/services/trade");
+    await placeBuyOrder(db, env, {
+      userId: reg.id,
+      fundCode: "000001",
+      amountCents: 100000,
+      now: new Date("2026-08-24T06:00:00Z"),
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network down");
+      }),
+    );
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const s = await syncNav(db, env);
+
+    expect(s.funds).toBe(1);
+    expect(s.empty).toBe(1);
+    expect(s.synced).toBe(0);
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("全部拉空"));
+
+    errSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("超出总预算就收手：剩余基金留给下一次触发，不把整次 invocation 耗光", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const { placeBuyOrder } = await import("~/services/trade");
+    await placeBuyOrder(db, env, {
+      userId: reg.id,
+      fundCode: "000001",
+      amountCents: 100000,
+      now: new Date("2026-08-24T06:00:00Z"),
+    });
+
+    const spy = vi.fn(async () => {
+      throw new Error("should not be called");
+    });
+    vi.stubGlobal("fetch", spy);
+
+    // 预算给 0：进循环前就该判定超预算，一次上游都不打
+    const s = await syncNav(db, env, undefined, 0);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(s.attempted).toBe(0);
+    expect(s.empty).toBe(0);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("有基金同步成功：不打汇总 error", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    const { placeBuyOrder } = await import("~/services/trade");
+    await placeBuyOrder(db, env, {
+      userId: reg.id,
+      fundCode: "000001",
+      amountCents: 100000,
+      now: new Date("2026-08-24T06:00:00Z"),
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              Data: {
+                LSJZList: [
+                  { FSRQ: "2026-08-24", DWJZ: "1.5000", LJJZ: "1.5000", JZZZL: "0" },
+                ],
+              },
+            }),
+          ),
+      ),
+    );
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const s = await syncNav(db, env);
+
+    expect(s.funds).toBe(1);
+    expect(s.empty).toBe(0);
+    expect(errSpy).not.toHaveBeenCalledWith(expect.stringContaining("全部拉空"));
+
+    errSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  // 2026-09-23 CodeRabbit 评审：成功结算的基金退出 pending 查询、但仍会从
+  // holding 进来，于是「已同步到当日」的基金会陪着重跑，把 8 分钟预算吃掉，
+  // 让真正缺净值的基金本轮没被尝试。按「需求」排序即可（不硬跳过，见 settle 注释）
+
+  it("预算紧张时先同步「还缺当日净值」的持仓基金（已有当日的排后面）", async () => {
+    const db = getDb(env.DB);
+    await seedFund("000001");
+    await seedFund("110022");
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    // 两只都进清单：走持仓（不是待确认单，免得「钱路优先」掩盖排序本身）
+    await db.insert(holding).values([
+      { userId: reg.id, fundCode: "000001", totalShares: 1_000_000, totalCost: 100_000 },
+      { userId: reg.id, fundCode: "110022", totalShares: 1_000_000, totalCost: 100_000 },
+    ]);
+    // 000001 已有「最后已收盘交易日」的净值，110022 缺
+    const lastDay = lastClosedTradingDay(new Date());
+    await db.insert(fundNav).values({
+      fundCode: "000001",
+      navDate: lastDay,
+      unitNav: 15000,
+      accNav: 15000,
+      growthRate: 0,
+    });
+
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        fetched.push(String(url));
+        // 每次拉取都超过预算 ⇒ 只可能尝试第一只
+        await new Promise(r => setTimeout(r, 60));
+        return new Response(
+          JSON.stringify({
+            TotalCount: 1,
+            Data: {
+              LSJZList: [
+                { FSRQ: lastDay, DWJZ: "1.5000", LJJZ: "1.5000", JZZZL: "0" },
+              ],
+            },
+          }),
+        );
+      }),
+    );
+
+    const s = await syncNav(db, env, undefined, 40);
+
+    expect(s.attempted).toBe(1);
+    expect(fetched).toHaveLength(1);
+    expect(fetched[0]).toContain("fundCode=110022"); // 缺当日的先来
+    expect(fetched[0]).not.toContain("fundCode=000001");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("有待确认订单的基金永远排最前（哪怕它已有当日净值）", async () => {
+    const db = getDb(env.DB);
+    await seedFund("000001");
+    await seedFund("110022");
+    const reg = await registerUser(db, env, "alice", "hunter2");
+    // 110022：持仓、缺当日净值
+    await db.insert(holding).values({
+      userId: reg.id,
+      fundCode: "110022",
+      totalShares: 1_000_000,
+      totalCost: 100_000,
+    });
+    // 000001：有待确认订单（撮合今晚要它的当日净值），且**已有**当日净值
+    const { placeBuyOrder } = await import("~/services/trade");
+    await placeBuyOrder(db, env, {
+      userId: reg.id,
+      fundCode: "000001",
+      amountCents: 100000,
+      now: new Date("2026-08-24T06:00:00Z"),
+    });
+    const lastDay = lastClosedTradingDay(new Date());
+    await db.insert(fundNav).values({
+      fundCode: "000001",
+      navDate: lastDay,
+      unitNav: 15000,
+      accNav: 15000,
+      growthRate: 0,
+    });
+
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        fetched.push(String(url));
+        await new Promise(r => setTimeout(r, 60));
+        return new Response(
+          JSON.stringify({
+            TotalCount: 1,
+            Data: {
+              LSJZList: [
+                { FSRQ: lastDay, DWJZ: "1.5000", LJJZ: "1.5000", JZZZL: "0" },
+              ],
+            },
+          }),
+        );
+      }),
+    );
+
+    await syncNav(db, env, undefined, 40);
+
+    expect(fetched).toHaveLength(1);
+    expect(fetched[0]).toContain("fundCode=000001");
 
     vi.unstubAllGlobals();
   });

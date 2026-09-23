@@ -18,10 +18,10 @@ import { fmtYuan } from "~/components/ui/format";
 import { NavButton } from "~/components/ui/NavButton";
 import { SectionCard } from "~/components/ui/SectionCard";
 import { StatBig } from "~/components/ui/StatBig";
-import { runBatch } from "~/db/client";
-import { account, fundNav } from "~/db/schema";
+import { account } from "~/db/schema";
 import { DCA_BACKTEST_AMOUNT_CENTS, runDcaBacktest, toBacktestSeries } from "~/domain/dca-backtest";
 import { navToDisplay, rateToPercent } from "~/domain/money";
+import { NAV_BACKFILL_MIN_ROWS } from "~/domain/nav-backfill";
 import { calcPeriodReturns } from "~/domain/performance";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { buildFundBreadcrumbJsonLd, buildFundMeta, pageMeta } from "~/domain/seo";
@@ -35,10 +35,11 @@ import {
   fetchIndexNav,
   fetchInvestStyle,
   fetchManagerInfo,
-  fetchNavHistory,
+  NAV_FETCH_TIMEOUT_BACKGROUND_MS,
+  NAV_PAGE_BACKFILL_MAX_ROWS,
 } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
-import { getDcaPlans, getHoldingBrief, getNavSeries } from "~/services/portfolio-service";
+import { ensureNavHistory, getDcaPlans, getHoldingBrief, getNavSeries } from "~/services/portfolio-service";
 import { listSiblingFunds } from "~/services/seo-service";
 import { isWatched } from "~/services/watchlist-service";
 import { pnlColor } from "~/theme";
@@ -70,7 +71,7 @@ export function meta({ loaderData, params }: Route.MetaArgs) {
  * 400 天约 1.6 年，覆盖近 1 年阶段涨幅（spec §6）。
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
-  const { db, env } = getAppContext(context);
+  const { db, env, ctx } = getAppContext(context);
   const code = params.code;
 
   // 基金档案：没有或过期就拉东财落库（抽到 ensureFund，自选也复用它）
@@ -79,40 +80,27 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     throw new Response(`没找到基金 ${code}`, { status: 404 });
   }
 
-  // 净值：历史残缺就回填一批（首访 400 天，覆盖近 1 年阶段涨幅）。
+  // 净值：历史残缺（< 60 条）才值得补一批。口径与闸门全在 ensureNavHistory
+  // （阈值 + `fund.nav_backfilled_at/target` 记忆化）；这里只决定「等不等」：
+  //   库里一行都没有 → 这一页没数据就是废页（爬虫只来一次），等它拉完；
+  //   有数据但残缺   → 现有序列先渲染，回填丢 waitUntil（下次访问/爬虫就齐了）。
   //
-  // ⚠️ 条件刻意不是「库里为空」而是「少于 60 条」：settle 的 cron 每天只拉
-  // 最近 30 条做滑动窗口同步，任何基金只要有持仓/待确认单，库在被人类访问
-  // 之前就已有数据——写 length === 0 的话回填永远不触发，库里的净值就永远
-  // 只有薄薄一层滑动窗口（实测 14 只基金全是 20~23 条），图表与近 1 年
-  // 阶段涨幅全都残缺。60 ≈ 一个季度交易日，低于它必是残缺历史；
-  // 回填一次后库里就有完整历史，条件自然不再命中（每基金一次性）。
+  // 两档都用**一次翻页波**的行数上限 + 没人等档的超时：实测边缘打 lsjz 单页
+  // 7~8s，而平台给 waitUntil 的预算是**响应后 30 秒**（同请求内共享，超时直接
+  // 掐死且什么都没写），400 行 = 20 页 = 5 个串行阶段 ≈ 35~60s 必然超；
+  // 长历史回填留给回测页（用户主动等）与后续 cron/队列（见 NAV_PAGE_BACKFILL_MAX_ROWS）。
   let series = await getNavSeries(db, code);
-  if (series.length < 60) {
-    const rows = await fetchNavHistory(env, code, 400);
-    if (rows.length > 0) {
-      // 400 行走 batch 一次提交：逐条 await 是 400 次 D1 往返（约 1.2s），
-      // 会把触发回填的那次页面访问拖到超时边缘。onConflictDoNothing 保持
-      // 「已存在的日期不动」语义（与 cron 的 upsert 覆盖策略不同——
-      // 回填只补洞，不覆盖 cron 已写的当日新值）。
-      await runBatch(
-        db,
-        rows.map(r =>
-          db
-            .insert(fundNav)
-            .values({
-              fundCode: code,
-              navDate: r.navDate,
-              unitNav: r.unitNav,
-              accNav: r.accNav,
-              growthRate: r.growthRate,
-            })
-            .onConflictDoNothing(),
-        ),
-      );
-      series = await getNavSeries(db, code);
-    }
-  }
+  const backfillOpts = {
+    maxRows: NAV_PAGE_BACKFILL_MAX_ROWS,
+    timeoutMs: NAV_FETCH_TIMEOUT_BACKGROUND_MS,
+  };
+  // hadSeries 取「await 之前」的状态：库里本来为空时上面那次 await 已经把活干完，
+  // 不该再挂一个多余的后台任务（闸门会拦住，但白跑两次 D1 读）
+  const hadSeries = series.length > 0;
+  if (!hadSeries)
+    series = await ensureNavHistory(db, env, code, backfillOpts);
+  // 历史完整（线上 106/113 只）就别白发任务：那会白跑两次 D1 读才发现闸门不放行
+  const backgroundBackfill = hadSeries && series.length < NAV_BACKFILL_MIN_ROWS;
 
   // 登录用户才需要：现金（买入抽屉）、自选态、已持有速览（顶部标识与两格统计）、
   // 该基金定投计划（定投抽屉）——四查互相独立，一波并行
@@ -165,6 +153,16 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     // 与东财那批并行（一条 D1 查询，不额外占关键路径）
     listSiblingFunds(db, { code, type: f.type, limit: 6 }),
   ]);
+
+  // 后台回填注册在 8 路东财请求**之后**：免费版并发出站连接只有 6 个
+  // （第 7 个排队，不是在等响应头就算），提前注册会让回填的翻页波和页面
+  // 自己的 8 路抢连接，把回填推向 30s 预算边界
+  if (backgroundBackfill) {
+    ctx.waitUntil(
+      ensureNavHistory(db, env, code, backfillOpts).catch(err =>
+        console.error(`[funds] ${code} 后台回填净值失败：`, err)),
+    );
+  }
 
   return {
     fund: {

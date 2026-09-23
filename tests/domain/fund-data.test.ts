@@ -10,6 +10,7 @@ import {
   fetchInvestStyle,
   fetchManagerInfo,
   fetchNavHistory,
+  fetchNavHistoryDetailed,
   parseFundListJs,
   percentToRate,
   searchFunds,
@@ -287,6 +288,142 @@ describe("fetchNavHistory 历史净值", () => {
       }),
     );
     expect(await fetchNavHistory(fakeEnv(), "000001")).toEqual([]);
+  });
+
+  // 2026-09-23 新增：边缘打 lsjz 实测单页要 7~8s，正贴着我们 8s 的超时线
+  // （4 次探针访问 TTFB 6.8~8.5s）。所以超时必须可注入——
+  // cron 与页面后台回填没人等，给它们更宽的余量。
+  it("超时可注入：挂住的接口按注入值放弃，不等默认的 8s", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("The operation was aborted", "AbortError")));
+          }),
+      ),
+    );
+    const t0 = Date.now();
+    const rows = await fetchNavHistory(fakeEnv(), "000001", 60, 30);
+    expect(rows).toEqual([]);
+    expect(Date.now() - t0).toBeLessThan(3000);
+    // 15s 上限：修前会等默认的 8s，别被 vitest 的 5s 默认值提前掐断
+  }, 15_000);
+
+  it("某一波翻页全失败就收手，不把剩余波次一路打完", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls++;
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        if (idx > 1)
+          throw new Error("Network connection lost");
+        return new Response(
+          JSON.stringify({
+            TotalCount: 400,
+            Data: {
+              LSJZList: Array.from({ length: 20 }, (_, i) => ({
+                FSRQ: `2026-01-${String(i + 1).padStart(2, "0")}`,
+                DWJZ: "1.0000",
+                LJJZ: "1.0000",
+                JZZZL: "0",
+              })),
+            },
+          }),
+        );
+      }),
+    );
+
+    const rows = await fetchNavHistory(fakeEnv(), "000001", 400);
+
+    expect(rows).toHaveLength(20); // 首页已到手的照常返回
+    // 首页 + 第一波 5 页；之后收手（修前会把剩下 14 页也打完）
+    expect(calls).toBe(6);
+  });
+
+  // 2026-09-23 CodeRabbit 评审：调用方必须能分辨「部分成功」——
+  // 否则回填闸门会把「库里只有首页那 20 行」记成「拉取成功」而锁满 6 小时
+
+  /** 造一页 20 行的响应（东财单页上限） */
+  const pageOf20 = (month: string) =>
+    Array.from({ length: 20 }, (_, i) => ({
+      FSRQ: `2026-${month}-${String(i + 1).padStart(2, "0")}`,
+      DWJZ: "1.0000",
+      LJJZ: "1.0000",
+      JZZZL: "0.5",
+    }));
+
+  it("整波全败：返回已到手的部分行，但 complete=false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        if (idx > 1)
+          throw new Error("Network connection lost");
+        return new Response(
+          JSON.stringify({ TotalCount: 400, Data: { LSJZList: pageOf20("03") } }),
+        );
+      }),
+    );
+
+    const r = await fetchNavHistoryDetailed(fakeEnv(), "000001", 400);
+
+    expect(r.rows).toHaveLength(20);
+    expect(r.complete).toBe(false);
+  });
+
+  it("翻完计划页数：complete=true", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        return new Response(
+          JSON.stringify({
+            TotalCount: 400,
+            Data: { LSJZList: pageOf20(String(idx).padStart(2, "0")) },
+          }),
+        );
+      }),
+    );
+
+    const r = await fetchNavHistoryDetailed(fakeEnv(), "000001", 60);
+
+    expect(r.rows).toHaveLength(60);
+    expect(r.complete).toBe(true);
+  });
+
+  it("遇到短页（上游没有更多数据）：仍算完整", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const idx = Number(/pageIndex=(\d+)/.exec(url)?.[1] ?? 1);
+        // 第 2 页只有 10 行 = 后面没数据了（TotalCount 不准时的兜底）
+        const list = idx === 2 ? pageOf20("02").slice(0, 10) : pageOf20("03");
+        return new Response(
+          JSON.stringify({ TotalCount: 400, Data: { LSJZList: list } }),
+        );
+      }),
+    );
+
+    const r = await fetchNavHistoryDetailed(fakeEnv(), "000001", 60);
+
+    expect(r.complete).toBe(true);
+  });
+
+  it("首屏就失败：空行 + complete=false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    );
+
+    const r = await fetchNavHistoryDetailed(fakeEnv(), "000001");
+
+    expect(r.rows).toEqual([]);
+    expect(r.complete).toBe(false);
   });
 
   it("要的条数超过单页上限时自动翻页拼齐（东财 lsjz 单页钳 20 行）", async () => {
@@ -630,6 +767,49 @@ describe("fetchIndexNav 沪深300", () => {
       }),
     );
     expect(await fetchIndexNav(fakeEnv(), "1.000300", 30)).toEqual([]);
+  });
+
+  // 2026-09-23 新增：push2his 被限流/被挡时可能回 HTTP 200 + data:null。
+  // 原先只有 catch 出口读兜底缓存，这条出口直接返回空数组——
+  // 基准线整段消失且不打任何日志（比抛异常更隐蔽）。
+  it("HTTP 200 但 data 为空时同样走陈旧兜底", async () => {
+    const kv = fakeKV();
+    const stale = JSON.stringify([{ date: "2026-08-20", close: 4500.0 }]);
+    kv._store.set("fund:index:1.000300:30:stale", stale);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: null }))),
+    );
+    expect(await fetchIndexNav(fakeEnv(kv), "1.000300", 30))
+      .toEqual([{ date: "2026-08-20", close: 4500.0 }]);
+  });
+
+  it("HTTP 200 但 data 为空且无兜底（冷启动）返回空数组", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: null }))),
+    );
+    expect(await fetchIndexNav(fakeEnv(), "1.000300", 30)).toEqual([]);
+  });
+
+  // 2026-09-23 新增：窗口右端不能再取「今天」——盘中抓取会把当天实时价
+  // 写进 7 天缓存并冻结。右端改用「最后已收盘的交易日」。
+  it("盘中取数：窗口右端是上一个交易日，不是今天", async () => {
+    const spy = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify(indexResp)),
+    );
+    vi.stubGlobal("fetch", spy);
+    // 2026-09-23 周三 北京 14:00（盘中）= UTC 06:00
+    await fetchIndexNav(
+      fakeEnv(),
+      "1.000300",
+      30,
+      new Date("2026-09-23T06:00:00Z"),
+    );
+    const url = String(spy.mock.calls[0][0]);
+    expect(url).toContain("end=20260922");
+    expect(url).toContain("beg=20260823");
   });
 });
 

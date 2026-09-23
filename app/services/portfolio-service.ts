@@ -15,13 +15,18 @@ import {
   transactions,
 } from "~/db/schema";
 import {
+  NAV_BACKFILL_MIN_ROWS,
+  navBackfillStamp,
+  shouldBackfillNav,
+} from "~/domain/nav-backfill";
+import {
 
   costBasisNavScaled,
   valuateHolding,
   valuatePortfolio,
 } from "~/domain/portfolio";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
-import { fetchNavHistory } from "./fund-data";
+import { fetchNavHistoryDetailed, NAV_FETCH_TIMEOUT_MS } from "./fund-data";
 
 /**
  * 组合读取与估值编排。把 D1 数据喂给领域层的纯函数，产出页面要的视图模型。
@@ -379,6 +384,16 @@ export async function getNavSeries(
   return rows.reverse();
 }
 
+/** ensureNavHistory 的可选项；默认值即基金页口径 */
+export interface NavBackfillOptions {
+  /** 行数阈值：基金页 60，回测页 250（按天定投默认 250 期） */
+  minRows?: number;
+  /** 单次最多回填多少行 */
+  maxRows?: number;
+  /** 单页超时：访客在等的路径用默认值，后台/撮合用后台档（见 fund-data） */
+  timeoutMs?: number;
+}
+
 /**
  * 净值历史「够用就好」的保障：不足 minRows 条就回填 maxRows 条（默认 400，
  * 约 400 个交易日）。供需要长历史的页面用（定投回测要足够多的月数）。
@@ -387,47 +402,110 @@ export async function getNavSeries(
  * 任何基金只要有持仓/待确认单，在被人类访问之前就已有数据——写成 length === 0
  * 的话回填永远不触发，库里永远只有薄薄一层滑动窗口（实测 14 只基金全是
  * 20~23 条，图表与近 1 年阶段涨幅全都残缺）。60 ≈ 一个季度交易日，低于它
- * 必是残缺历史；回填一次后库里就有完整历史，条件自然不再命中（每基金一次性）。
+ * 必是残缺历史。
+ *
+ * ⚠️ 光看行数会漏一类基金：**上市不足 60 个交易日的新基金**，上游总共就没有
+ * 60 行（2026-09-23 实测 028439 只有 50 行），条件对它**永久成立** ⇒ 每次访问
+ * 白拉 3 页东财 + 写一遍 D1，永不收敛。所以再叠一道 `fund.nav_backfilled_at`
+ * 记忆化闸门（不论成败都记，单基金 ≤ 4 次/天），判断逻辑在 domain/nav-backfill。
  *
  * 依赖方向：本文件 → fund-data（fetchNavHistory）。**不能反过来**——
  * fund-data 不 import 本模块，否则成环。
- * ⚠️ 基金页 loader 里还有一份内联的同款逻辑（那一页本次未动），改口径时两处同改。
+ * 基金页 loader 已改为调用本函数（此前那份内联同款逻辑已删），口径唯一。
  */
 export async function ensureNavHistory(
   db: Db,
   env: Env,
   fundCode: string,
-  minRows = 60,
-  maxRows = 400,
+  opts: NavBackfillOptions = {},
 ): Promise<NavSeriesRow[]> {
+  const {
+    minRows = NAV_BACKFILL_MIN_ROWS,
+    maxRows = 400,
+    timeoutMs = NAV_FETCH_TIMEOUT_MS,
+  } = opts;
   const series = await getNavSeries(db, fundCode);
-  if (series.length >= minRows) {
+
+  const f = await db.query.fund.findFirst({
+    where: eq(fund.code, fundCode),
+    columns: { navBackfilledAt: true, navBackfilledTarget: true },
+  });
+  const now = Date.now();
+  if (
+    !shouldBackfillNav({
+      rowCount: series.length,
+      backfilledAt: f?.navBackfilledAt ?? null,
+      backfilledTarget: f?.navBackfilledTarget ?? null,
+      now,
+      minRows,
+    })
+  ) {
     return series;
   }
-  const rows = await fetchNavHistory(env, fundCode, maxRows);
+
+  /** 记一笔尝试：成功记满间隔，失败只记短冷却（见 domain/nav-backfill 的论证） */
+  const stamp = async (succeeded: boolean) => {
+    const s = navBackfillStamp({ now, minRows, succeeded });
+    await db
+      .update(fund)
+      .set({ navBackfilledAt: s.at, navBackfilledTarget: s.target })
+      .where(eq(fund.code, fundCode));
+  };
+
+  let fetched: Awaited<ReturnType<typeof fetchNavHistoryDetailed>> = {
+    rows: [],
+    complete: false,
+  };
+  try {
+    // 要「完整度」：整波全败时只拿到部分行，不能按成功档记账（见 fetchNavHistoryDetailed）
+    fetched = await fetchNavHistoryDetailed(env, fundCode, maxRows, timeoutMs);
+  }
+  catch (err) {
+    // 回填是「锦上添花」，绝不该把页面或后台任务打成异常
+    console.error(`[nav] 基金 ${fundCode} 回填净值异常：`, err);
+  }
+  const { rows, complete } = fetched;
+
   if (rows.length === 0) {
-    // 东财拉不到（节假日抖动/接口挂了）就把现有的还给调用方，别把页面打成 500
+    // 东财拉不到（节假日抖动/链路慢）：把现有的还给调用方，并只锁短冷却——
+    // 拉取失败不写任何数据，若按成功档锁满 6 小时就成了「数据停一天」
+    await stamp(false);
     return series;
   }
-  // 400 行走 batch 一次提交：逐条 await 是 400 次 D1 往返（约 1.2s），
-  // 会把触发回填的那次页面访问拖到超时边缘。onConflictDoNothing 保持
-  // 「已存在的日期不动」语义（与 cron 的 upsert 覆盖策略不同——回填只补洞，
-  // 不覆盖 cron 已写的当日新值）
-  await runBatch(
-    db,
-    rows.map(r =>
-      db
-        .insert(fundNav)
-        .values({
-          fundCode,
-          navDate: r.navDate,
-          unitNav: r.unitNav,
-          accNav: r.accNav,
-          growthRate: r.growthRate,
-        })
-        .onConflictDoNothing(),
-    ),
-  );
+
+  try {
+    // 400 行走 batch 一次提交：逐条 await 是 400 次 D1 往返（约 1.2s），
+    // 会把触发回填的那次页面访问拖到超时边缘。onConflictDoNothing 保持
+    // 「已存在的日期不动」语义（与 cron 的 upsert 覆盖策略不同——回填只补洞，
+    // 不覆盖 cron 已写的当日新值）
+    await runBatch(
+      db,
+      rows.map(r =>
+        db
+          .insert(fundNav)
+          .values({
+            fundCode,
+            navDate: r.navDate,
+            unitNav: r.unitNav,
+            accNav: r.accNav,
+            growthRate: r.growthRate,
+          })
+          .onConflictDoNothing(),
+      ),
+    );
+  }
+  catch (err) {
+    // 落库失败：不记账（下次访问再试一遍，拉取是幂等的）
+    console.error(`[nav] 基金 ${fundCode} 回填落库失败：`, err);
+    return series;
+  }
+
+  // 记账放在真正成功之后（2026-09-23 对抗 review 修正：原先「先记账再拉」
+  // 会在平台掐死后台任务/链路抖动时把闸门白烧 6 小时）。
+  // 部分成功（中途一整波全败，只拿到首页那 20 行）同样只锁短冷却——否则库里
+  // 明明才二十来行，回测页却要等满 6 小时才有人再补
+  // （2026-09-23 CodeRabbit 评审：原先只判 rows.length === 0，部分结果被记成成功）
+  await stamp(complete);
   return getNavSeries(db, fundCode);
 }
 

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { fund } from "~/db/schema";
 import { roundInt, yuanToCents } from "~/domain/money";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
+import { lastClosedTradingDay } from "~/domain/trading-calendar";
 
 /**
  * 东方财富公开接口封装：搜索、档案、历史净值、全量列表兜底。
@@ -107,6 +108,32 @@ const EM_WEB_HEADERS = {
 const EM_MOBILE_HEADERS = {
   Referer: "https://fundf10.eastmoney.com/",
 };
+
+/**
+ * 单页普通请求超时（毫秒）。默认档给「有人等着」的路径用：失败要快。
+ */
+export const NAV_FETCH_TIMEOUT_MS = 8000;
+
+/**
+ * 没人等的路径（撮合 cron、页面后台回填）的超时。
+ *
+ * 2026-09-23 实测：从 CF 边缘打 lsjz 单页要 7~8s（4 次探针 TTFB 6.8~8.5s），
+ * 正贴着默认的 8s 线——偶尔一页被掐断就是「今晚订单整晚顺延」或
+ * 「基准线/历史缺一段」。这些路径没有用户等着，给足余量。
+ */
+export const NAV_FETCH_TIMEOUT_BACKGROUND_MS = 12000;
+
+/**
+ * 页面侧回填的行数上限 = **一次翻页波**（CONCURRENCY × PAGE_SIZE = 5 × 20）。
+ *
+ * 2026-09-23 对抗 review 修正：原先基金页在 `ctx.waitUntil` 里做 400 行回填
+ * （20 页 = 首页 + 4 波 ≈ 5 个串行阶段），而平台硬顶是 **响应发出后 30 秒**
+ * （所有 waitUntil 共享）、CPU 还与 SSR 共享 Free 档的 10ms——实测 lsjz 单页
+ * 7~8s ⇒ 35~60s，会被平台**掐死且什么都没写**（闸门却已经烧掉）。
+ * 所以页面只补「最近一段」（≤100 行，够补齐新鲜度），长历史（400 行）
+ * 不在请求里做——留给回测页（用户主动等）与后续的 cron/队列任务。
+ */
+export const NAV_PAGE_BACKFILL_MAX_ROWS = 100;
 
 /** 带超时的 fetch，避免 Worker 被慢接口拖死 */
 async function fetchWithTimeout(
@@ -303,7 +330,24 @@ export async function fetchFundBasic(
 }
 
 /**
- * 拉取历史净值序列（按日期倒序，最新在前）。
+ * 长历史拉取的结果：行 + 「完整度」信号。
+ *
+ * 为什么需要 complete（2026-09-23 CodeRabbit 评审）：翻页中途**一整波全败**时
+ * 会收手并返回已到手的部分行——首页那 20 行也算「非空」。调用方若只看
+ * `rows.length !== 0` 就记「拉取成功」，记忆化闸门就会锁满 6 小时
+ * （NAV_BACKFILL_INTERVAL_MS），而库里其实只有二十来行：回测页这 6 小时里
+ * 静默按短窗口计算。拉取失败只锁短冷却，部分成功同理。
+ *
+ * 完整 = 计划内的页都拿到了（翻完、TotalCount 取尽，或遇到短页 = 上游没有更多）。
+ * 不完整 = 首屏失败，或中途一整波全败。
+ */
+export interface NavHistoryFetch {
+  rows: NavRow[];
+  complete: boolean;
+}
+
+/**
+ * 拉取历史净值序列（按日期倒序，最新在前）+ 完整度信号。
  *
  * ⚠️ 东财 2026 年起对 lsjz 接口加了钳制：**单页最多 20 行**——pageSize 填
  * 30~200 也只回 20 条，≥400 直接回空 `Data`。所以要拿长历史必须翻页：
@@ -312,13 +356,18 @@ export async function fetchFundBasic(
  *
  * 失败时返回空数组——撮合任务据此让订单保持 pending 顺延到下个交易日，
  * 绝不能把「拉不到净值」误判成「订单失败」。翻页中途某页失败不炸整体
- * （allSettled 保留成功页），第一页就失败才返回空。
+ * （allSettled 保留成功页），**某一波全败就收手**（上游此刻不可用，继续翻页
+ * 只是把超时一笔笔重复付掉），第一页就失败才返回空。
+ *
+ * `timeoutMs` 是单页超时：有人等着的路径用默认值（失败要快），
+ * cron / 页面后台回填传 NAV_FETCH_TIMEOUT_BACKGROUND_MS。
  */
-export async function fetchNavHistory(
+export async function fetchNavHistoryDetailed(
   env: Env,
   code: string,
   wantRows = 60,
-): Promise<NavRow[]> {
+  timeoutMs = NAV_FETCH_TIMEOUT_MS,
+): Promise<NavHistoryFetch> {
   /** 接口单页实际上限（实测值；写大无效，写 ≥400 直接回空） */
   const PAGE_SIZE = 20;
   /** 翻页并发波次宽度：一口气全并发容易触发风控（push2his 的教训） */
@@ -331,7 +380,7 @@ export async function fetchNavHistory(
     const url
       = `https://api.fund.eastmoney.com/f10/lsjz`
         + `?fundCode=${encodeURIComponent(code)}&pageIndex=${pageIndex}&pageSize=${PAGE_SIZE}`;
-    const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS });
+    const resp = await fetchWithTimeout(url, { headers: EM_WEB_HEADERS }, timeoutMs);
     const json = (await resp.json()) as {
       TotalCount?: number;
       Data?: {
@@ -364,8 +413,10 @@ export async function fetchNavHistory(
   try {
     // 第 1 页先单独拉：拿 TotalCount 决定还要翻几页
     const first = await fetchPage(1);
+    // 首屏就空：可能上游挂了，也可能这只基金确实没有历史。两种都拿不到
+    // 计划内的页，一律算不完整（调用方按 rows.length === 0 分支）
     if (first.rows.length === 0)
-      return first.rows;
+      return { rows: first.rows, complete: false };
 
     // 需要的总页数：目标条数与接口存量取小（TotalCount 缺失时按首页行数估）
     const total = first.totalCount ?? first.rows.length;
@@ -375,6 +426,8 @@ export async function fetchNavHistory(
     );
 
     const collected = [...first.rows];
+    // 默认完整；只有「中途整波全败」才翻成 false（遇到短页是上游没数据了，仍算完整）
+    let complete = true;
     // 剩余页按波次并发（每波 CONCURRENCY 页），拉完为止
     const restPages: number[] = [];
     for (let p = 2; p <= maxPages; p++)
@@ -383,23 +436,45 @@ export async function fetchNavHistory(
       const wave = restPages.slice(i, i + CONCURRENCY);
       const settled = await Promise.allSettled(wave.map(p => fetchPage(p)));
       let shortPage = false;
+      let fulfilled = 0;
       for (const s of settled) {
         if (s.status !== "fulfilled")
           continue; // 单页失败不炸整体：已到手的页照常入库
+        fulfilled++;
         collected.push(...s.value.rows);
         // 不满一页说明后面没有更多数据了（TotalCount 不准时的兜底）
         if (s.value.rows.length < PAGE_SIZE)
           shortPage = true;
       }
+      // 一整波全败 = 上游此刻不可用（跨境链路抖动）。继续翻页只会把超时
+      // 一笔笔重复付掉，把 cron / 后台任务的时间预算耗光——收手
+      if (fulfilled === 0) {
+        complete = false;
+        break;
+      }
       if (shortPage)
         break;
     }
-    return collected;
+    return { rows: collected, complete };
   }
   catch (err) {
     console.error(`[fund-data] 拉取基金 ${code} 净值失败：`, err);
-    return [];
+    return { rows: [], complete: false };
   }
+}
+
+/**
+ * 只要行的薄包装：撮合 cron 等「拉不到就顺延」的调用方用这个
+ * （完整度对它们没有意义）。需要区分「部分成功」的调用方
+ * ——回填闸门——请直接用 fetchNavHistoryDetailed。
+ */
+export async function fetchNavHistory(
+  env: Env,
+  code: string,
+  wantRows = 60,
+  timeoutMs = NAV_FETCH_TIMEOUT_MS,
+): Promise<NavRow[]> {
+  return (await fetchNavHistoryDetailed(env, code, wantRows, timeoutMs)).rows;
 }
 
 /**
@@ -829,12 +904,19 @@ export async function fetchFundPosition(
   }
 }
 
+/** 指数净值点：date=交易日，close=收盘点数（未缩放，直接画线用） */
+export interface IndexNavPoint {
+  date: string;
+  close: number;
+}
+
 /**
  * 指数净值（沪深300等）。东财 push2his，新域名。
  * ⚠️ Referer 用 https://quote.eastmoney.com/（与 fundf10 不同）。
  * @param env Worker 环境，提供 KV
  * @param secid 如 "1.000300"（沪深300），"1.000001"（上证综指）
  * @param days 取最近多少天
+ * @param now 取数时刻（默认当前）。注入是为了覆盖「盘中 / 盘后」两种窗口
  * 失败降级顺序：陈旧兜底缓存（无 TTL 的 last-known-good）→ 空数组
  * （基准线不画，不阻塞详情页）。
  */
@@ -842,7 +924,8 @@ export async function fetchIndexNav(
   env: Env,
   secid: string,
   days: number,
-): Promise<{ date: string; close: number }[]> {
+  now: Date = new Date(),
+): Promise<IndexNavPoint[]> {
   const cacheKey = `fund:index:${secid}:${days}`;
   // 陈旧兜底 key：无过期，成功时随主缓存一起双写，只在拉取失败时救场
   // ——基准线是 400 天序列，旧几个缓存周期无妨，总比不画强
@@ -852,16 +935,59 @@ export async function fetchIndexNav(
   const cached = await env.KV.get(cacheKey);
   if (cached) {
     try {
-      return JSON.parse(cached) as { date: string; close: number }[];
+      return JSON.parse(cached) as IndexNavPoint[];
     }
     catch {
       /* 缓存损坏 */
     }
   }
 
+  /**
+   * 统一降级出口：「抛异常」与「HTTP 200 但没数据」两条失败路都走这里。
+   *
+   * 日志分层（2026-09-23）：有兜底 → warn（数据在变旧但页面照常，末日期供排障）；
+   * 无兜底 → error（用户真的看不到基准线）。
+   * err 一律 String() 进模板：走 `console.error(msg, err)` 时 CF 日志管线会丢掉
+   * err 的 message、只留 stack（2026-09-23 线上日志实测），那样排障时分不清
+   * 「连接被重置」和「我们自己的 8s 超时」。
+   */
+  const fallbackToStale = async (
+    reason: string,
+    err?: unknown,
+  ): Promise<IndexNavPoint[]> => {
+    let stale: string | null = null;
+    try {
+      stale = await env.KV.get(staleKey);
+    }
+    catch {
+      /* KV 也炸了，只能认空 */
+    }
+    if (stale) {
+      try {
+        const rows = JSON.parse(stale) as IndexNavPoint[];
+        console.warn(
+          `[fund-data] 指数 ${secid} ${reason}；改用陈旧兜底（末日期 ${rows.at(-1)?.date ?? "未知"}），基准线暂用旧数据`,
+        );
+        return rows;
+      }
+      catch {
+        /* 兜底也损坏，落到下面报 error */
+      }
+    }
+    // 原因进模板（CF 日志管线可能只留 stack），原始 err 仍作第二参传下去（保 stack）
+    console.error(
+      `[fund-data] 指数 ${secid} ${reason}；无兜底数据，本次不画基准线`,
+      err,
+    );
+    return [];
+  };
+
   try {
-    const ed = dayjs().format("YYYYMMDD");
-    const sd = dayjs().subtract(days, "day").format("YYYYMMDD");
+    // 右端取「最后已收盘的交易日」：盘中抓取会把当天实时价当 K 线返回，
+    // 被 7 天 TTL 冻住（2026-09-23 线上实测），且与基金线末端错位
+    const edDay = lastClosedTradingDay(now);
+    const ed = dayjs(edDay).format("YYYYMMDD");
+    const sd = dayjs(edDay).subtract(days, "day").format("YYYYMMDD");
     const url
       = `https://push2his.eastmoney.com/api/qt/stock/kline/get`
         + `?secid=${encodeURIComponent(secid)}&fields1=f1,f2,f3`
@@ -869,8 +995,11 @@ export async function fetchIndexNav(
     // push2his 会随机重置连接（本地实测 10 次挂 6 次，workerd 报
     // "Network connection lost" 且自带 retryable:true），单发必抖。
     // 重试 3 次 + 间隔递增，本地实测把成功率抬到 >98%；
-    // 但从 Cloudflare 海外边缘访问时失败率远高于本地（东财对海外
-    // 数据中心 IP 不友好），所以失败后还要走 stale 兜底。
+    // 但从 Cloudflare 海外边缘访问时基本打不通（东财对海外数据中心 IP
+    // 不友好）：2026-09-23 线上实测**单次 HTTP 成功率仅 ~4%**（7 个批次里
+    // 6 败 1 成反推；4 次重试把一轮抬到 ~14%——两个量纲别混）。重试救不了它，
+    // 只是让失败别直接砸在访客身上；根治要换源或离线预抓（见开发文档）。
+    // 所以失败后还要走 stale 兜底。
     const resp = await fetchWithRetry(
       url,
       { headers: { Referer: "https://quote.eastmoney.com/" } },
@@ -889,32 +1018,24 @@ export async function fetchIndexNav(
         const close = Number(parts[2]);
         return Number.isFinite(close) ? { date: parts[0], close } : null;
       })
-      .filter((r): r is { date: string; close: number } => r !== null);
+      .filter((r): r is IndexNavPoint => r !== null);
 
-    if (rows.length > 0) {
-      // 双写：主缓存（带 TTL）+ 陈旧兜底（无过期）。
-      // KV 无原子批量，两笔分开写最坏差一拍，兜底旧一个周期而已，无害
-      await env.KV.put(cacheKey, JSON.stringify(rows), {
-        expirationTtl: CACHE_TTL.index,
-      });
-      await env.KV.put(staleKey, JSON.stringify(rows));
-    }
+    // HTTP 200 但一根 K 线都没有（限流 / 被挡）：与抛异常同一条降级路径。
+    // 原先这条出口直接 return 空数组——基准线静默消失且不留日志，比报错更隐蔽
+    if (rows.length === 0)
+      return await fallbackToStale(`返回空数据（HTTP ${resp.status}）`);
+
+    // 双写：主缓存（带 TTL）+ 陈旧兜底（无过期）。
+    // KV 无原子批量，两笔分开写最坏差一拍，兜底旧一个周期而已，无害
+    await env.KV.put(cacheKey, JSON.stringify(rows), {
+      expirationTtl: CACHE_TTL.index,
+    });
+    await env.KV.put(staleKey, JSON.stringify(rows));
     return rows;
   }
   catch (err) {
-    console.error(`[fund-data] 拉取指数 ${secid} 净值失败：`, err);
-    // 拉取全灭：退而求其次用上次成功的数据画基准线；
-    // 冷启动（兜底也没有）才真正返回空数组
-    const stale = await env.KV.get(staleKey);
-    if (stale) {
-      try {
-        return JSON.parse(stale) as { date: string; close: number }[];
-      }
-      catch {
-        /* 兜底也损坏，认了 */
-      }
-    }
-    return [];
+    // 拉取全灭：退而求其次用上次成功的数据画基准线；冷启动（兜底也没有）才报 error
+    return await fallbackToStale(`拉取失败：${String(err)}`, err);
   }
 }
 
