@@ -631,6 +631,29 @@ describe("fetchIndexNav 沪深300", () => {
     );
     expect(await fetchIndexNav(fakeEnv(), "1.000300", 30)).toEqual([]);
   });
+
+  // 2026-09-23 新增：push2his 被限流/被挡时可能回 HTTP 200 + data:null。
+  // 原先只有 catch 出口读兜底缓存，这条出口直接返回空数组——
+  // 基准线整段消失且不打任何日志（比抛异常更隐蔽）。
+  it("HTTP 200 但 data 为空时同样走陈旧兜底", async () => {
+    const kv = fakeKV();
+    const stale = JSON.stringify([{ date: "2026-08-20", close: 4500.0 }]);
+    kv._store.set("fund:index:1.000300:30:stale", stale);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: null }))),
+    );
+    expect(await fetchIndexNav(fakeEnv(kv), "1.000300", 30))
+      .toEqual([{ date: "2026-08-20", close: 4500.0 }]);
+  });
+
+  it("HTTP 200 但 data 为空且无兜底（冷启动）返回空数组", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: null }))),
+    );
+    expect(await fetchIndexNav(fakeEnv(), "1.000300", 30)).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

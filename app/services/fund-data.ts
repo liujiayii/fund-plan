@@ -829,6 +829,12 @@ export async function fetchFundPosition(
   }
 }
 
+/** 指数净值点：date=交易日，close=收盘点数（未缩放，直接画线用） */
+export interface IndexNavPoint {
+  date: string;
+  close: number;
+}
+
 /**
  * 指数净值（沪深300等）。东财 push2his，新域名。
  * ⚠️ Referer 用 https://quote.eastmoney.com/（与 fundf10 不同）。
@@ -842,7 +848,7 @@ export async function fetchIndexNav(
   env: Env,
   secid: string,
   days: number,
-): Promise<{ date: string; close: number }[]> {
+): Promise<IndexNavPoint[]> {
   const cacheKey = `fund:index:${secid}:${days}`;
   // 陈旧兜底 key：无过期，成功时随主缓存一起双写，只在拉取失败时救场
   // ——基准线是 400 天序列，旧几个缓存周期无妨，总比不画强
@@ -852,12 +858,47 @@ export async function fetchIndexNav(
   const cached = await env.KV.get(cacheKey);
   if (cached) {
     try {
-      return JSON.parse(cached) as { date: string; close: number }[];
+      return JSON.parse(cached) as IndexNavPoint[];
     }
     catch {
       /* 缓存损坏 */
     }
   }
+
+  /**
+   * 统一降级出口：「抛异常」与「HTTP 200 但没数据」两条失败路都走这里。
+   *
+   * 日志分层（2026-09-23）：有兜底 → warn（数据在变旧但页面照常，末日期供排障）；
+   * 无兜底 → error（用户真的看不到基准线）。
+   * err 一律 String() 进模板：走 `console.error(msg, err)` 时 CF 日志管线会丢掉
+   * err 的 message、只留 stack（2026-09-23 线上日志实测），那样排障时分不清
+   * 「连接被重置」和「我们自己的 8s 超时」。
+   */
+  const fallbackToStale = async (reason: string): Promise<IndexNavPoint[]> => {
+    let stale: string | null = null;
+    try {
+      stale = await env.KV.get(staleKey);
+    }
+    catch {
+      /* KV 也炸了，只能认空 */
+    }
+    if (stale) {
+      try {
+        const rows = JSON.parse(stale) as IndexNavPoint[];
+        console.warn(
+          `[fund-data] 指数 ${secid} ${reason}；改用陈旧兜底（末日期 ${rows.at(-1)?.date ?? "未知"}），基准线暂用旧数据`,
+        );
+        return rows;
+      }
+      catch {
+        /* 兜底也损坏，落到下面报 error */
+      }
+    }
+    console.error(
+      `[fund-data] 指数 ${secid} ${reason}；无兜底数据，本次不画基准线`,
+    );
+    return [];
+  };
 
   try {
     const ed = dayjs().format("YYYYMMDD");
@@ -869,8 +910,11 @@ export async function fetchIndexNav(
     // push2his 会随机重置连接（本地实测 10 次挂 6 次，workerd 报
     // "Network connection lost" 且自带 retryable:true），单发必抖。
     // 重试 3 次 + 间隔递增，本地实测把成功率抬到 >98%；
-    // 但从 Cloudflare 海外边缘访问时失败率远高于本地（东财对海外
-    // 数据中心 IP 不友好），所以失败后还要走 stale 兜底。
+    // 但从 Cloudflare 海外边缘访问时基本打不通（东财对海外数据中心 IP
+    // 不友好）：2026-09-23 线上实测单次 HTTP 成功率仅 ~4%（7 个批次
+    // 6 败 1 成），4 次重试只能把一轮抬到 ~14%——重试救不了它，只是
+    // 让失败别直接砸在访客身上。根治要换源或离线预抓（见开发文档）。
+    // 所以失败后还要走 stale 兜底。
     const resp = await fetchWithRetry(
       url,
       { headers: { Referer: "https://quote.eastmoney.com/" } },
@@ -889,32 +933,24 @@ export async function fetchIndexNav(
         const close = Number(parts[2]);
         return Number.isFinite(close) ? { date: parts[0], close } : null;
       })
-      .filter((r): r is { date: string; close: number } => r !== null);
+      .filter((r): r is IndexNavPoint => r !== null);
 
-    if (rows.length > 0) {
-      // 双写：主缓存（带 TTL）+ 陈旧兜底（无过期）。
-      // KV 无原子批量，两笔分开写最坏差一拍，兜底旧一个周期而已，无害
-      await env.KV.put(cacheKey, JSON.stringify(rows), {
-        expirationTtl: CACHE_TTL.index,
-      });
-      await env.KV.put(staleKey, JSON.stringify(rows));
-    }
+    // HTTP 200 但一根 K 线都没有（限流 / 被挡）：与抛异常同一条降级路径。
+    // 原先这条出口直接 return 空数组——基准线静默消失且不留日志，比报错更隐蔽
+    if (rows.length === 0)
+      return await fallbackToStale(`返回空数据（HTTP ${resp.status}）`);
+
+    // 双写：主缓存（带 TTL）+ 陈旧兜底（无过期）。
+    // KV 无原子批量，两笔分开写最坏差一拍，兜底旧一个周期而已，无害
+    await env.KV.put(cacheKey, JSON.stringify(rows), {
+      expirationTtl: CACHE_TTL.index,
+    });
+    await env.KV.put(staleKey, JSON.stringify(rows));
     return rows;
   }
   catch (err) {
-    console.error(`[fund-data] 拉取指数 ${secid} 净值失败：`, err);
-    // 拉取全灭：退而求其次用上次成功的数据画基准线；
-    // 冷启动（兜底也没有）才真正返回空数组
-    const stale = await env.KV.get(staleKey);
-    if (stale) {
-      try {
-        return JSON.parse(stale) as { date: string; close: number }[];
-      }
-      catch {
-        /* 兜底也损坏，认了 */
-      }
-    }
-    return [];
+    // 拉取全灭：退而求其次用上次成功的数据画基准线；冷启动（兜底也没有）才报 error
+    return await fallbackToStale(`拉取失败：${String(err)}`);
   }
 }
 
