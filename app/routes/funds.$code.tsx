@@ -34,9 +34,10 @@ import {
   fetchIndexNav,
   fetchInvestStyle,
   fetchManagerInfo,
+  NAV_FETCH_TIMEOUT_BACKGROUND_MS,
 } from "~/services/fund-data";
 import { getCurrentUser } from "~/services/guard";
-import { ensureNavHistory, getDcaPlans, getHoldingBrief } from "~/services/portfolio-service";
+import { ensureNavHistory, getDcaPlans, getHoldingBrief, getNavSeries } from "~/services/portfolio-service";
 import { listSiblingFunds } from "~/services/seo-service";
 import { isWatched } from "~/services/watchlist-service";
 import { pnlColor } from "~/theme";
@@ -68,7 +69,7 @@ export function meta({ loaderData, params }: Route.MetaArgs) {
  * 400 天约 1.6 年，覆盖近 1 年阶段涨幅（spec §6）。
  */
 export async function loader({ params, request, context }: Route.LoaderArgs) {
-  const { db, env } = getAppContext(context);
+  const { db, env, ctx } = getAppContext(context);
   const code = params.code;
 
   // 基金档案：没有或过期就拉东财落库（抽到 ensureFund，自选也复用它）
@@ -81,7 +82,22 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // 口径与闸门全在 ensureNavHistory：除了「少于 60 条」，还带一道
   // `fund.nav_backfilled_at` 记忆化——否则**上市不足 60 个交易日的新基金**
   // 每次访问都会白拉 3 页东财（实测 028439）。别再往这里塞内联副本。
-  const series = await ensureNavHistory(db, env, code);
+  //
+  // 分两档（2026-09-23 实测边缘打 lsjz 单页要 7~8s，不该让访客替全网付）：
+  //   库里一行都没有 → 这一页没数据就是废页（爬虫只来一次），等它拉完；
+  //   有数据但残缺   → 现有序列先渲染，回填丢 waitUntil（下次访问/爬虫就齐了）。
+  let series = await getNavSeries(db, code);
+  if (series.length === 0) {
+    series = await ensureNavHistory(db, env, code);
+  }
+  else {
+    ctx.waitUntil(
+      ensureNavHistory(db, env, code, {
+        timeoutMs: NAV_FETCH_TIMEOUT_BACKGROUND_MS,
+      }).catch(err =>
+        console.error(`[funds] ${code} 后台回填净值失败：`, err)),
+    );
+  }
 
   // 登录用户才需要：现金（买入抽屉）、自选态、已持有速览（顶部标识与两格统计）、
   // 该基金定投计划（定投抽屉）——四查互相独立，一波并行

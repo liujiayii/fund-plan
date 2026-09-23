@@ -22,7 +22,7 @@ import {
   valuatePortfolio,
 } from "~/domain/portfolio";
 import { DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
-import { fetchNavHistory } from "./fund-data";
+import { fetchNavHistory, NAV_FETCH_TIMEOUT_MS } from "./fund-data";
 
 /**
  * 组合读取与估值编排。把 D1 数据喂给领域层的纯函数，产出页面要的视图模型。
@@ -380,6 +380,16 @@ export async function getNavSeries(
   return rows.reverse();
 }
 
+/** ensureNavHistory 的可选项；默认值即基金页口径 */
+export interface NavBackfillOptions {
+  /** 行数阈值：基金页 60，回测页 250（按天定投默认 250 期） */
+  minRows?: number;
+  /** 单次最多回填多少行 */
+  maxRows?: number;
+  /** 单页超时：访客在等的路径用默认值，后台/撮合用后台档（见 fund-data） */
+  timeoutMs?: number;
+}
+
 /**
  * 净值历史「够用就好」的保障：不足 minRows 条就回填 maxRows 条（默认 400，
  * 约 400 个交易日）。供需要长历史的页面用（定投回测要足够多的月数）。
@@ -403,9 +413,13 @@ export async function ensureNavHistory(
   db: Db,
   env: Env,
   fundCode: string,
-  minRows = NAV_BACKFILL_MIN_ROWS,
-  maxRows = 400,
+  opts: NavBackfillOptions = {},
 ): Promise<NavSeriesRow[]> {
+  const {
+    minRows = NAV_BACKFILL_MIN_ROWS,
+    maxRows = 400,
+    timeoutMs = NAV_FETCH_TIMEOUT_MS,
+  } = opts;
   const series = await getNavSeries(db, fundCode);
 
   const f = await db.query.fund.findFirst({
@@ -431,7 +445,7 @@ export async function ensureNavHistory(
     .set({ navBackfilledAt: now })
     .where(eq(fund.code, fundCode));
 
-  const rows = await fetchNavHistory(env, fundCode, maxRows);
+  const rows = await fetchNavHistory(env, fundCode, maxRows, timeoutMs);
   if (rows.length === 0) {
     // 东财拉不到（节假日抖动/接口挂了）就把现有的还给调用方，别把页面打成 500
     return series;

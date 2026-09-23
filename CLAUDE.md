@@ -288,6 +288,11 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
   `ensureNavHistory`，别再写内联副本。
 - 基准线取数窗口右端用 `lastClosedTradingDay`（见下节节假日表的消费方）：
   盘中抓到的当天实时价会被 7 天 TTL 冻在缓存里。
+- **时间预算分档**：有人等着的路径 `NAV_FETCH_TIMEOUT_MS`(8s)，cron / 后台回填
+  `NAV_FETCH_TIMEOUT_BACKGROUND_MS`(12s)——实测 lsjz 单页从边缘要 7~8s，贴着
+  8s 线。lsjz 翻页某一波全败即收手，不把剩余波次打完。
+- **别让访客等回填**：基金页只在「库里一行都没有」时 await 回填（废页值得等），
+  有数据但残缺时现有序列先渲染、回填丢 `ctx.waitUntil`。
 
 详细实测表、探针手法与坑（KV 60s 边缘读缓存、`wrangler tail` 本机不通且会留下
 孤儿子进程）见 `docs/development.md` 的「边缘拉东财」一节。

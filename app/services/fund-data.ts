@@ -330,7 +330,7 @@ export async function fetchFundBasic(
  * （allSettled 保留成功页），**某一波全败就收手**（上游此刻不可用，继续翻页
  * 只是把超时一笔笔重复付掉），第一页就失败才返回空。
  *
- * @param timeoutMs 单页超时。有人等着的路径用默认值（失败要快），
+ * `timeoutMs` 是单页超时：有人等着的路径用默认值（失败要快），
  * cron / 页面后台回填传 NAV_FETCH_TIMEOUT_BACKGROUND_MS。
  */
 export async function fetchNavHistory(
