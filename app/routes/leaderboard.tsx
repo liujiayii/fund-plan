@@ -1,14 +1,12 @@
 import type { Route } from "./+types/leaderboard";
 import type { LeaderboardEntry } from "~/domain/leaderboard";
 import { message, Space, Tabs, Tag, Tooltip, Typography } from "antd";
-import { eq } from "drizzle-orm";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { fmtRate, fmtSignedYuan } from "~/components/ui/format";
 import { PnlText } from "~/components/ui/PnlText";
 import { SectionCard } from "~/components/ui/SectionCard";
-import { user as userTable } from "~/db/schema";
 import { isOlympicPodium, splitPodium } from "~/domain/leaderboard";
 import { pageMeta } from "~/domain/seo";
 import { getAppContext } from "~/services/context";
@@ -32,14 +30,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     getCurrentUser(request, db),
     getLeaderboard(db),
   ]);
-  // 自己没开公开，排行榜上任何人名都不可点（双向开关）
-  const viewerPublic = me
-    ? (await db.query.user.findFirst({
-        where: eq(userTable.id, me.id),
-        columns: { portfolioPublic: true },
-      }))?.portfolioPublic === 1
-    : false;
-  return { me, lb, viewerPublic };
+  return { me, lb };
 }
 
 /** 当前榜的排序口径：英雄数字跟 tab 走，别两榜都把收益率撑成主角 */
@@ -109,19 +100,23 @@ const MEDAL: Record<number, {
   },
 };
 
-/** 点不进别人盘的原因。自己那行、以及双方都公开时返回 null */
+/**
+ * 点不进别人盘的原因。自己那行、以及已登录且对方已公开时返回 null。
+ *  游客必须先拦下来：对方开没开都不能给链接，统一提示去登录，
+ *  否则「有没有提示」本身就向未登录访客泄露了谁开了开关。
+ */
 function portfolioHint(
   entry: LeaderboardEntry,
   meId: number | null,
-  viewerPublic: boolean,
 ): string | null {
   const isMe = meId !== null && entry.userId === meId;
-  if (isMe || (viewerPublic && entry.portfolioPublic))
+  if (isMe)
     return null;
-  if (!meId)
-    return "登录并打开公开后可查看";
-  if (!viewerPublic)
-    return "打开「公开我的组合」后可互相查看";
+  // 游客一律先拦，别让「对方是否公开」提前返回把登录提示吃掉
+  if (meId === null)
+    return "登录后可查看";
+  if (entry.portfolioPublic)
+    return null;
   return "对方未公开组合";
 }
 
@@ -129,14 +124,12 @@ function portfolioHint(
 function BoardName({
   entry,
   meId,
-  viewerPublic,
 }: {
   entry: LeaderboardEntry;
   meId: number | null;
-  viewerPublic: boolean;
 }) {
   const isMe = meId !== null && entry.userId === meId;
-  const hint = portfolioHint(entry, meId, viewerPublic);
+  const hint = portfolioHint(entry, meId);
   const href = hint === null && !isMe && meId !== null ? `/users/${entry.userId}` : null;
   const name = href
     ? <Link to={href} className="text-ink hover:text-primary" onClick={e => e.stopPropagation()}>{entry.username}</Link>
@@ -189,20 +182,18 @@ function bib(rank: number): string {
 function TopSpot({
   entry,
   meId,
-  viewerPublic,
   metric,
   featured,
   openPortfolio,
 }: {
   entry: LeaderboardEntry;
   meId: number | null;
-  viewerPublic: boolean;
   metric: RankMetric;
   featured: boolean;
   openPortfolio: (hint: string | null, href: string | null) => void;
 }) {
   const isMe = meId !== null && entry.userId === meId;
-  const hint = portfolioHint(entry, meId, viewerPublic);
+  const hint = portfolioHint(entry, meId);
   const href = hint === null && !isMe && meId !== null ? `/users/${entry.userId}` : null;
   const place = PLACE[entry.rank] ?? PLACE[3];
   const heroIsRate = metric === "rate";
@@ -233,7 +224,7 @@ function TopSpot({
 
       <div className="min-w-0 flex-1">
         <div className={`truncate font-medium text-ink ${featured ? "text-[16px] md:text-[17px]" : "text-[15px]"}`}>
-          <BoardName entry={entry} meId={meId} viewerPublic={viewerPublic} />
+          <BoardName entry={entry} meId={meId} />
         </div>
         <div className="mt-0.5 font-num text-xs text-muted">
           {heroIsRate
@@ -272,14 +263,12 @@ function Podium({
   leads,
   rest,
   meId,
-  viewerPublic,
   metric,
   openPortfolio,
 }: {
   leads: LeaderboardEntry[];
   rest: LeaderboardEntry[];
   meId: number | null;
-  viewerPublic: boolean;
   metric: RankMetric;
   openPortfolio: (hint: string | null, href: string | null) => void;
 }) {
@@ -296,7 +285,6 @@ function Podium({
             meId={meId}
             metric={metric}
             featured
-            viewerPublic={viewerPublic}
             openPortfolio={openPortfolio}
           />
         ))}
@@ -309,7 +297,6 @@ function Podium({
                 meId={meId}
                 metric={metric}
                 featured={false}
-                viewerPublic={viewerPublic}
                 openPortfolio={openPortfolio}
               />
             ))}
@@ -371,7 +358,7 @@ function Podium({
             ? (e.investedPnlRate === null ? "—" : fmtRate(e.investedPnlRate))
             : signedYuan(e.totalPnlCents);
           const heroTone = pnlTone(heroIsRate ? (e.investedPnlRate ?? 0) : e.totalPnlCents);
-          const hint = portfolioHint(e, meId, viewerPublic);
+          const hint = portfolioHint(e, meId);
           const href = hint === null && !isMe && meId !== null ? `/users/${e.userId}` : null;
 
           return (
@@ -393,7 +380,7 @@ function Podium({
                 {e.rank}
               </span>
               <div className="mt-1.5 w-full truncate px-2 text-center text-[13px] font-medium text-ink md:mt-2 md:text-[15px]">
-                <BoardName entry={e} meId={meId} viewerPublic={viewerPublic} />
+                <BoardName entry={e} meId={meId} />
               </div>
               {/* 名字下的另一口径：收益率榜给收益金额，总收益榜给选基收益率。
                   移动端柱宽不够，这行让位给英雄数字 */}
@@ -428,20 +415,18 @@ function Podium({
 function LeaderRow({
   entry,
   meId,
-  viewerPublic,
   metric,
   openPortfolio,
 }: {
   entry: LeaderboardEntry;
   meId: number | null;
-  viewerPublic: boolean;
   /** 当前榜：决定哪边是主角。跟领奖台同一套规则，别两套 UI 各说各话 */
   metric: RankMetric;
   openPortfolio: (hint: string | null, href: string | null) => void;
 }) {
   const isMe = meId !== null && entry.userId === meId;
   const heroIsRate = metric === "rate";
-  const hint = portfolioHint(entry, meId, viewerPublic);
+  const hint = portfolioHint(entry, meId);
   const href = hint === null && meId !== null && entry.userId !== meId
     ? `/users/${entry.userId}`
     : null;
@@ -455,7 +440,7 @@ function LeaderRow({
       </span>
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="font-medium text-ink">
-          <BoardName entry={entry} meId={meId} viewerPublic={viewerPublic} />
+          <BoardName entry={entry} meId={meId} />
         </div>
         <div className="mt-0.5 font-num text-xs text-muted">
           {/* 副值是「另一个口径」：收益率榜给收益金额（这榜上的人都买过，
@@ -485,13 +470,11 @@ function LeaderRow({
 function ListTape({
   entries,
   meId,
-  viewerPublic,
   metric,
   openPortfolio,
 }: {
   entries: LeaderboardEntry[];
   meId: number | null;
-  viewerPublic: boolean;
   metric: RankMetric;
   openPortfolio: (hint: string | null, href: string | null) => void;
 }) {
@@ -499,13 +482,13 @@ function ListTape({
     return null;
   return (
     <div className="-mx-4 md:-mx-6">
-      {entries.map(e => <LeaderRow key={e.userId} entry={e} meId={meId} viewerPublic={viewerPublic} metric={metric} openPortfolio={openPortfolio} />)}
+      {entries.map(e => <LeaderRow key={e.userId} entry={e} meId={meId} metric={metric} openPortfolio={openPortfolio} />)}
     </div>
   );
 }
 
 export default function Leaderboard({ loaderData }: Route.ComponentProps) {
-  const { me, lb, viewerPublic } = loaderData;
+  const { me, lb } = loaderData;
   const meId = me?.id ?? null;
   // 受控 tab：「我的排名」必须看当前榜。只赎回、从未买入的人被排除在
   // 收益率榜之外，但总收益榜上有他——固定查 byRate 会把在榜的人显示成没上榜
@@ -548,7 +531,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
             选基收益率 = 总收益 ÷ 累计买入金额（分母只算真投进基金的钱；
             同一笔钱买了再卖、卖了再买会重复计入，频繁交易会把这个比率压低）。
             榜单只公示收益数字，不公示任何人的资产与余额。
-            想看别人的持仓，双方都要在设置里打开「公开我的组合」。
+            想看别人的持仓，登录后点开了「公开我的组合」的人即可进入。
           </Paragraph>
         </div>
 
@@ -572,8 +555,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                       label: "总收益榜",
                       children: (
                         <>
-                          <Podium leads={pnlBoard.leads} rest={pnlBoard.rest} meId={meId} viewerPublic={viewerPublic} metric="pnl" openPortfolio={openPortfolio} />
-                          <ListTape entries={pnlBoard.tape} meId={meId} viewerPublic={viewerPublic} metric="pnl" openPortfolio={openPortfolio} />
+                          <Podium leads={pnlBoard.leads} rest={pnlBoard.rest} meId={meId} metric="pnl" openPortfolio={openPortfolio} />
+                          <ListTape entries={pnlBoard.tape} meId={meId} metric="pnl" openPortfolio={openPortfolio} />
                         </>
                       ),
                     },
@@ -582,8 +565,8 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
                       label: "收益率榜",
                       children: (
                         <>
-                          <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} viewerPublic={viewerPublic} metric="rate" openPortfolio={openPortfolio} />
-                          <ListTape entries={rateBoard.tape} meId={meId} viewerPublic={viewerPublic} metric="rate" openPortfolio={openPortfolio} />
+                          <Podium leads={rateBoard.leads} rest={rateBoard.rest} meId={meId} metric="rate" openPortfolio={openPortfolio} />
+                          <ListTape entries={rateBoard.tape} meId={meId} metric="rate" openPortfolio={openPortfolio} />
                         </>
                       ),
                     },
@@ -602,7 +585,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
               ? (
                 // 单行卡不走 ListTape 负边距：外卡 body 自己就是左右呼吸
                   <div className="-mx-4 md:-mx-6">
-                    <LeaderRow entry={mine} meId={meId} viewerPublic={viewerPublic} metric={metric} openPortfolio={openPortfolio} />
+                    <LeaderRow entry={mine} meId={meId} metric={metric} openPortfolio={openPortfolio} />
                   </div>
                 )
               : (

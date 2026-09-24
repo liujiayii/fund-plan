@@ -8,11 +8,12 @@ export type PublicPortfolioDenial
 
 /**
  * 排行榜点进他人公开组合的门。
- * 双向：看的人和被看的人都得开着「公开我的组合」。
+ * 单向：只看被看的人开没开「公开我的组合」，看的人自己开不开无所谓。
+ * 自己的开关只决定别人能不能看自己。
  *
- * 自己没开时一律 403，不区分目标存不存在、开没开——
- * 否则关着的人能用 404/403 枚举全站 user id。
- * 自己开了之后：目标不存在 404，对方没开 403。
+ * 代价是登录用户能靠 404/403 的差别探到某个 id 存不存在、开没开——
+ * 这是改成单向时接受的暴露，排行榜本来就会把开了的人亮出来。
+ * 自己看自己不走这里（/me）；目标不存在 404，对方没开 403。
  */
 export async function canViewPublicPortfolio(
   db: Db,
@@ -23,21 +24,11 @@ export async function canViewPublicPortfolio(
     return { ok: false, status: 403, message: "请到「我的」查看自己的组合" };
   }
 
-  const [viewer, target] = await Promise.all([
-    db.query.user.findFirst({
-      where: eq(user.id, viewerId),
-      columns: { portfolioPublic: true },
-    }),
-    db.query.user.findFirst({
-      where: eq(user.id, targetId),
-      columns: { portfolioPublic: true },
-    }),
-  ]);
+  const target = await db.query.user.findFirst({
+    where: eq(user.id, targetId),
+    columns: { portfolioPublic: true },
+  });
 
-  // 先看自己。关着的人连「这个 id 有没有人」都不该探到
-  if (!viewer?.portfolioPublic) {
-    return { ok: false, status: 403, message: "你未公开组合，不能查看他人的盘" };
-  }
   if (!target) {
     return { ok: false, status: 404, message: "用户不存在" };
   }

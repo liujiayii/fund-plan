@@ -18,8 +18,8 @@ export function meta(_: Route.MetaArgs) {
 /**
  * 已登录用户看别人的公开组合。只读，与 admin 详情共用盘面组件。
  *
- * 双向开关：viewer 和 target 都必须 portfolio_public = 1。
- * 自己看自己不走这里（/me），未公开一律 403，不存在 404。
+ * 单向开关：只要求对方 portfolio_public = 1，看的人自己开不开无所谓。
+ * 自己看自己 403 并指向「我的」；目标不存在 404；对方没开 403。
  */
 export async function loader({ request, params, context }: Route.LoaderArgs) {
   const { db } = getAppContext(context);

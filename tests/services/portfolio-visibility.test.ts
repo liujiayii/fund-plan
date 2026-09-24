@@ -40,19 +40,19 @@ async function openPublic(userId: number) {
   await db.update(user).set({ portfolioPublic: 1 }).where(eq(user.id, userId));
 }
 
-describe("canViewPublicPortfolio 双向公开", () => {
-  it("双方都开着才放行", async () => {
+describe("canViewPublicPortfolio 单向公开", () => {
+  it("对方开着就放行，自己开不开无所谓", async () => {
     const db = getDb(env.DB);
     const alice = await registerUser(db, env, "alice", "hunter2");
     const bob = await registerUser(db, env, "bob", "hunter2");
+    // 双方都关着：进不去
     expect((await canViewPublicPortfolio(db, alice.id, bob.id)).ok).toBe(false);
 
+    // 只开对方：自己没开也能看
     await openPublic(bob.id);
-    const onlyTarget = await canViewPublicPortfolio(db, alice.id, bob.id);
-    expect(onlyTarget.ok).toBe(false);
-    if (!onlyTarget.ok)
-      expect(onlyTarget.message).toContain("你未公开");
+    expect((await canViewPublicPortfolio(db, alice.id, bob.id)).ok).toBe(true);
 
+    // 自己再开：仍然能看，开关不互相牵制
     await openPublic(alice.id);
     expect((await canViewPublicPortfolio(db, alice.id, bob.id)).ok).toBe(true);
   });
@@ -68,7 +68,7 @@ describe("canViewPublicPortfolio 双向公开", () => {
     const missing = await canViewPublicPortfolio(db, alice.id, 99999);
     expect(missing.ok).toBe(false);
     if (!missing.ok)
-      expect(missing.status).toBe(403);
+      expect(missing.status).toBe(404);
   });
 });
 
@@ -92,11 +92,10 @@ describe("/users/:id loader", () => {
     }
   });
 
-  it("对方未公开时 403，双方公开时返回详情", async () => {
+  it("对方未公开时 403，对方公开时返回详情（看的人自己没开也行）", async () => {
     const db = getDb(env.DB);
     const alice = await registerUser(db, env, "alice", "hunter2");
     const bob = await registerUser(db, env, "bob", "hunter2");
-    await openPublic(alice.id);
     const token = await createSession(db, alice.id);
 
     try {
@@ -121,33 +120,27 @@ describe("/users/:id loader", () => {
     expect(data.detail.user.username).toBe("bob");
   });
 
-  it("自己开了之后，不存在的 id 才是 404", async () => {
+  it("不存在的 id 是 404，与自己开没开无关", async () => {
     const db = getDb(env.DB);
     const alice = await registerUser(db, env, "alice", "hunter2");
-    await openPublic(alice.id);
     const missing = await canViewPublicPortfolio(db, alice.id, 99999);
     expect(missing.ok).toBe(false);
     if (!missing.ok)
       expect(missing.status).toBe(404);
   });
 
-  it("关着的人访问已公开用户仍 403", async () => {
+  it("自己关着开关，访问已公开用户也放行", async () => {
     const db = getDb(env.DB);
     const alice = await registerUser(db, env, "alice", "hunter2");
     const bob = await registerUser(db, env, "bob", "hunter2");
     await openPublic(bob.id);
     const token = await createSession(db, alice.id);
-    try {
-      await publicLoader({
-        request: authed(token, `https://x.dev/users/${bob.id}`),
-        params: { id: String(bob.id) },
-        context: fakeContext(),
-      } as never);
-      expect.unreachable("应该 403");
-    }
-    catch (thrown) {
-      expect((thrown as Response).status).toBe(403);
-    }
+    const data = await publicLoader({
+      request: authed(token, `https://x.dev/users/${bob.id}`),
+      params: { id: String(bob.id) },
+      context: fakeContext(),
+    } as never);
+    expect(data.detail.user.username).toBe("bob");
   });
 });
 
