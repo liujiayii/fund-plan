@@ -126,7 +126,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // 阈值给 250 而不是默认的 60：本页按天定投的默认期数就是 250 期，库里只有
   // 60~249 条时会静默算成短窗口——而 settle 每晚只同步最近 30 条，不会替我们补齐
   // 更早的历史，光靠默认阈值补不上（CodeRabbit 评审 #7）
-  const series = await ensureNavHistory(db, env, code, 250);
+  const series = await ensureNavHistory(db, env, code, { minRows: 250 });
   const points = toBacktestSeries(series, parsed.adjust);
   const backtest = runDcaBacktest(points, {
     amountCents: parsed.amountCents,

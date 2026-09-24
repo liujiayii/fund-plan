@@ -270,6 +270,41 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 的 postinstall（不放行则二进制不下载、git 钩子装不上）。`trustPolicyExclude`
 豁免了 `semver@6.3.1`（pnpm 误判，考证见 `docs/development.md`）。
 
+### 边缘拉东财：降级路径的纪律（2026-09-23 实测）
+
+`push2his`（沪深300 基准线）从 CF 边缘**基本打不通**：线上实测**单次 HTTP 成功
+~4%**（由 7 个批次 6 败 1 成反推；一轮 4 次重试整体成功 ~14%——两个量纲别混），
+失败是快速连接重置；本机直连 >98%。`lsjz`（基金净值）形态不同——单页 **7~8s**
+（能到，但贴着超时线），超时表现为**我们自己的 `AbortError`**。
+
+⇒ **重试救不了它**（一轮到 95% 要 ~75 次尝试），`fetchIndexNav` 的 stale 兜底是
+必需品而非保险；要根治得换源（要求「从边缘可达」，**尚未定源**）或离线预抓写
+KV。改相关代码的五条纪律：
+
+- **HTTP 200 但 `data` 为空 = 失败**，与抛异常走同一条兜底；日志分层（有兜底 →
+  `warn`，无兜底 → `error`），**原因自己 `String(err)` 拼进模板**（同一批线上日志
+  里 `AbortError: ...` 保留了 message、原生网络错误只剩 stack）。
+- 长历史回填有闸门 `fund.nav_backfilled_at` + `nav_backfilled_target`
+  （`domain/nav-backfill`）：**成功**记 6 小时、**失败**只记 30 分钟冷却（失败没写
+  任何数据，锁满 6 小时就成了「数据停一天」）、**目标更大时放行**（基金页 60 行
+  不连坐回测页 250 行）。光看「行数 < 60」对**上市不足 60 个交易日的新基金**
+  永久成立（实测 028439 上游仅 50 行），会退化成每次访问都拉 3 页东财。
+  基金页 loader 已改调 `ensureNavHistory`，别再写内联副本。
+- 基准线取数窗口右端用 `lastClosedTradingDay`（见下节节假日表的消费方）：
+  盘中抓到的当天实时价会被 7 天 TTL 冻在缓存里。
+- **时间预算分档**：有人等着的路径 `NAV_FETCH_TIMEOUT_MS`(8s)，cron / 后台回填
+  `NAV_FETCH_TIMEOUT_BACKGROUND_MS`(12s)；lsjz 翻页某一波全败即收手；`syncNav`
+  另有 8 分钟总预算（cron 墙钟硬顶 15 分钟）。
+- ⚠️ **`ctx.waitUntil` 只有响应后 30 秒**（同请求内共享，超时被取消且**什么都没
+  写**），Free 档 CPU 仅 10ms 且与 SSR 共享 ⇒ 后台任务只放**一次翻页波**的量级
+  （`NAV_PAGE_BACKFILL_MAX_ROWS = 100`），**400 行的长历史回填不在请求里做**。
+  基金页只在「库里一行都没有」时 `await`（废页值得等），有数据但残缺时先渲染、
+  回填丢 `ctx.waitUntil`（注册点放在 8 路东财请求**之后**：并发出站连接免费版
+  只有 6 个，第 7 个排队）。
+
+详细实测表、探针手法与坑（KV 60s 边缘读缓存、`wrangler tail` 本机不通且会留下
+孤儿子进程）见 `docs/development.md` 的「边缘拉东财」一节。
+
 ## 代码风格
 
 `@antfu/eslint-config`，**双引号 + 分号 + 2 空格缩进**。
@@ -320,8 +355,10 @@ git 钩子（simple-git-hooks）：`pre-commit` 对暂存文件跑 `eslint --fix
 ## 交易日历需每年更新
 
 `app/domain/trading-calendar.ts` 的 `CN_HOLIDAYS` 是硬编码节假日表，每年需人工更新。
-**消费方有两处**：撮合（`resolveConfirmDate` 算 T+1 确认日）与定投（`nextRunDate`
-算下次执行日——2026-09-07 起定投执行日也校准到交易日，周末/节假日不再下单）。
+**消费方有三处**：撮合（`resolveConfirmDate` 算 T+1 确认日）、定投（`nextRunDate`
+算下次执行日——2026-09-07 起定投执行日也校准到交易日，周末/节假日不再下单）、
+基准线取数窗口（`lastClosedTradingDay` 算「最后已收盘的交易日」，做
+`fetchIndexNav` 的窗口右端；口径与撮合刻意不同，见函数注释）。
 表漏了某天会导致定投在该日多生成一单（会在下个交易日被撮合）。
 兜底：撮合时把 `fund_nav` 的净值日期序列作为 `knownTradingDays` 传入——
 有净值的那天必然是交易日，可反向校正遗漏（定投的 `nextRunDate` 目前未接

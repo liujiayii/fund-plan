@@ -15,8 +15,8 @@ import {
 } from "~/db/schema";
 import { calcPurchase } from "~/domain/purchase";
 import { calcRedeem, DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
-import { toBeijing } from "~/domain/trading-calendar";
-import { fetchNavHistory } from "./fund-data";
+import { lastClosedTradingDay, toBeijing } from "~/domain/trading-calendar";
+import { fetchNavHistory, NAV_FETCH_TIMEOUT_BACKGROUND_MS } from "./fund-data";
 
 /**
  * 撮合引擎：净值同步 + T+1 确认。
@@ -57,16 +57,64 @@ export interface SettleResult {
 }
 
 /**
+ * 一轮净值同步的总预算。
+ *
+ * cron 的墙钟硬顶是 **15 分钟**（官方 limits），同一次 invocation 里还要跑
+ * 撮合与清理会话。超预算就收手，剩余基金留给 21:30 那轮幂等重跑——
+ * 宁可让几只基金顺延，也别让整次 invocation 被砍、连撮合都跑不成。
+ */
+export const NAV_SYNC_BUDGET_MS = 8 * 60 * 1000;
+
+/** syncNav 的结果：synced 是行数，funds/attempted/empty 是基金数（供判定「整轮是否全灭」） */
+export interface SyncNavResult {
+  /** 实际写入的净值行数 */
+  synced: number;
+  /** 本轮清单里的基金数 */
+  funds: number;
+  /** 真正尝试过（进入循环）的基金数；超预算提前收手时 < funds */
+  attempted: number;
+  /** 尝试过的基金里，一条净值都没拉到的只数 */
+  empty: number;
+}
+
+/**
+ * 挑出「指定交易日已经有净值」的基金代码。
+ *
+ * 为什么要分批：inArray 会把每个代码变成一个 SQL 参数，而清单是「所有持仓基金」
+ * （线上量级上百只），一次塞进去会顶到参数上限。50 个一批，多几次查询对每天
+ * 只跑两次的 cron 无所谓。
+ */
+async function codesWithNavOn(
+  db: Db,
+  codes: string[],
+  navDate: string,
+): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (let i = 0; i < codes.length; i += 50) {
+    const batch = codes.slice(i, i + 50);
+    const rows = await db
+      .selectDistinct({ code: fundNav.fundCode })
+      .from(fundNav)
+      .where(and(inArray(fundNav.fundCode, batch), eq(fundNav.navDate, navDate)));
+    for (const r of rows)
+      found.add(r.code);
+  }
+  return found;
+}
+
+/**
  * 同步基金净值到 fund_nav 表。
  * @param db Drizzle 实例
  * @param env Worker 环境（取 KV 与网络）
  * @param fundCodes 指定基金；不传则同步所有「有持仓或有待确认订单」的基金
+ * @param budgetMs 总时间预算，超出即收手（测试可注入 0 来验证短路）
  */
 export async function syncNav(
   db: Db,
   env: Env,
   fundCodes?: string[],
-): Promise<{ synced: number }> {
+  budgetMs = NAV_SYNC_BUDGET_MS,
+): Promise<SyncNavResult> {
   let codes = fundCodes;
 
   if (!codes) {
@@ -75,21 +123,54 @@ export async function syncNav(
       .selectDistinct({ code: orders.fundCode })
       .from(orders)
       .where(eq(orders.status, "pending"));
+    const pendingCodes = fromOrders.map(r => r.code);
     const fromHoldings = await db
       .selectDistinct({ code: holding.fundCode })
       .from(holding);
+    const holdingCodes = fromHoldings
+      .map(r => r.code)
+      .filter(c => !pendingCodes.includes(c));
+
+    // 清单顺序 = 预算优先级（2026-09-23 CodeRabbit 评审）：
+    // 1. 有待确认订单的基金——撮合今晚就要用当日净值，缺它整批顺延；
+    // 2. 持仓基金里**还缺「最后已收盘交易日」净值**的——同步的主要目的；
+    // 3. 已经有当日的——有预算余量再幂等重刷，顺带补上游迟发的行。
+    //
+    // 为什么是排序而不是「硬跳过已有当日的基金」：上游偶尔迟发某一天的净值，
+    // 那时它的**最新行已经在库里**，而我们恰恰要把缺的那一行拉回来——硬跳过
+    // 会让这个洞永远补不上。排序只是把有限预算先花在真正需要它的基金上；
+    // 预算不够时，排在后面的自然留给了下一次触发。
+    const freshCodes = await codesWithNavOn(
+      db,
+      holdingCodes,
+      lastClosedTradingDay(new Date()),
+    );
     codes = [
-      ...new Set([
-        ...fromOrders.map(r => r.code),
-        ...fromHoldings.map(r => r.code),
-      ]),
+      ...pendingCodes,
+      ...holdingCodes.filter(c => !freshCodes.has(c)),
+      ...holdingCodes.filter(c => freshCodes.has(c)),
     ];
   }
 
   let synced = 0;
+  let empty = 0;
+  let attempted = 0;
+  const startedAt = Date.now();
   for (const code of codes) {
-    const rows = await fetchNavHistory(env, code, 30);
+    // 超预算就收手：剩余基金留给 21:30 那轮幂等重跑，别把 15 分钟墙钟耗光
+    // （用 >= 而非 >：预算给 0 时也要立刻收手，便于测试与「禁用同步」的语义）
+    if (Date.now() - startedAt >= budgetMs) {
+      console.warn(
+        `[settle] 净值同步超出 ${Math.round(budgetMs / 1000)}s 预算，本轮中止（剩余基金留给下一次触发）`,
+      );
+      break;
+    }
+    attempted++;
+    // 用「没人等」档的超时：跨境 lsjz 单页实测 7~8s，正贴着默认的 8s 线，
+    // 一页被掐断就是今晚订单整晚顺延。cron 没有用户在等，给足余量
+    const rows = await fetchNavHistory(env, code, 30, NAV_FETCH_TIMEOUT_BACKGROUND_MS);
     if (rows.length === 0) {
+      empty++;
       console.warn(`[settle] 基金 ${code} 净值拉取为空，跳过`);
       continue;
     }
@@ -116,7 +197,18 @@ export async function syncNav(
     synced += rows.length;
   }
 
-  return { synced };
+  // 整轮全灭：订单会整体顺延到次日，而 per-fund 的 warn 埋在细节里看不出后果。
+  // 这是**钱路**上的失败（撮合靠它拿当日净值），必须给一条 error 级的汇总信号
+  // （2026-09-23 补；跨境链路不稳时真有这种夜晚）。
+  // 口径是「尝试过的全拉空」，且带上代码——别把「我们库里代码不对」误诊成
+  // 「东财挂了」，也别对原因下断言。
+  if (attempted > 0 && empty === attempted) {
+    console.error(
+      `[settle] 本轮尝试的 ${attempted} 只基金净值全部拉空——今晚订单会全部顺延（基金：${codes.slice(0, attempted).join("、")}）`,
+    );
+  }
+
+  return { synced, funds: codes.length, attempted, empty };
 }
 
 /**
