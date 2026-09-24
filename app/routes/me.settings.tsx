@@ -77,8 +77,8 @@ export async function action({ request, context }: Route.ActionArgs) {
       return {
         ok: true,
         message: next
-          ? "已公开。同样打开的人可以在排行榜点进你的组合，你也能点进他们的。"
-          : "已关闭。你看不了别人的组合，别人也看不了你的。",
+          ? "已公开。别人可以在排行榜点进你的组合；你看别人只取决于对方开没开。"
+          : "已关闭。别人看不了你的组合；你看别人不受影响。",
       };
     }
 
@@ -178,10 +178,9 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
       <SectionCard title="公开我的组合" className="animate-fade-up animate-delay-[60ms]">
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            默认关闭。打开后，
-            <Text strong>同样打开了这个开关的人</Text>
-            可以在排行榜点进你的持仓、收益和订单（只读）；你也能点进他们的。
-            关掉之后，你看不了别人，别人也看不了你。游客和没打开的人始终只能看榜，进不了任何人的盘。
+            默认关闭。打开后，任何登录用户都可以在排行榜点进你的持仓、收益和订单（只读）。
+            你看别人只取决于对方开没开，跟你自己的开关无关。
+            关掉只是别人看不了你，不影响你看别人。游客始终只能看榜，进不了任何人的盘。
           </Paragraph>
           <fetcher.Form method="post">
             <input type="hidden" name="intent" value="setPortfolioPublic" />
@@ -195,7 +194,7 @@ export default function MeSettings({ loaderData }: Route.ComponentProps) {
                   { method: "post" },
                 )}
               />
-              <Text>{portfolioPublic ? "已公开，排行榜上互相可见" : "未公开"}</Text>
+              <Text>{portfolioPublic ? "已公开，排行榜上的人可以点进来" : "未公开"}</Text>
             </Space>
           </fetcher.Form>
         </Space>
