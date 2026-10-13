@@ -35,6 +35,7 @@ export const SITEMAP_STATIC_PATHS = [
   "/plan",
   "/leaderboard",
   "/funds",
+  "/glossary",
   "/tools/fee-calculator",
   "/tools/dca-backtest",
   "/login",

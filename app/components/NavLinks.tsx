@@ -8,6 +8,7 @@ import {
   DashboardOutlined,
   FundOutlined,
   HomeOutlined,
+  ReadOutlined,
   StarOutlined,
   TrophyOutlined,
   UserOutlined,
@@ -23,6 +24,8 @@ const NAV_ICON: Record<string, ReactNode> = {
   "/plan": <BulbOutlined />,
   "/leaderboard": <TrophyOutlined />,
   "/funds": <FundOutlined />,
+  // 基金词典:书(学习/查词),与基金的钞票图标区分
+  "/glossary": <ReadOutlined />,
   "/tools/fee-calculator": <CalculatorOutlined />,
   // 定投回测：曲线图（与费用计算器的计算器图标区分开）。⚠️ 漏登记会静默
   // 退回下面的 UserOutlined，看起来就像「我的」——tests/domain/seo-guard.test.ts

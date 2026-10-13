@@ -11,7 +11,7 @@ import { flatRoutes } from "@react-router/fs-routes";
  *
  * 鉴权不在路由表里，而在各自 loader：
  *   公开页（游客可见）：/ /master /plan /leaderboard /funds /funds/:code
- *     /tools/* /login /register
+ *     /glossary /tools/* /login /register
  *   需登录页：/me 系列（loader 里 requireUser 把门）
  *   公开组合：/users/:id（requireUser，且对方打开了「公开我的组合」才 200；
  *     看的人自己开不开无所谓。不是游客页，不要进边缘缓存）
