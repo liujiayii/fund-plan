@@ -26,6 +26,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "/plan", label: "低估指数定投计划" },
   { key: "/leaderboard", label: "排行榜" },
   { key: "/funds", label: "基金" },
+  // 基金词典紧跟基金:讲的是同一个「基金」主题下的学习内容,读者看完基金
+  // 自然想查不懂的名词;侧栏每页都渲染,等于给词典全站内链(SEO 实在)
+  { key: "/glossary", label: "基金词典" },
   // 工具页也进侧栏：侧栏在每个页面都渲染，给它一个导航项等于给这一页全站内链
   // （SEO 上比只挂 sitemap 实在），顺带让用户找得到。底栏（MOBILE_TAB_KEYS）
   // 不放它——底栏只留四个高频入口
