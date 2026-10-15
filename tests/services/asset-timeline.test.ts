@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "~/db/client";
 import {
@@ -124,6 +125,14 @@ describe("getAssetTimeline 在途申购", () => {
     await seedFund();
     const userId = await seedUser();
 
+    // init 流水的 createdAt 是注册时刻（真实时钟「今天」），而下单注入的是
+    // 08-24——显式把 init 挪到下单之前，让「注册先于下单」的时间线成立，
+    // 账本链的日期序才与 id（提交）序一致（账本按 id 序前向填充）
+    await db
+      .update(transactions)
+      .set({ createdAt: new Date("2026-08-22T04:00:00Z").getTime() })
+      .where(and(eq(transactions.userId, userId), eq(transactions.type, "init")));
+
     // 北京 15:30 下单 → 确认日 08-25
     await placeBuyOrder(db, env, {
       userId,
@@ -173,5 +182,31 @@ describe("getAssetTimeline 在途申购", () => {
     expect(daily.every(d => d.dayPnlCents === 0)).toBe(true);
     expect(daily[daily.length - 1].transitCents).toBe(0);
     expect(daily[daily.length - 1].totalAssetCents).toBe(INITIAL_CASH_CENTS);
+  });
+
+  it("createdAt 乱序的余额链按 id（提交序）前向填充（2026-10-14 回归）", async () => {
+    const db = getDb(env.DB);
+    await seedFund();
+    const userId = await seedUser();
+
+    // 直接构造事故形态的流水：createdAt 与真实提交序脱节。
+    // 真实提交序（id 递增）= init → 冻结A → 签到；createdAt 却是
+    // init(昨日) → 签到(2 小时前) → 冻结A(1 小时前)。旧的 (createdAt, id)
+    // 排序会把链尾读成冻结行（4,900,000）；按 id 排序才取到真值
+    // 签到行的 4,950,000
+    const t = Date.now();
+    await db.insert(transactions).values([
+      { userId, type: "init", amount: INITIAL_CASH_CENTS, balance: INITIAL_CASH_CENTS, note: "初始本金", createdAt: t - 86400000 },
+      // 提交序第 2 笔：冻结 −100000（createdAt 伪造成「1 小时前」）
+      { userId, type: "buy", amount: -100000, balance: INITIAL_CASH_CENTS - 100000, note: "冻结", createdAt: t - 3600000 },
+      // 提交序第 3 笔：签到 +50000（createdAt 伪造成「2 小时前」，比冻结还早）
+      { userId, type: "checkin", amount: 50000, balance: INITIAL_CASH_CENTS - 50000, note: "签到", createdAt: t - 7200000 },
+    ]);
+
+    const { latest } = await getAssetTimeline(db, userId);
+    expect(latest).not.toBeNull();
+    // 现金真值 = id 最大的那条流水的 balance（4,950,000），不是
+    // createdAt 序最大的冻结行（4,900,000）
+    expect(latest!.cashCents).toBe(INITIAL_CASH_CENTS - 50000);
   });
 });

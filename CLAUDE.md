@@ -270,6 +270,17 @@ miniflare 按 `database_id` 哈希本地数据库文件名，改 id 会切到全
 的 postinstall（不放行则二进制不下载、git 钩子装不上）。`trustPolicyExclude`
 豁免了 `semver@6.3.1`（pnpm 误判，考证见 `docs/development.md`）。
 
+### 现金账只准相对量更新（2026-10-14 事故）
+
+CF cron 是 at-least-once：定投扫描被重复派发过（相隔 5 秒两单重叠）。旧
+`placeBuyOrder` 是「读 cash → JS 减 → 无条件写回」的读-改-写，两笔并发扣款
+互相覆盖丢了 2 万，`scanDcaPlans` 的「先下单后推进 next_run」两步窗口则让
+重复派发真的重复下单——当日收益凭空多 2.2 万。修复与纪律：现金写点全部走
+`app/services/cash.ts` 的相对量原语（`cashDelta`/`cashNow`/`hasBuyFreezeSql`），
+**禁止读 cash 再写回绝对值**；扫描改抢占式 CAS next_run；重放账本按 id 序
+（不是 createdAt 序）前向填充。对账恒等式 `account.cash === Σtransactions.amount`
+有测试与运维 SQL 把守（详见 `docs/development.md`「现金账并发丢失更新」）。
+
 ### 边缘拉东财：降级路径的纪律（2026-09-23 实测）
 
 `push2his`（沪深300 基准线）从 CF 边缘**基本打不通**：线上实测**单次 HTTP 成功

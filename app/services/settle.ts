@@ -16,6 +16,7 @@ import {
 import { calcPurchase } from "~/domain/purchase";
 import { calcRedeem, DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { lastClosedTradingDay, toBeijing } from "~/domain/trading-calendar";
+import { cashDelta, cashNow, hasBuyFreezeSql } from "./cash";
 import { fetchNavHistory, NAV_FETCH_TIMEOUT_BACKGROUND_MS } from "./fund-data";
 
 /**
@@ -450,13 +451,11 @@ export async function settleSellOrder(
   if (!acc)
     throw new Error("账户不存在");
 
-  const newCash = acc.cash + calc.totalNetCents;
   // 卖出总额（分）= 到账净额 + 赎回费。账本按「总额入账 → 扣费」两笔记，
   // 而不是「净额入账 → 再记一笔负的费用」——后者会让「Σ流水金额」比真实
   // 余额变化多减一次手续费，且两行余额同值，读起来像「扣了钱但余额没变」
   // （TxList 逐行渲染余额，用户看得见）。见下方 sell / fee 两行的注释
   const grossCents = calc.totalNetCents + calc.totalFeeCents;
-  const cashAfterGross = acc.cash + grossCents;
 
   const h = await db.query.holding.findFirst({
     where: and(
@@ -530,16 +529,22 @@ export async function settleSellOrder(
           eq(holding.fundCode, order.fundCode),
         ),
       ),
-    // 4. 现金入账
-    db.update(account).set({ cash: newCash }).where(eq(account.userId, order.userId)),
-    // 5. 到账流水。记**卖出总额**（净额 + 费），余额是总额入账后的中间态；
-    //    紧接着的第 6 条 fee 流水再把它扣到 newCash。两行相加 = 余额变化，
-    //    余额列严格单调递减，逐行读「这笔之后我还剩多少」不会自相矛盾
+    // 4. 现金入账：相对量更新（cash = cash + 净额），单语句内完成读改写。
+    //    并发下（用户此刻下单冻结/签到入账）不丢更新——2026-10-14 事故的
+    //    写法是按 JS 预计算的绝对值无条件写回，会被并发批次覆盖
+    db
+      .update(account)
+      .set({ cash: cashDelta(calc.totalNetCents) })
+      .where(eq(account.userId, order.userId)),
+    // 5. 到账流水。记**卖出总额**（净额 + 费），余额是总额入账后的中间态
+    //    （子查询真值 + 本笔未扣的费用）；紧接着的第 6 条 fee 流水再把它扣
+    //    到终值。两行相加 = 余额变化，余额列严格单调递减，逐行读
+    //    「这笔之后我还剩多少」不会自相矛盾
     db.insert(transactions).values({
       userId: order.userId,
       type: "sell",
       amount: grossCents,
-      balance: cashAfterGross,
+      balance: cashNow(order.userId, calc.totalFeeCents),
       orderId: order.id,
       note: `赎回 ${f?.name ?? order.fundCode} 到账`,
       createdAt: ts,
@@ -547,14 +552,14 @@ export async function settleSellOrder(
   ];
 
   // 6. 手续费单独记一条，便于统计总成本。balance 记**扣费后**的最终余额
-  //    （= 上面 sell 行的余额 − 本行费用的绝对值）
+  //    （同事务子查询：account 的相对量入账在前，此处读到的是真值）
   if (calc.totalFeeCents > 0) {
     writes.push(
       db.insert(transactions).values({
         userId: order.userId,
         type: "fee",
         amount: -calc.totalFeeCents,
-        balance: newCash,
+        balance: cashNow(order.userId),
         orderId: order.id,
         note: `赎回手续费`,
         createdAt: ts,
@@ -604,27 +609,33 @@ export async function failOrder(
   }
 
   if (order.side === "buy" && order.amount !== null) {
-    const acc = await db.query.account.findFirst({
-      where: eq(account.userId, order.userId),
-    });
-    if (acc) {
-      const refunded = acc.cash + order.amount;
-      await runBatch(db, [
-        db
-          .update(account)
-          .set({ cash: refunded })
-          .where(eq(account.userId, order.userId)),
-        db.insert(transactions).values({
-          userId: order.userId,
-          type: "buy",
-          amount: order.amount, // 退款为正
-          balance: refunded,
-          orderId: order.id,
-          note: `申购失败退款：${reason}`,
-          createdAt: now.getTime(),
-        }),
-      ]);
+    // 退款：相对量更新 + 冻结流水存在守卫 + returning 判赢，随后补流水。
+    // 拆两步是有意的：退款若 0 行（冻结缺失的脏数据），流水绝不能插，
+    // 否则账面凭空多一笔——batch 内的 insert 无条件化能力，只能事后拆。
+    // 理论不可达：订单创建时必冻结（placeBuyOrder 的守卫保证冻结成功才留单）
+    const refunded = await db
+      .update(account)
+      .set({ cash: cashDelta(order.amount) })
+      .where(
+        and(
+          eq(account.userId, order.userId),
+          hasBuyFreezeSql(order.id),
+        ),
+      )
+      .returning({ cash: account.cash });
+    if (refunded.length === 0) {
+      console.error(`[settle] 订单 ${order.id} 退款中止：未找到冻结流水（资金未动，需人工核查）`);
+      return true; // 翻转已赢、订单已 failed；退款中止不重试（裁判挡住重复处置）
     }
+    await db.insert(transactions).values({
+      userId: order.userId,
+      type: "buy",
+      amount: order.amount, // 退款为正
+      balance: refunded[0]!.cash,
+      orderId: order.id,
+      note: `申购失败退款：${reason}`,
+      createdAt: now.getTime(),
+    });
   }
 
   return true;

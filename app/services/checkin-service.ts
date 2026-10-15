@@ -1,8 +1,9 @@
 import type { Db } from "~/db/client";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { account, checkin, transactions } from "~/db/schema";
 import { calcCheckinReward, calcStreak } from "~/domain/checkin";
 import { toBeijing } from "~/domain/trading-calendar";
+import { cashDelta, cashNow } from "./cash";
 
 /**
  * 每日签到领本金。
@@ -64,7 +65,6 @@ export async function doCheckin(
   // calcStreak 会在同日重复签到时抛错
   const streak = calcStreak(last?.checkinDate ?? null, last?.streak ?? 0, today);
   const reward = calcCheckinReward(streak);
-  const newBalance = acc.cash + reward;
 
   await db.batch([
     db.insert(checkin).values({
@@ -73,24 +73,29 @@ export async function doCheckin(
       reward,
       streak,
     }),
+    // 相对量更新（cash = cash + Δ）：签到恰与定投扫描（北京 10:00）同分钟
+    // 也很常见，按 JS 预计算的绝对值写回会覆盖并发资金变动——2026-10-14
+    // 事故同款风险点。流水 balance 用同事务子查询取真值
     db
       .update(account)
       .set({
-        cash: newBalance,
-        totalCheckin: acc.totalCheckin + reward,
+        cash: cashDelta(reward),
+        totalCheckin: sql`total_checkin + ${reward}`,
       })
       .where(eq(account.userId, userId)),
     db.insert(transactions).values({
       userId,
       type: "checkin",
       amount: reward,
-      balance: newBalance,
+      balance: cashNow(userId),
       note: `第 ${streak} 天连续签到奖励`,
       createdAt: now.getTime(),
     }),
   ]);
 
-  return { reward, streak, balance: newBalance };
+  // 返回值是展示用途的近似余额（acc.cash + 奖励）；batch 与本次返回之间
+  // 若有并发入账，真实余额以流水为准，展示层无需绝对精确
+  return { reward, streak, balance: acc.cash + reward };
 }
 
 /**

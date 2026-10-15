@@ -64,7 +64,12 @@ async function buildReplayInput(db: Db, userId: number): Promise<{
       })
       .from(transactions)
       .where(eq(transactions.userId, userId))
-      .orderBy(asc(transactions.createdAt), asc(transactions.id)),
+      // 必须按 id（写入序 = 提交序）排序，不能按 (createdAt, id)：
+      // createdAt 是 JS 时钟（语句构造时取值），并发批次交错提交时与真实
+      // 提交序脱节——2026-10-14 事故里同一分钟的流水 balance 链被按
+      // createdAt 读反，前向填充取到链中部的快照，当日现金多算 2000 元。
+      // id 由 SQLite 单写者按执行顺序分配，才是可靠的提交序
+      .orderBy(asc(transactions.id)),
   ]);
 
   // 映射成重放与归因各自要的形状。份额重放只用已成交单；归因额外带

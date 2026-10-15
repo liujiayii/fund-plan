@@ -237,6 +237,22 @@ export async function scanDcaPlans(
       from: today,
     });
 
+    // 抢占式推进：CAS next_run（必须还是读到时的旧值）+ returning 判赢。
+    // 放在下单**之前**是关键——CF cron 是 at-least-once 语义，重复派发的
+    // 两个扫描会拿着同一份 next_run 快照各自走到这里，只有赢下 CAS 的那个
+    // 才下单，输家零副作用直接跳过。2026-10-14 的重复下单正是「先下单、
+    // 后推进 next_run」的两步窗口被两个相隔 5 秒的重叠扫描钻了空子。
+    const claimed = await db
+      .update(dcaPlan)
+      .set({ nextRun: next })
+      .where(and(eq(dcaPlan.id, plan.id), eq(dcaPlan.nextRun, plan.nextRun)))
+      .returning({ id: dcaPlan.id });
+    if (claimed.length === 0) {
+      // 并发扫描已处置该计划（或用户刚改过排期）
+      result.skipped++;
+      continue;
+    }
+
     try {
       await placeBuyOrder(db, env, {
         userId: plan.userId,
@@ -246,15 +262,14 @@ export async function scanDcaPlans(
         now,
       });
 
+      // ⚠️ 这两个是「触发计数」而非「成交计数」：下单成功就 +1，
+      // 撮合业务失败退款（failOrder）或用户撤单都不会回滚。
+      // 展示层（getDcaPlans）已改为从 orders 现场聚合已确认的 dca 买单，
+      // 这里继续写只是为了留一条「计划被触发过几次」的排查线索——
+      // 谁要拿这两个字段做展示或对账，先读 docs/money-audit.md §5。
       await db
         .update(dcaPlan)
         .set({
-          nextRun: next,
-          // ⚠️ 这两个是「触发计数」而非「成交计数」：下单成功就 +1，
-          // 撮合业务失败退款（failOrder）或用户撤单都不会回滚。
-          // 展示层（getDcaPlans）已改为从 orders 现场聚合已确认的 dca 买单，
-          // 这里继续写只是为了留一条「计划被触发过几次」的排查线索——
-          // 谁要拿这两个字段做展示或对账，先读 docs/money-audit.md §5。
           runCount: plan.runCount + 1,
           totalInvested: plan.totalInvested + plan.amount,
         })
@@ -264,11 +279,8 @@ export async function scanDcaPlans(
     }
     catch (err) {
       console.error(`[dca] 计划 ${plan.id} 触发失败：`, err);
-      // 失败也要推进日期，否则明天会连着今天的一起失败，日志刷屏
-      await db
-        .update(dcaPlan)
-        .set({ nextRun: next })
-        .where(eq(dcaPlan.id, plan.id));
+      // next_run 已在抢占时推进——与原「失败也推进」语义一致（避免次日
+      // 连着今天一起失败、日志刷屏）；计数器保持「下单成功才 +1」不变
       result.failed++;
     }
   }
