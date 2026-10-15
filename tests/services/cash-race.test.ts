@@ -228,6 +228,44 @@ describe("现金账并发安全", () => {
     expect(refundTxs.length).toBe(0);
   });
 
+  it("并发双单后重放链尾=真实余额（CodeRabbit 指出的交错失真回归）", async () => {
+    await seedFund();
+    const userId = await seedUser();
+    const db = getDb(env.DB);
+
+    await Promise.all([
+      placeBuyOrder(db, env, { userId, fundCode: "000001", amountCents: 10000 }),
+      placeBuyOrder(db, env, { userId, fundCode: "000001", amountCents: 20000 }),
+    ]);
+
+    // 若现金更新与流水插入分属两个往返，并发交错会让流水 id 序与现金
+    // 更新序脱节，重放前向填充取到旧余额当最新现金。原子批后链尾恒真值
+    const { getAssetTimeline } = await import("~/services/asset-service");
+    const { latest } = await getAssetTimeline(db, userId);
+    expect(latest!.cashCents).toBe(INITIAL_CASH_CENTS - 30000);
+    expect(latest!.transitCents).toBe(30000);
+    expect(latest!.totalAssetCents).toBe(INITIAL_CASH_CENTS);
+  });
+
+  it("透支申购被守卫拒绝：零残留（无孤儿订单、无流水）", async () => {
+    await seedFund();
+    const userId = await seedUser();
+    const db = getDb(env.DB);
+
+    await expect(
+      placeBuyOrder(db, env, { userId, fundCode: "000001", amountCents: INITIAL_CASH_CENTS + 1 }),
+    ).rejects.toThrow("现金不足");
+
+    const userOrders = await db.select().from(orders).where(eq(orders.userId, userId));
+    expect(userOrders.length).toBe(0);
+    const userTxs = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.userId, userId), eq(transactions.type, "buy")));
+    expect(userTxs.length).toBe(0);
+    expect(await ledgerGap(userId)).toBe(0);
+  });
+
   it("改单差额走相对量：金额与流水对账一致", async () => {
     const db = getDb(env.DB);
     await seedFund();

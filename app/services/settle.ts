@@ -16,7 +16,7 @@ import {
 import { calcPurchase } from "~/domain/purchase";
 import { calcRedeem, DEFAULT_REDEEM_TIERS } from "~/domain/redeem";
 import { lastClosedTradingDay, toBeijing } from "~/domain/trading-calendar";
-import { cashDelta, cashNow, hasBuyFreezeSql } from "./cash";
+import { cashDelta, cashNow, commitCashMove } from "./cash";
 import { fetchNavHistory, NAV_FETCH_TIMEOUT_BACKGROUND_MS } from "./fund-data";
 
 /**
@@ -609,33 +609,25 @@ export async function failOrder(
   }
 
   if (order.side === "buy" && order.amount !== null) {
-    // 退款：相对量更新 + 冻结流水存在守卫 + returning 判赢，随后补流水。
-    // 拆两步是有意的：退款若 0 行（冻结缺失的脏数据），流水绝不能插，
-    // 否则账面凭空多一笔——batch 内的 insert 无条件化能力，只能事后拆。
+    // 退款：原子现金动作（相对量 + 冻结流水存在守卫 + 条件流水，单事务）。
     // 理论不可达：订单创建时必冻结（placeBuyOrder 的守卫保证冻结成功才留单）
-    const refunded = await db
-      .update(account)
-      .set({ cash: cashDelta(order.amount) })
-      .where(
-        and(
-          eq(account.userId, order.userId),
-          hasBuyFreezeSql(order.id),
-        ),
-      )
-      .returning({ cash: account.cash });
-    if (refunded.length === 0) {
+    const moved = await commitCashMove(
+      db,
+      order.userId,
+      order.amount,
+      { requireFreezeFor: order.id },
+      {
+        type: "buy",
+        amount: order.amount, // 退款为正
+        orderId: order.id,
+        note: `申购失败退款：${reason}`,
+        createdAt: now.getTime(),
+      },
+    );
+    if (!moved.ok) {
       console.error(`[settle] 订单 ${order.id} 退款中止：未找到冻结流水（资金未动，需人工核查）`);
       return true; // 翻转已赢、订单已 failed；退款中止不重试（裁判挡住重复处置）
     }
-    await db.insert(transactions).values({
-      userId: order.userId,
-      type: "buy",
-      amount: order.amount, // 退款为正
-      balance: refunded[0]!.cash,
-      orderId: order.id,
-      note: `申购失败退款：${reason}`,
-      createdAt: now.getTime(),
-    });
   }
 
   return true;
