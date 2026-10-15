@@ -1,10 +1,10 @@
 import type { Db } from "~/db/client";
 import { and, eq, ne, sql } from "drizzle-orm";
-import { runBatch } from "~/db/client";
-import { account, fund, holding, orders, transactions } from "~/db/schema";
+import { account, fund, holding, orders } from "~/db/schema";
 import { centsToYuan, sharesToDisplay } from "~/domain/money";
 import { planAmendBuy, planAmendSell, planCancel } from "~/domain/order-lifecycle";
 import { resolveConfirmDate, toBeijing } from "~/domain/trading-calendar";
+import { commitCashMove } from "./cash";
 
 /**
  * 下单服务。
@@ -62,7 +62,8 @@ export async function placeBuyOrder(
     );
   }
 
-  // 现金必须够
+  // 现金必须够——这里是给用户看的友好预检；真正的不透支由下方守卫
+  // UPDATE 在语句内原子保证（读到这里够、写时被并发扣光也扣不动）
   const acc = await db.query.account.findFirst({
     where: eq(account.userId, userId),
   });
@@ -76,7 +77,6 @@ export async function placeBuyOrder(
 
   const placeDate = toBeijing(now).format("YYYY-MM-DD");
   const confirmDate = resolveConfirmDate(now);
-  const newCash = acc.cash - amountCents;
 
   // 先插订单拿 id，流水要引用它
   const [created] = await db
@@ -95,22 +95,35 @@ export async function placeBuyOrder(
     })
     .returning();
 
-  // 扣现金 + 记流水，必须同生共死
-  await db.batch([
-    db
-      .update(account)
-      .set({ cash: newCash })
-      .where(eq(account.userId, userId)),
-    db.insert(transactions).values({
-      userId,
+  // 冻结现金：原子现金动作（相对量 + 双守卫 + 条件流水，单事务不可交错）。
+  // 2026-10-14 事故：本处原实现「读 cash → JS 减 → 无条件写回绝对值」，
+  // 定投扫描被重复派发时两笔并发扣款互相覆盖，丢了一笔 2 万元的冻结。
+  // 守卫未命中（现金不足 / 订单被并发撤销）= 分文未动、流水未写。
+  const moved = await commitCashMove(
+    db,
+    userId,
+    -amountCents,
+    { minBalance: 0, requirePendingOrder: { orderId: created.id } },
+    {
       type: "buy",
       amount: -amountCents, // 出账为负
-      balance: newCash,
       orderId: created.id,
       note: `申购 ${f.name}（${fundCode}），待 ${confirmDate} 确认`,
       createdAt: now.getTime(),
-    }),
-  ]);
+    },
+  );
+
+  if (!moved.ok) {
+    // 守卫保证资金分文未动，删掉刚插的孤儿订单收尾。
+    // 只删仍 pending 的：若已被并发撤单翻转成 cancelled 则不命中，
+    // 留给撤单路径处置——其退款带冻结守卫，资金不会凭空多出。
+    await db
+      .delete(orders)
+      .where(and(eq(orders.id, created.id), eq(orders.status, "pending")));
+    throw new Error(
+      `现金不足：可用 ${centsToYuan(acc.cash)} 元，需要 ${centsToYuan(amountCents)} 元`,
+    );
+  }
 
   return { orderId: created.id };
 }
@@ -249,28 +262,31 @@ export async function cancelOrder(
   if (o.side !== "buy" || refundCents === 0)
     return;
 
-  // 第二段：退款 + 冲正流水，同生共死
-  const acc = await db.query.account.findFirst({
-    where: eq(account.userId, userId),
-  });
   const f = await db.query.fund.findFirst({ where: eq(fund.code, o.fundCode) });
-  const newCash = (acc?.cash ?? 0) + refundCents;
 
-  await runBatch(db, [
-    db
-      .update(account)
-      .set({ cash: newCash })
-      .where(eq(account.userId, userId)),
-    db.insert(transactions).values({
-      userId,
+  // 第二段：退款。原子现金动作（相对量 + 冻结流水存在守卫 + 条件流水）。
+  // 退款必须对应一笔真实冻结，防历史脏数据把退款凭空入账（并发场景：
+  // 冻结被守卫落空的同时撤单抢先翻转）。守卫未命中 = 分文未动、流水未写。
+  const moved = await commitCashMove(
+    db,
+    userId,
+    refundCents,
+    { requireFreezeFor: orderId },
+    {
       type: "cancel",
       amount: refundCents, // 冲正入账为正
-      balance: newCash,
       orderId,
       note: `撤单退款：申购 ${f?.name ?? o.fundCode}（${o.fundCode}）`,
       createdAt: now.getTime(),
-    }),
-  ]);
+    },
+  );
+
+  if (!moved.ok) {
+    // 理论不可达：订单创建时必冻结，能走到这里说明账本有脏数据。
+    // 订单已翻转 cancelled，但资金分文未动——大声报警留人工核查
+    console.error(`[cancel] 订单 ${orderId} 退款中止：未找到冻结流水（资金未动，需人工核查）`);
+    throw new Error("退款异常：未找到原始冻结记录，资金未动，请联系管理员");
+  }
 }
 
 /**
@@ -307,8 +323,39 @@ export async function amendOrder(
 
     const oldAmount = o.amount!;
     const newAmount = change.amountCents;
+    // 差额即 planAmendBuy 返回的 deltaCents：正 = 加仓要补钱，负 = 减仓可退款
 
-    // 第一段：乐观锁翻转（金额必须还是读到的旧值）
+    // 第一段：先动钱（原子现金动作：相对量 + 现金充足守卫 + 订单守卫 +
+    // 差额流水，单事务不可交错）。
+    // 顺序刻意为「先钱后单」：先动钱的失败 = 零副作用直接报错；若沿用旧的
+    // 「先翻转金额再动钱」，动钱一旦失败就要回滚订单金额，回滚再失败还得
+    // 资金冲正，三态处理得不偿失。
+    // 2026-10-14 事故同款风险点：原实现按 JS 预计算的绝对值无条件写回，
+    // 并发下会覆盖别的资金变动（或被覆盖）。
+    if (deltaCents !== 0) {
+      const moved = await commitCashMove(
+        db,
+        userId,
+        -deltaCents,
+        {
+          // 加仓补钱不透支；减仓退款无透支风险，不加守卫
+          ...(deltaCents > 0 ? { minBalance: 0 } : {}),
+          requirePendingOrder: { orderId, amount: oldAmount },
+        },
+        {
+          type: "amend",
+          amount: -deltaCents, // 出账为负（加仓负、减仓正）
+          orderId,
+          note: `改单：申购 ${f?.name ?? o.fundCode}（${o.fundCode}） ${centsToYuan(oldAmount)} 元 → ${centsToYuan(newAmount)} 元`,
+          createdAt: now.getTime(),
+        },
+      );
+      if (!moved.ok) {
+        throw new Error("现金不足或订单已被修改/撮合，请刷新后重试");
+      }
+    }
+
+    // 第二段：翻转订单金额（乐观锁，与原实现同款守卫）
     const flipped = await db
       .update(orders)
       .set({ amount: newAmount })
@@ -322,27 +369,30 @@ export async function amendOrder(
       )
       .returning({ id: orders.id });
     if (flipped.length === 0) {
+      // 订单被撮合/并发改单抢先：立即原路冲正（入账 + 冲正流水同批原子）。
+      // 冲正流水与第一段差额流水的金额互为相反数，Σ流水净变化归零，
+      // 对账恒等式保持（CodeRabbit PR#110 评审指正：只插冲正流水会破账）
+      if (deltaCents !== 0) {
+        const revert = await commitCashMove(
+          db,
+          userId,
+          deltaCents,
+          {},
+          {
+            type: "amend",
+            amount: deltaCents, // 原路退回：加仓退回补款、减仓收回退款
+            orderId,
+            note: `改单冲突冲正：订单 ${orderId} 竞态失败，差额原路退回`,
+            createdAt: now.getTime(),
+          },
+        );
+        if (!revert.ok) {
+          // 理论不可达（入账无守卫恒命中）；万一发生必须大声报警人工补账
+          console.error(`[amend] 订单 ${orderId} 冲正未生效（资金仍差 ${deltaCents} 分），需立即人工核查`);
+        }
+      }
       throw new Error("订单已被撮合确认或已被修改，请刷新后重试");
     }
-
-    // 第二段：差额动钱 + 流水，同生共死。
-    // cash - delta：加仓（delta>0）出账、减仓（delta<0）自动变入账
-    const newCash = (acc?.cash ?? 0) - deltaCents;
-    await runBatch(db, [
-      db
-        .update(account)
-        .set({ cash: newCash })
-        .where(eq(account.userId, userId)),
-      db.insert(transactions).values({
-        userId,
-        type: "amend",
-        amount: -deltaCents, // 出账为负（加仓负、减仓正）
-        balance: newCash,
-        orderId,
-        note: `改单：申购 ${f?.name ?? o.fundCode}（${o.fundCode}） ${centsToYuan(oldAmount)} 元 → ${centsToYuan(newAmount)} 元`,
-        createdAt: now.getTime(),
-      }),
-    ]);
     return;
   }
 

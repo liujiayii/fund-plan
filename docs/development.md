@@ -439,3 +439,68 @@ TTFB 上（实测失败轮 +1.15s、成功轮最高 +7.3s）。`fetchIndexNav` �
   与 GitHub 同类的网络限制），实时日志要看 CF 控制台的 Observability 面板。
   另外 `wrangler tail` 命令退出时**不会杀掉它后台起的子进程**——别把关键请求
   放在它后面的 `&` 子 shell 里，否则你以为没跑、它其实跑了（2026-09-23 实测）。
+
+## ⚠️ 现金账并发丢失更新（2026-10-14）
+
+### 事故
+
+用户 2 的 10-14 收益页显示总收益 +20,701.14 元，四个基金归因之和却是
+−1,298.86 元，差值恰好 +22,000.00。拆解：**+20,000 = 并发丢失更新**，
+**+2,000 = 重放侧按 `(createdAt, id)` 取余额快照取到链中部**。
+
+当晚定投 cron 被 CF **重复派发**（at-least-once 语义，两次 invocation 相隔
+5 秒，`orders.created_at` 的 10:00:04 / 10:00:09 双峰可证）。旧 `scanDcaPlans`
+是「先下单、成功后才推进 `next_run`」的两步非原子序列，两个重叠扫描各拿到
+同一份 `next_run` 快照 → 159547/021778 各下了两单；`placeBuyOrder` 的扣款是
+「`findFirst` 读 cash → JS 里减 → 无条件写回绝对值」的跨 await 读-改-写，
+两笔并发扣款互相覆盖，tx#179（−2 万元）的扣减被后提交的批次抹掉：
+`account.cash` 从此比流水链合计虚高 2 万元。9-07/9-08 有一对 ±200 的同款
+小样本（净效果归零），说明这是机制性问题不是孤例。
+
+### 修复（三层，全部落地）
+
+1. **现金写点全部相对量化**：新原语 `app/services/cash.ts`——
+   `cashDelta(Δ)`（`SET cash = cash + Δ`，单语句内完成读改写，SQLite 单写者
+   下无丢失更新窗口）+ `cashNow(userId)`（流水 balance 用同事务子查询取真值，
+   不再 JS 预计算）+ `hasBuyFreezeSql(orderId)`（退款必须对应一笔真实冻结）。
+   六个写点（买冻结/撤单退款/改单差额/卖单到账/失败退款/签到）全部改造；
+   需要失败信号的（冻结、补差额）单独执行 UPDATE 带 WHERE 守卫 +
+   `.returning()` 判赢，0 行 = 零副作用。
+2. **定投扫描改抢占式**：先 CAS `next_run`（`WHERE next_run = 读到的旧值`）
+   赢了才下单，输家 `skipped` 跳过——重复派发绝不再重复下单。
+3. **重放账本按 id 排序**：`buildReplayInput` 的流水从 `(createdAt, id)` 改
+   `asc(id)`。createdAt 是 JS 时钟（语句构造时取值），并发批次交错提交时与
+   真实提交序脱节；id 由 SQLite 单写者按执行顺序分配，才是可靠的提交序。
+
+有意接受的残余窗口：「判赢 UPDATE」与「流水 insert」拆两步的写点，两步之间
+崩溃会留下「现金动了、流水没记」的毫秒级缝隙（方向是平台不亏）。靠下面的
+对账恒等式兜底。
+
+### 新代码纪律
+
+**任何碰 `account.cash` 的代码必须走 `cash.ts` 的原语，禁止再写
+「读 cash → 算 → 写回绝对值」。** 新增资金动作时对照 cash-race.test.ts 的
+用例形态补并发测试。
+
+### 对账恒等式与运维 SQL
+
+任意操作序列后必须满足（cash-race.test.ts 在测）：
+
+```sql
+-- 全站扫描：只允许返回 0 行
+SELECT u.username, a.cash - COALESCE(SUM(t.amount), 0) AS gap
+FROM account a
+JOIN user u ON u.id = a.user_id
+LEFT JOIN transactions t ON t.user_id = a.user_id
+GROUP BY a.user_id
+HAVING ABS(a.cash - COALESCE(SUM(t.amount), 0)) > 0;
+```
+
+事故数据修复（2026-10-15 已执行，gap 复核为 0）：流水 balance 与
+`account.cash` 各减 2,000,000 分（id ≥ 180 的用户 2 流水全部从被污染的
+基数接链，整体虚高同一数值）：
+
+```sql
+UPDATE transactions SET balance = balance - 2000000 WHERE user_id = 2 AND id >= 180;
+UPDATE account SET cash = cash - 2000000 WHERE user_id = 2;
+```
