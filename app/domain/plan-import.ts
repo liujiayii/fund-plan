@@ -57,8 +57,13 @@ const MIN_ALIAS_LEN = 2;
  *
  * 为什么不用一条大正则：半角逗号既是名称分隔符、又可能出现在千分位里
  * （`恒生科技，1,060元`），一条正则表达不了这个歧义，还会触发
- * `regexp/no-super-linear-backtracking` 把 commit 拦下。改成从尾部往前吃数字：
- * 金额总是行尾那一串，名称里不会出现「数字 + 逗号 + 数字」的收尾。
+ * `regexp/no-super-linear-backtracking` 把 commit 拦下。改成从尾部往前吃数字。
+ *
+ * ⚠️ 反扫会**跨过半角逗号**，所以「沪深300,1000元」会一路吃到名称里的 300，
+ * 得到 `300,1000` → 剥成 `3001000`（300 万），名称只剩「沪深」。
+ * 品种池里以数字结尾的简称一大把（沪深300、中证500、上证50、优选300），
+ * 这是必须挡住的。判据：尾部数字串里含半角逗号时，它必须真的是千分位——
+ * 要么整串从行首就是金额（无名称），要么逗号前紧邻分隔符（全角逗号/空白）。
  */
 function splitItemLine(body: string): { alias: string; amountText: string } | null {
   if (!body.endsWith("元"))
@@ -69,12 +74,20 @@ function splitItemLine(body: string): { alias: string; amountText: string } | nu
   while (i > 0 && /[\d,.]/.test(head[i - 1]!))
     i--;
 
-  const amountText = head.slice(i).replace(AMOUNT_STRIP_RE, "");
+  const tail = head.slice(i);
+  // 尾部打头的半角逗号是分隔符，不是千分位
+  const lead = tail.length - tail.replace(/^,+/, "").length;
+  const digits = tail.slice(lead);
+  const separated = lead > 0 || i === 0 || /[，,\s]/.test(head[i - 1]!);
+  if (digits.includes(",") && !separated)
+    return null;
+
+  const amountText = digits.replace(AMOUNT_STRIP_RE, "");
   if (!AMOUNT_RE.test(amountText))
     return null;
 
   // 名称尾部可能残留分隔逗号（`中证白酒 ，1239元` 会留下全角逗号 + 空格）
-  const alias = head.slice(0, i).trimEnd().replace(/[，,]+$/, "").trim();
+  const alias = head.slice(0, i + lead).trimEnd().replace(/[，,]+$/, "").trim();
 
   // 去掉尾部逗号后名称里仍有逗号 → 行尾那串数字被吞错位了。
   // 典型：「港股科技，1 064元」的反扫会在空格处停下，把「1」留在名称里、

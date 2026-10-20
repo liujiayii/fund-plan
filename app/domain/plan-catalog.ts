@@ -117,36 +117,23 @@ function itemNames(item: PlanCatalogItem): string[] {
 /**
  * 查表：简称 → 场外基金。
  *
- * 三级，越往后越松，但**任何一级都要求唯一命中**：
- *   1. 归一化后全等（原文写的就是表上的简称）
+ * 只有两级，且都要求**全等**（归一化后）：
+ *   1. 命中表上的简称
  *   2. 命中某个变体（「沪港深红利低波动」vs 表上的「沪港深红利低波」）
- *   3. 双向包含，且只有唯一一条命中
  *
- * 命中不了就返回 null，由页面标红让人选——**绝不返回「最像的那条」**。
- * 猜错一只的代价比多点一次大得多。
+ * 刻意**不做「包含」匹配**：`沪深300成长` 包含 `沪深300`、`红利低波100`
+ * 包含变体 `红利低波`，于是池外品种会被静默映射成另一只指数；而下游把
+ * 「命中」当成确定结果锁成只读，用户连改都改不了——这比让他多点一次糟得多。
+ *
+ * 查不到就返回 null，页面标红让人选。要支持新写法就加 `variants`。
  */
 export function lookupPlanFund(alias: string): PlanCatalogItem | null {
   const key = normalizePlanAlias(alias);
   if (key === "")
     return null;
 
-  const exact = PLAN_FUND_CATALOG.find(item =>
-    itemNames(item).some(n => normalizePlanAlias(n) === key));
-  if (exact)
-    return exact;
-
-  // 双向包含：太短的 key（「A50」「银行」这种两三个字）容易撞多个条目，
-  // 所以要求 3 个字以上，且必须唯一
-  if (key.length < 3)
-    return null;
-
-  const hits = PLAN_FUND_CATALOG.filter(item =>
-    itemNames(item).some((n) => {
-      const nn = normalizePlanAlias(n);
-      return nn.length >= 3 && (nn.includes(key) || key.includes(nn));
-    }));
-
-  return hits.length === 1 ? hits[0] : null;
+  return PLAN_FUND_CATALOG.find(item =>
+    itemNames(item).some(n => normalizePlanAlias(n) === key)) ?? null;
 }
 
 /** 下拉选项：全表 50 条（代码 + 简称），给「手动选」兜底 */

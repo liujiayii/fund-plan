@@ -74,6 +74,25 @@ describe("parsePlanText", () => {
     expect(r.warnings.some(w => w.includes("港股科技，1 064元"))).toBe(true);
   });
 
+  it("名称以数字结尾 + 半角逗号分隔：不能把名称尾数吞进金额", () => {
+    // 反扫会跨过半角逗号：「沪深300,1000元」若不设防会变成「沪深 + 300 万元」
+    const r = parsePlanText(
+      "时间：2026年10月20日\n• 沪深300,1000元\n• 中证500,1,000元",
+    );
+    expect(r.items).toHaveLength(0);
+    expect(r.warnings.filter(w => w.includes("没有识别出金额"))).toHaveLength(2);
+  });
+
+  it("全角逗号或空格分隔时，数字结尾的名称照常解析", () => {
+    const r = parsePlanText(
+      "时间：2026年10月20日\n• 沪深300，1000元\n• 中证500 ,1,000元",
+    );
+    expect(r.items).toEqual([
+      { alias: "沪深300", amountCents: 100_000 },
+      { alias: "中证500", amountCents: 100_000 },
+    ]);
+  });
+
   it("空文本给一条可读的警告，不抛", () => {
     const r = parsePlanText("");
     expect(r.items).toEqual([]);

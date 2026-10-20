@@ -67,10 +67,13 @@ describe("lookupPlanFund", () => {
     expect(lookupPlanFund("")).toBeNull();
   });
 
-  it("双向包含命中多条时返回 null（歧义就让人选）", () => {
+  it("包含关系不算命中：池外品种不会被静默映射到池内另一只", () => {
+    // 「沪深300成长」包含「沪深300」、「红利低波100」包含变体「红利低波」，
+    // 若允许包含匹配，它们会被当成 110020 / 020602 并锁成只读
+    expect(lookupPlanFund("沪深300成长")).toBeNull();
+    expect(lookupPlanFund("红利低波100")).toBeNull();
     // 「红利」同时出现在中证红利、中证红利低波动、上证红利、港股红利…里
     expect(lookupPlanFund("红利")).toBeNull();
-    // 「300」同理
     expect(lookupPlanFund("300")).toBeNull();
   });
 });
