@@ -1,13 +1,20 @@
 import type { ReactNode } from "react";
 import type { Route } from "./+types/plan";
 import type { PlanRow } from "~/components/PlanBuysCard";
-import { Space, Typography } from "antd";
+import type { PlanImportRow } from "~/services/plan-import";
+import { Button, Space, Typography } from "antd";
+import { eq } from "drizzle-orm";
+import { useState } from "react";
+import { useFetcher } from "react-router";
 import { PlanBuysCard } from "~/components/PlanBuysCard";
 import { MethodCurve, TriVenn } from "~/components/PlanDiagrams";
+import { PlanImportModal } from "~/components/PlanImportModal";
 import { AdminNotReady } from "~/components/PortfolioView";
 import { NavButton } from "~/components/ui/NavButton";
 import { Reveal } from "~/components/ui/Reveal";
 import { SectionCard } from "~/components/ui/SectionCard";
+import { account } from "~/db/schema";
+import { parsePlanText, planDateWarnings } from "~/domain/plan-import";
 import { buildPlanMeta, pageMeta } from "~/domain/seo";
 import { toBeijing } from "~/domain/trading-calendar";
 import {
@@ -17,7 +24,8 @@ import {
   planTargetCents,
 } from "~/domain/undervalued-plan";
 import { getAppContext } from "~/services/context";
-import { getAdminUser } from "~/services/guard";
+import { getAdminUser, getCurrentUser, requireAdmin } from "~/services/guard";
+import { placePlanBuys, resolvePlanImport } from "~/services/plan-import";
 import { getPlanPeriod } from "~/services/undervalued-plan";
 
 const { Paragraph, Text } = Typography;
@@ -63,6 +71,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     ? await getPlanPeriod(db, admin.id, today)
     : { period: null, buys: [], totalCents: 0 };
 
+  // 谁能看到「录入本期」按钮：只有按 ADMIN_USERNAME 认定的那位。
+  // /plan 不在匿名页缓存白名单（见 domain/anon-page-cache），
+  // 按登录者渲染不会造成缓存污染。
+  const me = await getCurrentUser(request, db);
+  const isAdmin = me !== null && admin !== null && me.id === admin.id;
+  // 游客不该为「弹窗里那行可用现金」付一条查询
+  const cashCents = isAdmin && admin
+    ? (await db.query.account.findFirst({ where: eq(account.userId, admin.id) }))?.cash ?? null
+    : null;
+
   // 换算：以**主理人本期的买入合计**为基准 × 跟投比例，再按各基金的买入金额占比
   // 拆到每只上。纯函数在 domain 层（最大余数法，Σ一分不差），这里只管接线
   const targetCents = planTargetCents(view.totalCents, parsed.ratioBps);
@@ -85,6 +103,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   return {
     ready: admin !== null,
+    /** 当前访问者就是主理人本人：页面据此渲染「录入本期」 */
+    isAdmin,
+    /** 主理人的可用现金（分）；游客为 null，不查 */
+    cashCents,
     // 主理人还没注册时给个名字，页面照 /master 的口径显示引导而不是报错
     adminName: admin?.username ?? env.ADMIN_USERNAME ?? "未配置",
     today,
@@ -98,6 +120,105 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     notices: parsed.notices,
     ratioBps: parsed.ratioBps,
   };
+}
+
+/** 客户端提交的一行（服务端一律重新校验，不信任这里的任何值） */
+interface CommitRowInput {
+  alias?: unknown;
+  fundCode?: unknown;
+  amountCents?: unknown;
+}
+
+/** 解析客户端传来的明细 JSON：任何一行不合法就整批拒绝 */
+function parseCommitRows(raw: FormDataEntryValue | null): {
+  alias: string;
+  fundCode: string;
+  amountCents: number;
+}[] {
+  if (typeof raw !== "string" || raw === "")
+    throw new Error("缺少明细");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  }
+  catch {
+    throw new Error("明细格式不对");
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0)
+    throw new Error("没有可提交的品种");
+
+  return parsed.map((r) => {
+    const o = (r ?? {}) as CommitRowInput;
+    const fundCode = String(o.fundCode ?? "");
+    const amountCents = Number(o.amountCents ?? 0);
+    const alias = String(o.alias ?? "");
+    if (!/^\d{6}$/.test(fundCode))
+      throw new Error("明细里有不合法的基金代码");
+    if (!Number.isInteger(amountCents) || amountCents <= 0)
+      throw new Error("明细里有不合法的金额");
+    return { alias, fundCode, amountCents };
+  });
+}
+
+/**
+ * 定投计划导入（两段式）。
+ *
+ * - `intent=parse`：纯文本 → 候选预览（不写库）
+ * - `intent=commit`：校验 → 一次 batch 下单 → 记住别名
+ *
+ * 权限用 `requireAdmin`：`/plan` 本身是公开页，但「录入主理人实盘」只有 admin 能做。
+ * 非 admin 一律 403（与 `/admin` 同款，不暴露入口存在）。
+ */
+export async function action({ request, context }: Route.ActionArgs) {
+  const { db, env } = getAppContext(context);
+  // 权限必须在 try 之外：requireAdmin 抛的是 403 Response，
+  // 掉进下面的业务错误 catch 会变成 200 + { ok:false }，等于把拦截吞掉
+  const admin = await requireAdmin(request, db);
+
+  try {
+    // formData 解析失败也是 400 级的坏请求，不该冒成 500
+    const fd = await request.formData();
+    const intent = String(fd.get("intent") ?? "");
+    if (intent === "parse") {
+      const text = String(fd.get("text") ?? "");
+      const today = toBeijing(new Date()).format("YYYY-MM-DD");
+      const parsed = parsePlanText(text);
+      const warnings = [
+        ...parsed.warnings,
+        ...planDateWarnings(parsed.periodDate, today),
+      ];
+      const rows = await resolvePlanImport(db, admin.id, parsed.items, parsed.periodDate);
+      return {
+        ok: true as const,
+        stage: "preview" as const,
+        periodDate: parsed.periodDate,
+        warnings,
+        rows,
+      };
+    }
+
+    if (intent === "commit") {
+      const periodDate = String(fd.get("periodDate") ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(periodDate))
+        return { ok: false as const, error: "期次日期不合法" };
+
+      const rows = parseCommitRows(fd.get("rows"));
+      const { placed, totalCents } = await placePlanBuys(db, env, {
+        userId: admin.id,
+        periodDate,
+        items: rows,
+      });
+
+      return { ok: true as const, stage: "done" as const, placed, totalCents };
+    }
+
+    return { ok: false as const, error: "未知操作" };
+  }
+  catch (err) {
+    // 业务错误（起购/现金不足/档案缺失）原样回给页面，不 500
+    return { ok: false as const, error: err instanceof Error ? err.message : "导入失败" };
+  }
 }
 
 /**
@@ -162,9 +283,29 @@ function PhilosophyBlock({
   );
 }
 
+/** parse 的返回形状（与 action 的 preview 分支一一对应） */
+interface ParseResult {
+  ok: boolean;
+  stage?: string;
+  periodDate?: string | null;
+  warnings?: string[];
+  rows?: PlanImportRow[];
+  error?: string;
+}
+
+interface CommitResult {
+  ok: boolean;
+  stage?: string;
+  placed?: number;
+  totalCents?: number;
+  error?: string;
+}
+
 export default function PlanPage({ loaderData }: Route.ComponentProps) {
   const {
     ready,
+    isAdmin,
+    cashCents,
     adminName,
     period,
     stale,
@@ -180,6 +321,64 @@ export default function PlanPage({ loaderData }: Route.ComponentProps) {
   // 不会出现「输入框显示 50%、算的却是 10%」（见 PlanBuysCard 顶注）
   const paramsKey = String(ratioBps);
 
+  const [importOpen, setImportOpen] = useState(false);
+  /**
+   * 本次录入会话的快照。
+   *
+   * `fetcher.data` 清不掉（RR 没有重置它的 API），不搬到本地就会
+   * 「下次打开还看到上次的成功提示」——那时已经无法录入了。
+   */
+  const [preview, setPreview] = useState<{
+    periodDate: string | null;
+    warnings: string[];
+    rows: PlanImportRow[];
+  } | null>(null);
+  const [done, setDone] = useState<{ placed: number; totalCents: number } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const parseFetcher = useFetcher<ParseResult>();
+  const commitFetcher = useFetcher<CommitResult>();
+
+  // fetcher.data 只当「有新结果」的触发器。用「渲染期调整 state」而不是 effect：
+  // 引用变了就说明是新结果，React 会在同一次渲染里用新 state 重渲染。
+  const [seenParse, setSeenParse] = useState<ParseResult | undefined>(undefined);
+  if (parseFetcher.data && parseFetcher.data !== seenParse) {
+    const d = parseFetcher.data;
+    setSeenParse(d);
+    if (d.stage === "preview") {
+      setPreview({
+        periodDate: d.periodDate ?? null,
+        warnings: d.warnings ?? [],
+        rows: d.rows ?? [],
+      });
+      setImportError(null);
+    }
+    else if (!d.ok) {
+      setImportError(d.error ?? "解析失败");
+    }
+  }
+
+  const [seenCommit, setSeenCommit] = useState<CommitResult | undefined>(undefined);
+  if (commitFetcher.data && commitFetcher.data !== seenCommit) {
+    const d = commitFetcher.data;
+    setSeenCommit(d);
+    if (d.stage === "done") {
+      setDone({ placed: d.placed ?? 0, totalCents: d.totalCents ?? 0 });
+      setImportError(null);
+    }
+    else if (!d.ok) {
+      setImportError(d.error ?? "导入失败");
+    }
+  }
+
+  /** 每次打开都是新会话：上一次的预览、错误、成功提示全部清掉 */
+  function openImport() {
+    setPreview(null);
+    setDone(null);
+    setImportError(null);
+    setImportOpen(true);
+  }
+
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       {/* 页头走站内规范「标题出卡」（liquid-glass spec §5.4）：标题直接压在色雾上，
@@ -188,14 +387,20 @@ export default function PlanPage({ loaderData }: Route.ComponentProps) {
           标签用真 <h1>（全站目前只有首页有 h1，docs/seo.md 记为技术债），
           字号行高按 antd Title level={3} 的度量手写：这样既拿到了语义，
           又不必碰 level（它会连带字号一起变）。 */}
-      <div>
-        <h1 className="m-0 mb-1 text-[24px] leading-[1.35] font-semibold text-ink">
-          低估指数定投计划
-        </h1>
-        <Paragraph type="secondary" className="mb-0">
-          主理人每周二买入一批处于低估阶段的指数基金，这一页跟着他的实盘逐期更新；
-          你也可以按自己的比例，一键换算出本期投入。
-        </Paragraph>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="m-0 mb-1 text-[24px] leading-[1.35] font-semibold text-ink">
+            低估指数定投计划
+          </h1>
+          <Paragraph type="secondary" className="mb-0">
+            主理人每周二买入一批处于低估阶段的指数基金，这一页跟着他的实盘逐期更新；
+            你也可以按自己的比例，一键换算出本期投入。
+          </Paragraph>
+        </div>
+        {/* 只有主理人本人看得到；游客的 SSR 里没有这个按钮 */}
+        {isAdmin && (
+          <Button type="primary" onClick={openImport}>录入本期</Button>
+        )}
       </div>
 
       {ready
@@ -279,6 +484,34 @@ export default function PlanPage({ loaderData }: Route.ComponentProps) {
           不会凭空造出一期。
         </Paragraph>
       </SectionCard>
+
+      {/* 游客连组件树都不挂：入口本来就看不见，没必要为它渲染一整套 antd 子树 */}
+      {isAdmin && (
+        <PlanImportModal
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          preview={preview}
+          parsing={parseFetcher.state !== "idle"}
+          submitting={commitFetcher.state !== "idle"}
+          error={importError}
+          done={done}
+          cashCents={cashCents}
+          onReset={() => setPreview(null)}
+          onParse={(text) => {
+            const fd = new FormData();
+            fd.set("intent", "parse");
+            fd.set("text", text);
+            parseFetcher.submit(fd, { method: "post" });
+          }}
+          onCommit={(periodDate, commitRows) => {
+            const fd = new FormData();
+            fd.set("intent", "commit");
+            fd.set("periodDate", periodDate);
+            fd.set("rows", JSON.stringify(commitRows));
+            commitFetcher.submit(fd, { method: "post" });
+          }}
+        />
+      )}
     </Space>
   );
 }
