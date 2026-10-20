@@ -88,6 +88,12 @@ workers/app.ts   Worker 入口：export default { fetch, scheduled }
 `/funds*` `/tools*` `/login` `/register`）游客可见；`/me` 系列用 `requireUser` 把门；
 `/admin` 系列用 `requireAdmin` 把门（非 admin 一律 403）。
 
+`/plan` 另有一个**只有 admin 能用的写入口**：页面右上角「录入本期」→ 同文件 `action`
+的 `intent=parse|commit`（粘贴公众号原文 → 预览 → 一期原子批量下单）。基金代码靠
+`domain/plan-catalog` 的品种池（螺丝钉估值表 50 条，简称 → 场外代码）**查表**得到，
+**不做模糊匹配**——东财搜「自由现金流」前六条全是场内 ETF、搜「消费龙头」前四条是
+主动混合型，猜一次就买错一次。池外品种留空，必须在预览里手动选。
+
 ### loader/action 里取 env 的标准姿势
 
 Cloudflare 的 `env`/`ctx` 由 `workers/app.ts` 注入 `CloudflareContext`，
