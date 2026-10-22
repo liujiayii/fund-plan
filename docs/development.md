@@ -262,6 +262,21 @@ pnpm 的规则是「更早发布的版本有签名而此版本没有 → 可疑�
 将来若再遇到类似报错，**先核实发布时间与 provenance 机制的时间线**，
 确认是误判再用 `trustPolicyExclude` 精确到版本号豁免，不要整体关掉策略。
 
+## allowBuilds 里 tsparticles-engine: false 的来历（2026-10-22）
+
+`tsparticles@2.12.0`（背景舞台粒子库，见 docs/liquid-glass.md §2.1）的 engine 包
+自带 `install` script，pnpm 12 装包时会往 `pnpm-workspace.yaml` 的 `allowBuilds`
+**自动塞一行占位符**（值是字面量 `set this to true or false`）要求决策。
+
+钉成 `false` 的依据：读过该 script 源码，内容是纯 console 提示 + 检查是否装了
+`particles.js` / `react-particles-js` 等冲突包（本项目均未安装），**没有任何构建
+或下载动作**——不跑零影响（本地像素级渲染验证过）。显式 `false` 让 CI 的
+`pnpm install --frozen-lockfile` 免警告，也留下「决策过」的记录。
+
+⚠️ 这一段里的**行内注释会被 pnpm 重写时吃掉**（add/install 触发归一化时整段重排、
+注释全丢）——所以「为什么 false」记录在这里而不是 yaml 里，yaml 里只留键值。
+将来 pnpm 若再自动塞占位符，删掉占位行即可，别在段内写注释。
+
 ## ⚠️ 改了 database_id 之后必须重跑本地迁移
 
 miniflare 按 `database_id` **哈希出本地数据库文件名**，所以一旦改动

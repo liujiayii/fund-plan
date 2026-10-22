@@ -16,7 +16,8 @@ import {
 } from "react-router";
 import { POPUP_GLASS } from "~/antd-popup-glass";
 import { AppSidebar } from "~/components/AppSidebar";
-import { FogStage } from "~/components/FogStage";
+// 背景舞台（网格/光晕/粒子，2026-10-22 起替代退役的 FogStage 色雾承担衬底）
+import { BackdropStage } from "~/components/BackdropStage";
 import { MobileBrandBar } from "~/components/MobileBrandBar";
 import { MobileTabBar } from "~/components/MobileTabBar";
 import { NavProgressBar } from "~/components/NavProgressBar";
@@ -36,7 +37,7 @@ import "@fontsource/space-grotesk/700.css";
 // 顺序不受此处影响，故 reset 放在所有值导入之后即可。
 import "antd/dist/reset.css";
 import "virtual:uno.css";
-// 液态玻璃材料层（色雾 / .fp-glass / 高光 / 降级）：全站唯一的模糊材料出处（守卫测试钉死），
+// 液态玻璃材料层（.fp-glass / 高光 / 降级）：全站唯一的模糊材料出处（守卫测试钉死），
 // 排在 virtual:uno.css 之后（材料压过工具类）、responsive.css 之前（壳的媒体查询最后说话）
 import "./styles/liquid-glass.css";
 // 排行榜奥林匹克领奖台（典礼聚光）：clip-path / mix-blend / 伪元素关键帧
@@ -47,6 +48,9 @@ import "./styles/podium.css";
 // 动效层，不是材料层，所以不并进 liquid-glass.css。同样排在 responsive 之前——
 // §7 的 prefers-reduced-motion 关断靠 source-order 赢平局
 import "./styles/motion.css";
+// 背景舞台（网格/光晕/粒子容器）：玻璃材料外的独立衬底层，自带减动效关断；
+// 排在 responsive.css 之前，壳层媒体查询仍最后说话
+import "./styles/backdrop.css";
 // 期五移动端适配：唯一的媒体查询出处，必须排在 UnoCSS 之后
 // 才能覆盖工具类与 antd 组件类（顺序理由见该文件头注释）
 import "./styles/responsive.css";
@@ -94,8 +98,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
       </head>
       <body>
-        {/* 色雾舞台放 body 首位：fixed 层，DOM 顺序与视觉层级（雾在最底）一致 */}
-        <FogStage />
+        {/* 背景舞台放 body 首位：fixed 层，DOM 顺序与视觉层级（背景在最底）一致。
+            2026-10-22 起替代退役的 FogStage 色雾，成为玻璃的唯一衬底 */}
+        <BackdropStage />
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -193,7 +198,7 @@ export default function App() {
  * 全局错误边界：区分 404 等路由错误与运行时异常。
  *
  * 渲染在 Layout（文档骨架）里、App 之外——所以没有 ConfigProvider / 侧栏，
- * 只能用原生元素 + 工具类 + .fp-glass（色雾由 Layout 的 FogStage 提供，
+ * 只能用原生元素 + 工具类 + .fp-glass（背景舞台由 Layout 的 BackdropStage 提供，
  * 暗底玻璃语言不断片）。404 给「回首页 / 去发现基金」两条路，其余错误给重试。
  */
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

@@ -29,4 +29,5 @@ overrides:
 allowBuilds:
   esbuild: true
   simple-git-hooks: true
+  tsparticles-engine: false
   workerd: true

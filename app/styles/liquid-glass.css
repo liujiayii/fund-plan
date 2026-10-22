@@ -13,98 +13,13 @@
 /* ══════════ 0. 舞台：页面底 ══════════ */
 
 /* antd 的 Layout 已退役（Task 4），body 底色没人管了，这里钉死。
-   min-height 让色雾（fixed）在短页面上也有满屏可衬 */
+   min-height 让背景舞台（fixed）在短页面上也有满屏可衬。
+   （2026-10-22 色雾三团退役，衬底职责移交 styles/backdrop.css 的背景舞台） */
 html,
 body {
   background: var(--fp-bg);
   color: var(--fp-text-primary);
   min-height: 100%;
-}
-
-/* ══════════ 1. 色雾三团（宪法 §2.1）══════════ */
-
-/* 固定定位铺满视口，z-index 0；内容层 .fp-shell 是 relative z-index 1，
-   这样 backdrop-filter 透到的是雾，不是页面底色。
-   overflow hidden：三团各 60vmax，漂出去会撑出横向滚动条 */
-.fp-fog {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-/* 每团一个 radial-gradient 大圆：软边靠渐变本身，不上 CSS 滤镜做高斯模糊
-   （三个全屏级元素每帧重算模糊，低端安卓直接掉到个位数帧）。
-   只动 transform（合成层属性），will-change 提前提层 */
-.fp-fog > span {
-  position: absolute;
-  width: 60vmax;
-  height: 60vmax;
-  border-radius: 50%;
-  mix-blend-mode: screen;
-  /* 0.55：冰川档——玻璃质感 = 雾亮度与玻璃面暗度的差，亮雾 blur 才有东西可嚼
-     （紫夜版 0.4 是暗雾，2026-09-10 十七套 demo 实测暗雾会把玻璃闷成塑料）。
-     冰雾色相离涨红跌绿都远，0.55 不会顶到数字底下打架（那是粉雾的旧病） */
-  opacity: 0.55;
-  will-change: transform;
-  animation-duration: 14s;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-.fp-fog-a {
-  top: -20vmax;
-  left: -15vmax;
-  background: radial-gradient(closest-side, var(--fp-fog-a) 0%, transparent 70%);
-  animation-name: fp-fog-drift-a;
-}
-
-.fp-fog-b {
-  right: -20vmax;
-  top: 10vmax;
-  background: radial-gradient(closest-side, var(--fp-fog-b) 0%, transparent 70%);
-  animation-name: fp-fog-drift-b;
-  /* 负延迟错开相位：三团不同步呼吸 */
-  animation-delay: -5s;
-}
-
-.fp-fog-c {
-  left: 20vmax;
-  bottom: -30vmax;
-  background: radial-gradient(closest-side, var(--fp-fog-c) 0%, transparent 70%);
-  animation-name: fp-fog-drift-c;
-  animation-delay: -9s;
-}
-
-@keyframes fp-fog-drift-a {
-  0%,
-  100% {
-    transform: translate(0, 0);
-  }
-  50% {
-    transform: translate(12vmax, 8vmax);
-  }
-}
-
-@keyframes fp-fog-drift-b {
-  0%,
-  100% {
-    transform: translate(0, 0);
-  }
-  50% {
-    transform: translate(-10vmax, 12vmax);
-  }
-}
-
-@keyframes fp-fog-drift-c {
-  0%,
-  100% {
-    transform: translate(0, 0);
-  }
-  50% {
-    transform: translate(8vmax, -12vmax);
-  }
 }
 
 /* ══════════ 2. 玻璃（宪法 §2.2）══════════ */
@@ -292,10 +207,10 @@ body {
 
 /* ══════════ 8. 减弱动态（宪法 §5：材料部分）══════════ */
 
-/* 色雾冻在初始位置（不删——删了玻璃就没衬底），高光停。
+/* 高光停。背景舞台（网格/光晕/粒子）的减动效在 backdrop.css 自带
+   （粒子是 JS 侧 matchMedia 拦截，光晕的 CSS 关断也在那边）；
    fade-up / float / hover 位移的关闭在 responsive.css §7（那是全站动效出处） */
 @media (prefers-reduced-motion: reduce) {
-  .fp-fog > span,
   .fp-glass-specular::after {
     animation: none;
   }
