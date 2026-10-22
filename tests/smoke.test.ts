@@ -77,9 +77,16 @@ describe("视觉 token 不变式", () => {
     expect(lumOn).toBeLessThan(0.25);
   });
 
-  it("色雾只有三团（宪法 §2.1：别再加第四团）", () => {
-    const fogKeys = Object.keys(COLOR).filter(k => k.startsWith("fog"));
-    expect(fogKeys.sort()).toEqual(["fogA", "fogB", "fogC"]);
+  it("背景舞台 token 就位、色雾三团绝迹（2026-10-22 FogStage 退役）", () => {
+    // 雾退役后这三个键不该复辟（衬底职责已移交 BackdropStage 的网格/光晕/粒子）
+    const fogKeys = Object.keys(COLOR).filter(k => k.toLowerCase().includes("fog"));
+    expect(fogKeys).toEqual([]);
+    // 背景舞台五键：网格线 / 光晕进 CSS（--fp-backdrop-*），粒子三色进 JS 配置
+    expect(COLOR.backdropGrid).toBeDefined();
+    expect(COLOR.backdropGlow).toBeDefined();
+    expect(COLOR.particleA).toBeDefined();
+    expect(COLOR.particleB).toBeDefined();
+    expect(COLOR.particleC).toBeDefined();
   });
 
   it("待办第三语义不与涨跌、主色撞色", () => {

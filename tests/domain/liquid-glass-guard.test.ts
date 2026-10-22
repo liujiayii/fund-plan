@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 const APP_DIR = path.resolve(import.meta.dirname, "../../app");
 const GLASS_CSS = path.join(APP_DIR, "styles/liquid-glass.css");
+const BACKDROP_CSS = path.join(APP_DIR, "styles/backdrop.css");
 
 /** 递归收集目录下指定后缀的文件 */
 function walk(dir: string, exts: string[]): string[] {
@@ -47,15 +48,31 @@ describe("液态玻璃宪法守卫", () => {
     expect(offenders.map(f => path.relative(APP_DIR, f))).toEqual([]);
   });
 
-  it("liquid-glass.css 结构完整：玻璃、描边伪元素、高光、色雾、降级、减弱动态", () => {
+  it("liquid-glass.css 结构完整：玻璃、描边伪元素、高光、降级、减弱动态", () => {
     const css = readFileSync(GLASS_CSS, "utf8");
     expect(css).toContain(".fp-glass {");
     expect(css).toContain(".fp-glass::before");
     expect(css).toContain("mask-composite");
     expect(css).toContain(".fp-glass-specular");
-    expect(css).toContain(".fp-fog");
     expect(css).toContain("@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
+  it("背景舞台（2026-10-22 起）。三件套落地在 backdrop.css：网格 / 光晕 / 粒子容器 + 减动效", () => {
+    // 2026-10-22 色雾退役（FogStage 删除），衬底职责移交背景舞台。
+    // 铁律不变：玻璃下面必须有东西可透——舞台三件套就是那个「东西」，
+    // 谁想「顺手清理掉」背景 div，这条先红
+    const css = readFileSync(BACKDROP_CSS, "utf8");
+    expect(css).toContain(".fp-backdrop {");
+    expect(css).toContain(".fp-backdrop-grid");
+    expect(css).toContain(".fp-backdrop-glow");
+    expect(css).toContain(".fp-backdrop-particles");
+    expect(css).toContain("@keyframes fp-backdrop-pulse");
+    // 减动效：光晕的 CSS 关断必须自带（粒子是 JS 拦截，测不了 CSS 文本）
+    expect(css).toMatch(/\.fp-backdrop-glow\s*\{[^}]*animation: none/);
+    // 背景层不许发明模糊材料，也不许用 filter: blur 做软边（色雾时代的性能纪律延续）
+    expect(css).not.toMatch(/backdrop-filter/);
+    expect(css).not.toMatch(/(^|[^-])filter:\s*blur/m);
   });
 
   it("弹层玻璃走 semantic 官方通道：配置在 antd-popup-glass.ts，CSS 不追内部类名", () => {
@@ -82,7 +99,7 @@ describe("液态玻璃宪法守卫", () => {
     expect(css).not.toMatch(/\.(?:ant-modal|ant-drawer|ant-select)[\w-]*\s*[,{]/);
   });
 
-  it("色雾软边不用 filter: blur（宪法 §2.1 性能纪律）", () => {
+  it("玻璃文件软边不用 filter: blur（宪法 §2.1 性能纪律，色雾退役后沿用）", () => {
     const css = readFileSync(GLASS_CSS, "utf8");
     // 只禁 filter: blur；backdrop-filter: blur 是玻璃本体，允许
     expect(css).not.toMatch(/(^|[^-])filter:\s*blur/m);

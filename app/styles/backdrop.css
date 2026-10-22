@@ -1,0 +1,79 @@
+/* ============================================================
+   backdrop.css —— 背景舞台（docs/liquid-glass.md §2.1，2026-10-22 修订）：
+   网格 / 呼吸光晕 / 粒子画布容器 三件套，替代退役的漂移色雾（.fp-fog），
+   承担「玻璃底下必须有东西可透」的衬底职责。
+   三件套抄自 fund.tvmaze.cn 的背景层并做适配转正：
+   - 粒子库走 npm 包 tsparticles@2.12.0（package.json -E 精确锁版本；
+     v3 有「canvas 在但不绘制」的坑，换版本先做像素级验证）；
+   - 浓度在源站参数上整体提过一档：源站深蓝黑底 #070b14 上勉强可见的
+     0.1/0.15，在本站 #071018 上实测隐形（Playwright 计算样式取证：
+     元素在、样式生效，纯是对比度不足）。
+
+   纪律：
+   - 色值只走 var(--fp-*)（出处 theme.ts 的 COLOR.backdropGrid / backdropGlow）；
+   - 不碰模糊材料（玻璃宪法守卫钉死：那类 filter 只许出现在 liquid-glass.css）；
+   - 软边全靠预模糊的 radial-gradient，不上 CSS 滤镜；
+   - z-index:0 与壳层 .fp-shell（z-1）的层级关系继承自退役色雾的约定；
+   - 减动效自带关断（本文件独立于 responsive.css，不能指望 §7 认识这些类）。
+   ============================================================ */
+
+/* 舞台：fixed 满屏、不挡点击，挂根布局 body 首位 */
+.fp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* 网格：60px 方格线，顶部径向遮罩（源站 index 页参数：ellipse 80% 60% at 50% 30%；
+   遮罩不透明核放宽到 40%——30% 的原版在本站底色上核区太窄） */
+.fp-backdrop-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--fp-backdrop-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--fp-backdrop-grid) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 40%, transparent 100%);
+}
+
+/* 光晕：顶部紫色椭圆，8s 呼吸。CSS 里的 0.3 是实色浓度，
+   呼吸动画还会把整层 opacity 压到 0.5~0.8，实际峰值 0.24（源站参数只有 0.12，
+   在本站底色上隐形——见文件头） */
+.fp-backdrop-glow {
+  position: absolute;
+  top: -20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80vw;
+  height: 60vh;
+  background: radial-gradient(ellipse at center, var(--fp-backdrop-glow) 0%, transparent 70%);
+  animation: fp-backdrop-pulse 8s ease-in-out infinite;
+}
+
+@keyframes fp-backdrop-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* 粒子画布容器：tsParticles 挂 id 往里塞 canvas（fullScreen 关闭，尺寸随容器）。
+   pointer-events:none 保证不挡点击（鼠标交互靠 tsParticles 挂 window 实现） */
+.fp-backdrop-particles {
+  position: absolute;
+  inset: 0;
+}
+
+/* 减动效：光晕冻在最淡一档；粒子由 JS 侧 matchMedia 拦截，不创建 canvas */
+@media (prefers-reduced-motion: reduce) {
+  .fp-backdrop-glow {
+    animation: none;
+    opacity: 0.5;
+  }
+}

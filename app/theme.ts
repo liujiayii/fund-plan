@@ -12,9 +12,10 @@
  * 按钮/选中/进度条才不会和「涨」撞成一片。冰蓝与跌绿虽同属冷调，
  * 但隔着完整的青绿→蓝青色相带，且明度差一档（主色亮、跌色沉）。
  *
- * 为什么雾要亮：玻璃质感 = 雾亮度与玻璃面暗度的差。blur 需要有东西可嚼——
- * 底下越亮、冷暖变化越丰富，磨砂后的折射感越强（2026-09-10 十七套 demo
- * 实测结论，暗雾会把玻璃闷成塑料）。冰川雾透明度因此从紫夜版 0.4 提到 0.55。
+ * 2026-10-22 背景换血：漂移色雾（FogStage 三团）退役，衬底职责移交给
+ * 背景舞台 BackdropStage（网格 / 光晕 / 粒子，抄自 fund.tvmaze.cn 转正，
+ * 样式在 styles/backdrop.css）。玻璃的 blur 从此嚼的是网格与光晕，
+ * 「底下必须有东西可透」的铁律不变（宪法 §2.1 修订见 docs/liquid-glass.md）。
  */
 
 export const COLOR = {
@@ -58,10 +59,15 @@ export const COLOR = {
   elevated: "rgba(10, 26, 40, 0.92)",
   /** Modal / Drawer 遮罩（antd colorBgMask） */
   mask: "rgba(3, 10, 16, 0.55)",
-  // ── 色雾三团（宪法 §2.1）。只被 liquid-glass.css 以 --fp-fog-* 消费，不出 uno 类 ──
-  fogA: "#1E63D6",
-  fogB: "#36AEE8",
-  fogC: "#A8E4FF",
+  // ── 背景舞台（BackdropStage：网格 / 光晕 / 粒子）。
+  //    --fp-backdrop-grid / --fp-backdrop-glow 只被 styles/backdrop.css 消费，不出 uno 类；
+  //    particle 三色只被 BackdropStage.tsx 的 tsParticles 配置消费（JS 侧，不进 CSS）。
+  //    紫调 7b5cff 系抄自 fund.tvmaze.cn 转正时的原始色相，浓度按本站底色调过 ──
+  backdropGrid: "rgba(123, 92, 255, 0.18)",
+  backdropGlow: "rgba(123, 92, 255, 0.3)",
+  particleA: "#00d4ff",
+  particleB: "#7b5cff",
+  particleC: "#06b6d4",
   // ── 文字四档（对齐 antd colorText* 语义，宪法 §2.4）。月白系带蓝调 ──
   textPrimary: "#EFF7FC",
   textSecondary: "#C7DAE6",

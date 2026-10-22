@@ -34,3 +34,4 @@ Thumbs.db
 # 测试与缓存
 coverage/
 *.log
+.playwright-cli/
