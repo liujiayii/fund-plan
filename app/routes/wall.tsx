@@ -14,7 +14,7 @@ import {
   Tabs,
   Typography,
 } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher, useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { SectionCard } from "~/components/ui/SectionCard";
@@ -23,7 +23,6 @@ import {
   FEEDBACK_DETAIL_MAX,
   FEEDBACK_STATUS_LABELS,
   FEEDBACK_TITLE_MAX,
-
   feedbackStatusTone,
   statusFilterFromParam,
 } from "~/domain/feedback";
@@ -78,7 +77,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     await requireAdmin(request, db);
     try {
       const status = String(fd.get("status") ?? "");
-      if (!(status in FEEDBACK_STATUS_LABELS))
+      // Object.hasOwn 而非 in：普通对象字面量会被 "toString" in 绕过原型链
+      if (!Object.hasOwn(FEEDBACK_STATUS_LABELS, status))
         return { error: "未知状态" };
       await moderateFeedback(
         db,
@@ -219,6 +219,12 @@ export default function Wall({ loaderData }: Route.ComponentProps) {
   const [target, setTarget] = useState<FeedbackCard | null>(null);
   const [modStatus, setModStatus] = useState<FeedbackStatus>("pending");
   const [modNote, setModNote] = useState("");
+  /**
+   * 最近一次经 mainFetcher 提交的 intent。用 ref 而非把 target 塞进
+   * effect deps——后者会让「打开弹窗」这个状态变化重跑 effect，
+   * 上一轮的 success 数据把刚打开的弹窗当场关掉（评审 Critical #1）。
+   */
+  const lastIntentRef = useRef<"create" | "moderate" | null>(null);
 
   /** 任一提交成功 → 关抽屉/弹窗 + toast；modal 场景的错误也走 toast */
   useEffect(() => {
@@ -229,15 +235,19 @@ export default function Wall({ loaderData }: Route.ComponentProps) {
       setTarget(null);
       if ("message" in mainFetcher.data && mainFetcher.data.message)
         void messageApi.success(mainFetcher.data.message);
+      lastIntentRef.current = null;
     }
-    else if ("error" in mainFetcher.data && target !== null) {
+    else if ("error" in mainFetcher.data && lastIntentRef.current === "moderate") {
       // 抽屉里的 create 错误由内联 Alert 展示；moderate 的错误弹窗内没有
       // Alert 位，用 toast 兜底
       void messageApi.error(mainFetcher.data.error);
+      lastIntentRef.current = null;
     }
-  }, [mainFetcher.state, mainFetcher.data, messageApi, target]);
+  }, [mainFetcher.state, mainFetcher.data, messageApi]);
 
-  const submitErr = mainFetcher.data && "error" in mainFetcher.data
+  // 抽屉内 Alert 只认 create 自己的错误——渲染期读 ref，天然滤掉
+  // moderate 留下的 error 残留（评审 Minor #2）
+  const submitErr = lastIntentRef.current === "create" && mainFetcher.data && "error" in mainFetcher.data
     ? mainFetcher.data.error
     : null;
 
@@ -258,6 +268,7 @@ export default function Wall({ loaderData }: Route.ComponentProps) {
   }
 
   function submitCreate() {
+    lastIntentRef.current = "create";
     mainFetcher.submit(
       { intent: "create", title, detail },
       { method: "post" },
@@ -267,6 +278,7 @@ export default function Wall({ loaderData }: Route.ComponentProps) {
   function submitModerate() {
     if (!target)
       return;
+    lastIntentRef.current = "moderate";
     mainFetcher.submit(
       { intent: "moderate", feedbackId: String(target.id), status: modStatus, statusNote: modNote },
       { method: "post" },
