@@ -69,6 +69,14 @@ describe("resolveSelectedKey", () => {
     // /plan 与 /master 是平级页，谁都不该是对方的前缀
     expect(resolveSelectedKey("/master", NAV_ITEMS)).toBe("/master");
   });
+
+  it("需求墙挂进导航，且不吞相邻页高亮", () => {
+    expect(NAV_ITEMS.some(i => i.key === "/wall")).toBe(true);
+    expect(resolveSelectedKey("/wall", NAV_ITEMS)).toBe("/wall");
+    // /wall 是单页，与相邻的定投回测、自选互不为前缀
+    expect(resolveSelectedKey("/tools/dca-backtest", NAV_ITEMS)).toBe("/tools/dca-backtest");
+    expect(resolveSelectedKey("/me/watchlist", NAV_ITEMS)).toBe("/me/watchlist");
+  });
 });
 
 describe("MOBILE_TAB_KEYS", () => {
