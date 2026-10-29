@@ -64,6 +64,13 @@
       "when": 1790151277155,
       "tag": "0008_fund_nav_backfill_cols",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793281099962,
+      "tag": "0009_amusing_wiccan",
+      "breakpoints": true
     }
   ]
 }
