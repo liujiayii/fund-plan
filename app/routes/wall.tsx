@@ -231,7 +231,11 @@ export default function Wall({ loaderData }: Route.ComponentProps) {
     if (mainFetcher.state !== "idle" || !mainFetcher.data)
       return;
     if ("ok" in mainFetcher.data && mainFetcher.data.ok) {
+      // 异步提交完成后的副作用（关抽屉/弹窗），effect 正是该用的工具
+      // ——OrderActions 关改单弹窗同款豁免理由：改成派生状态反而出 bug
+      // eslint-disable-next-line react/set-state-in-effect
       setDrawerOpen(false);
+      // eslint-disable-next-line react/set-state-in-effect
       setTarget(null);
       if ("message" in mainFetcher.data && mainFetcher.data.message)
         void messageApi.success(mainFetcher.data.message);
@@ -256,6 +260,8 @@ export default function Wall({ loaderData }: Route.ComponentProps) {
       void navigate("/login?redirectTo=/wall");
       return;
     }
+    // 清掉上一轮 create 的 error 残留（submitErr 以 ref==="create" 为闸）
+    lastIntentRef.current = null;
     setTitle("");
     setDetail("");
     setDrawerOpen(true);

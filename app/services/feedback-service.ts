@@ -156,7 +156,8 @@ export async function moderateFeedback(
     .update(feedback)
     .set({
       status,
-      statusNote: statusNote.trim(),
+      // 服务端截断，与前端 maxLength=200 同口径（前端只是体验层）
+      statusNote: statusNote.trim().slice(0, 200),
       statusUpdatedAt: Date.now(),
     })
     .where(eq(feedback.id, feedbackId));

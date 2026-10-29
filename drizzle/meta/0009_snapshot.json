@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b4f199de-c207-4f85-99e3-cea92f1b2919",
+  "id": "0a670000-f025-4b68-9af2-076dc14cc75e",
   "prevId": "51ee8635-c281-4997-ab43-bbf549d98636",
   "tables": {
     "account": {
@@ -408,7 +408,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_feedback_vote_user": {
+          "name": "idx_feedback_vote_user",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "feedback_vote_feedback_id_feedback_id_fk": {
           "name": "feedback_vote_feedback_id_feedback_id_fk",

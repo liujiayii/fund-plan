@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "~/db/client";
 import { account, feedback, feedbackVote, session, transactions, user } from "~/db/schema";
+import { action } from "~/routes/wall";
 import { registerUser } from "~/services/auth";
 import {
   createFeedback,
@@ -11,6 +12,8 @@ import {
   unvoteFeedback,
   voteFeedback,
 } from "~/services/feedback-service";
+import { createSession, sessionCookie } from "~/services/session";
+import { CloudflareContext } from "../../workers/app";
 
 /**
  * 需求服务集成测试（真实 workerd + 真实 D1，模板同 watchlist.test.ts）。
@@ -171,5 +174,54 @@ describe("级联删除", () => {
     await db.delete(user).where(eq(user.id, author));
     expect(await db.select().from(feedback)).toHaveLength(0);
     expect(await db.select().from(feedbackVote)).toHaveLength(0);
+  });
+});
+
+/** 仿 plan-import.test.ts：伪造 CloudflareContext 直调 wall 的 action（接线层） */
+function fakeContext(): unknown {
+  return {
+    get: (key: unknown) =>
+      key === CloudflareContext
+        ? { env, ctx: { waitUntil: () => {} } }
+        : undefined,
+  };
+}
+
+function post(fd: Record<string, string>, token: string): Request {
+  const body = new FormData();
+  for (const [k, v] of Object.entries(fd))
+    body.append(k, v);
+  return new Request("https://x.dev/wall", {
+    method: "POST",
+    body,
+    headers: { Cookie: sessionCookie(token) },
+  });
+}
+
+describe("wall action 权限接线", () => {
+  it("非 admin 调 moderate：403，且库内状态未被改动", async () => {
+    const db = getDb(env.DB);
+    const userId = await seedUser("alice");
+    const token = await createSession(db, userId);
+    const fid = await seedFeedback(userId);
+
+    try {
+      await action({
+        request: post(
+          { intent: "moderate", feedbackId: String(fid), status: "done", statusNote: "越权" },
+          token,
+        ),
+        context: fakeContext(),
+        params: {},
+      } as never);
+      expect.unreachable("应该 403");
+    }
+    catch (thrown) {
+      expect((thrown as Response).status).toBe(403);
+    }
+    // 403 抛在业务 try 外（plan.tsx 纪律），状态流转不应发生
+    const row = await db.query.feedback.findFirst({ where: eq(feedback.id, fid) });
+    expect(row!.status).toBe("pending");
+    expect(row!.statusNote).toBe("");
   });
 });

@@ -19,3 +19,5 @@ CREATE TABLE `feedback_vote` (
 	FOREIGN KEY (`feedback_id`) REFERENCES `feedback`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
+--> statement-breakpoint
+CREATE INDEX `idx_feedback_vote_user` ON `feedback_vote` (`user_id`);

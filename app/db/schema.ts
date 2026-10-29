@@ -418,7 +418,12 @@ export const feedbackVote = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     createdAt: integer("created_at").notNull(),
   },
-  t => [primaryKey({ columns: [t.feedbackId, t.userId] })],
+  t => [
+    primaryKey({ columns: [t.feedbackId, t.userId] }),
+    // viewer 已投集合查询 WHERE user_id = ? 是每次登录态加载 /wall 的热路径，
+    // 复合 PK 只有 feedback_id 前缀，按 user 查/级联删都要这一列
+    index("idx_feedback_vote_user").on(t.userId),
+  ],
 );
 
 /** 供 drizzle 关系查询与类型推断使用的聚合导出 */
