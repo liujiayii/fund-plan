@@ -5,6 +5,7 @@ import {
   buildDismissRecord,
   buildNoticeDismissScript,
   parseAnnouncement,
+  shouldHideForVersion,
   validateAnnouncementInput,
 } from "~/domain/announcement";
 
@@ -114,6 +115,35 @@ describe("parseAnnouncement", () => {
 describe("buildDismissRecord", () => {
   it("格式为 `版本|时刻`，供内联脚本 split 解析", () => {
     expect(buildDismissRecord(1730270000000, 1730270060000)).toBe("1730270000000|1730270060000");
+  });
+});
+
+describe("shouldHideForVersion", () => {
+  const version = 1730270000000;
+  const now = 1730270000000 + 3600_000;
+
+  it("同版本且冷却期内 → true", () => {
+    const record = buildDismissRecord(version, 1730270000000);
+    expect(shouldHideForVersion(record, version, 1, now)).toBe(true);
+  });
+
+  it("版本不同 → false（admin 改内容立刻重现）", () => {
+    const record = buildDismissRecord(version, 1730270000000);
+    expect(shouldHideForVersion(record, version + 1, 1, now)).toBe(false);
+  });
+
+  it("冷却已过 → false", () => {
+    const record = buildDismissRecord(version, 1730270000000);
+    expect(shouldHideForVersion(record, version, 1, 1730270000000 + 2 * 86_400_000)).toBe(false);
+  });
+
+  it("旧格式（纯版本号，无时刻段）→ false（自动兼容回可见）", () => {
+    expect(shouldHideForVersion(String(version), version, 1, now)).toBe(false);
+  });
+
+  it("无记录 / null → false", () => {
+    expect(shouldHideForVersion(null, version, 1, now)).toBe(false);
+    expect(shouldHideForVersion("", version, 1, now)).toBe(false);
   });
 });
 

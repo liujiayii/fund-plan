@@ -42,12 +42,15 @@ export async function action({ request, context }: Route.ActionArgs) {
   await requireAdmin(request, db);
 
   const fd = await request.formData();
+  const rawCooldown = fd.get("cooldownDays");
   const input = {
     enabled: fd.get("enabled") === "1",
     zh: String(fd.get("zh") ?? ""),
     en: String(fd.get("en") ?? ""),
-    // 表单传来的是字符串；NaN 会被 validateAnnouncementInput 拦下
-    cooldownDays: Number(fd.get("cooldownDays")),
+    // ⚠️ 缺失/空串不能 Number() 直转——Number(null)/Number("") 都是 0，
+    // 会把「没填」静默存成 0 天。显式走 NaN 通道交给校验拒绝
+    // （CodeRabbit PR #114；正常表单永远带该字段，缺失即请求被篡改）
+    cooldownDays: rawCooldown === null || rawCooldown === "" ? Number.NaN : Number(rawCooldown),
   };
 
   const invalid = validateAnnouncementInput(input);

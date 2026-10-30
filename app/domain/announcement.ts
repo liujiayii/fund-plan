@@ -133,6 +133,23 @@ export function buildDismissRecord(version: number, now = Date.now()): string {
 }
 
 /**
+ * 给定关闭记录与横幅参数，判定该浏览器此刻是否应隐藏横幅。
+ * 内联脚本（首帧前）与组件的 SPA 版本变化重估（CodeRabbit PR #114 指正：
+ * 关闭类挂在 <html> 上整个文档生命周期有效，root loader 重校验拿到新版
+ * 公告时必须按同一套规则重新判定，否则新版横幅要整页刷新才见天日）
+ * 共用这一份判定，防止两处漂移。
+ */
+export function shouldHideForVersion(
+  record: string | null,
+  version: number,
+  cooldownDays: number,
+  now = Date.now(),
+): boolean {
+  const [v, t] = (record ?? "").split("|");
+  return v === String(version) && now - Number(t) < cooldownDays * DAY_MS;
+}
+
+/**
  * 首帧前隐藏脚本：HTML 解析到横幅后立即执行——localStorage 记着当前版本的
  * 关闭动作、且距关闭时刻未过冷却期，就把 <html> 挂上关闭类，横幅在首帧渲染前
  * 被 CSS 藏掉（无闪烁、无 CLS）。冷却天数从横幅的 data-cooldown 属性读，
