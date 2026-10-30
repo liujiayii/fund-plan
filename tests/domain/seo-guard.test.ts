@@ -75,6 +75,7 @@ describe("SEO 路由守卫", () => {
       "glossary._index.tsx",
       "tools.fee-calculator.tsx",
       "tools.dca-backtest.tsx",
+      "wall.tsx",
       "login.tsx",
       "register.tsx",
     ];

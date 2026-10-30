@@ -365,6 +365,67 @@ export const watchlist = sqliteTable(
   t => [primaryKey({ columns: [t.userId, t.fundCode] })],
 );
 
+/**
+ * 需求墙：用户提交的产品功能建议。
+ *
+ * 生命周期：pending（待评估）→ planned（已排期）/ done（已完成）/ rejected（不做），
+ * 由 admin 在 /wall 页面内联流转（/admin 后台刻意只读）。
+ * 作者本人不能编辑/删除自己的需求（v1，撤回联系主理人）。
+ */
+export const feedback = sqliteTable(
+  "feedback",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** 标题，服务端校验 ≤ 50 字 */
+    title: text("title").notNull(),
+    /** 详情，可为空串，≤ 500 字 */
+    detail: text("detail").notNull().default(""),
+    status: text("status", {
+      enum: ["pending", "planned", "done", "rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    /** admin 处理备注，随状态展示 */
+    statusNote: text("status_note").notNull().default(""),
+    /** 最近一次状态流转时间（毫秒），从未流转过为 null */
+    statusUpdatedAt: integer("status_updated_at"),
+    createdAt: integer("created_at").notNull(),
+  },
+  t => [
+    // 限频查「某用户今日提交数」、个人页将来按作者聚合，都走 (userId, createdAt)
+    index("idx_feedback_user_created").on(t.userId, t.createdAt),
+  ],
+);
+
+/**
+ * 需求投票（一人一需求至多一票）。
+ *
+ * 复合主键 (feedbackId, userId) 天然防重复投票，重复 INSERT 由
+ * onConflictDoNothing 吞掉（照抄 watchlist 模式）。双向级联：
+ * 需求删→票删，用户注销→票删。
+ */
+export const feedbackVote = sqliteTable(
+  "feedback_vote",
+  {
+    feedbackId: integer("feedback_id")
+      .notNull()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull(),
+  },
+  t => [
+    primaryKey({ columns: [t.feedbackId, t.userId] }),
+    // viewer 已投集合查询 WHERE user_id = ? 是每次登录态加载 /wall 的热路径，
+    // 复合 PK 只有 feedback_id 前缀，按 user 查/级联删都要这一列
+    index("idx_feedback_vote_user").on(t.userId),
+  ],
+);
+
 /** 供 drizzle 关系查询与类型推断使用的聚合导出 */
 export const schema = {
   fund,
@@ -379,6 +440,8 @@ export const schema = {
   transactions,
   checkin,
   watchlist,
+  feedback,
+  feedbackVote,
 };
 
 // 便捷类型：插入/查询行类型
@@ -393,3 +456,5 @@ export type DcaPlanRow = typeof dcaPlan.$inferSelect;
 export type TransactionRow = typeof transactions.$inferSelect;
 export type CheckinRow = typeof checkin.$inferSelect;
 export type WatchlistRow = typeof watchlist.$inferSelect;
+export type FeedbackRow = typeof feedback.$inferSelect;
+export type FeedbackVoteRow = typeof feedbackVote.$inferSelect;

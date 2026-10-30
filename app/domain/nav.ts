@@ -34,6 +34,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // 不放它——底栏只留四个高频入口
   { key: "/tools/fee-calculator", label: "费用计算器" },
   { key: "/tools/dca-backtest", label: "定投回测" },
+  // 需求墙：产品社区入口——内容页在前、社区居中、个人区殿后；
+  // 单页无子路由，不影响「/me/watchlist 先于 /me」的顺序约束
+  { key: "/wall", label: "需求墙" },
   { key: "/me/watchlist", label: "自选" },
   { key: "/me", label: "我的" },
 ];

@@ -38,6 +38,7 @@ export const SITEMAP_STATIC_PATHS = [
   "/glossary",
   "/tools/fee-calculator",
   "/tools/dca-backtest",
+  "/wall",
   "/login",
   "/register",
 ] as const;

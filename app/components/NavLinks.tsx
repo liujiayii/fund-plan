@@ -8,6 +8,7 @@ import {
   DashboardOutlined,
   FundOutlined,
   HomeOutlined,
+  LikeOutlined,
   ReadOutlined,
   StarOutlined,
   TrophyOutlined,
@@ -31,6 +32,8 @@ const NAV_ICON: Record<string, ReactNode> = {
   // 退回下面的 UserOutlined，看起来就像「我的」——tests/domain/seo-guard.test.ts
   // 钉着「每个 NAV_ITEMS 的 key 都必须登记」
   "/tools/dca-backtest": <AreaChartOutlined />,
+  // 需求墙：点赞图标贴「投票」语义（BulbOutlined 已被 /plan 占用）
+  "/wall": <LikeOutlined />,
   "/me/watchlist": <StarOutlined />,
   "/me": <UserOutlined />,
   "/admin": <DashboardOutlined />,
