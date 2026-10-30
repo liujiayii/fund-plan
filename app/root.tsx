@@ -15,6 +15,7 @@ import {
   useMatches,
 } from "react-router";
 import { POPUP_GLASS } from "~/antd-popup-glass";
+import { AnnouncementBar } from "~/components/AnnouncementBar";
 import { AppSidebar } from "~/components/AppSidebar";
 // 背景舞台（网格/光晕/粒子，2026-10-22 起替代退役的 FogStage 色雾承担衬底）
 import { BackdropStage } from "~/components/BackdropStage";
@@ -24,6 +25,7 @@ import { NavProgressBar } from "~/components/NavProgressBar";
 import { Logo } from "~/components/ui/Logo";
 import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 import { buildJsonLd } from "~/domain/seo";
+import { readAnnouncement } from "~/services/announcement-service";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
 import { ANTD_TOKEN } from "~/theme";
@@ -51,6 +53,9 @@ import "./styles/motion.css";
 // 背景舞台（网格/光晕/粒子容器）：玻璃材料外的独立衬底层，自带减动效关断；
 // 排在 responsive.css 之前，壳层媒体查询仍最后说话
 import "./styles/backdrop.css";
+// 公告横幅显隐开关（.fp-notice-off 祖先选择器，工具类扛不住）：
+// 独立小文件；排在 responsive.css 之前，壳层媒体查询仍最后说话
+import "./styles/announcement.css";
 // 期五移动端适配：唯一的媒体查询出处，必须排在 UnoCSS 之后
 // 才能覆盖工具类与 antd 组件类（顺序理由见该文件头注释）
 import "./styles/responsive.css";
@@ -65,16 +70,21 @@ import "./styles/responsive.css";
  * 自动注入从 zone 接入起就在收集，历史数据与 CWV 都在，手动嵌入零收益。
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const { db } = getAppContext(context);
+  const { db, env } = getAppContext(context);
   const user = await getCurrentUser(request, db);
-  return { user };
+  // 全站公告：KV 读 + isolate 内存缓存，读失败静默无横幅（见 announcement-service）
+  const notice = await readAnnouncement(env);
+  return { user, notice };
 }
 
 // 一级导航项定义已迁至 ~/domain/nav（侧栏与移动端底部胶囊共用，顺序敏感）
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN">
+    // suppressHydrationWarning：公告横幅的首帧前隐藏脚本会在 hydration 之前
+    // 给 <html> 挂 fp-notice-off 类（localStorage 已关闭时），属性对比必炸一次
+    // 告警。只抑制 html 本元素的属性告警，子树不受影响（暗色模式类方案同款）
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -118,7 +128,13 @@ export default function App() {
   // NAV_ITEMS 是「无角色分叉的公共导航」的单一事实源（侧栏与胶囊共用、
   // 顺序被单测钉死），混入角色逻辑就毁了这个约定。追加在末尾无前缀冲突。
   const navItems = user?.role === "admin"
-    ? [...NAV_ITEMS, { key: "/admin", label: "管理" }]
+    ? [
+        ...NAV_ITEMS,
+        // 「公告」必须排在「管理」之前：resolveSelectedKey 按 startsWith 取首个命中，
+        // 排后面的话 /admin/announcement 会被 /admin 吃掉高亮
+        { key: "/admin/announcement", label: "公告" },
+        { key: "/admin", label: "管理" },
+      ]
     : NAV_ITEMS;
   // 高亮当前所在的一级导航（侧栏与底部胶囊共用同一份纯函数）
   const selectedKey = resolveSelectedKey(location.pathname, navItems);
@@ -162,6 +178,9 @@ export default function App() {
         <div className="fp-main flex min-w-0 flex-1 flex-col">
           {/* navItems 一并传入：导航抽屉与桌面侧栏同源（含 admin 追加项） */}
           <MobileBrandBar navItems={navItems} user={user} />
+          {/* 全站公告横幅：挂在内容列里与正文同栅格（对齐策略见组件头注释），
+              SSR 恒渲染，显隐由 CSS 类控制 */}
+          <AnnouncementBar notice={data.notice} />
           <main id="fp-main-content" className="fp-content mx-auto w-full max-w-[1120px] px-6 pt-6 pb-12">
             <Outlet />
           </main>

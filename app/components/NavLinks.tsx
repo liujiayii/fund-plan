@@ -9,6 +9,7 @@ import {
   FundOutlined,
   HomeOutlined,
   LikeOutlined,
+  NotificationOutlined,
   ReadOutlined,
   StarOutlined,
   TrophyOutlined,
@@ -36,6 +37,9 @@ const NAV_ICON: Record<string, ReactNode> = {
   "/wall": <LikeOutlined />,
   "/me/watchlist": <StarOutlined />,
   "/me": <UserOutlined />,
+  // 公告：喇叭（admin 追加项也要登记，漏了会静默退回 UserOutlined，
+  // 看起来就像「我的」——2026-10-30 公告页实测踩坑）
+  "/admin/announcement": <NotificationOutlined />,
   "/admin": <DashboardOutlined />,
 };
 

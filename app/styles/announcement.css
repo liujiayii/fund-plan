@@ -1,0 +1,7 @@
+/* 全站公告横幅显隐开关（SSR 恒渲染 + 内联脚本首帧前藏横幅）。
+   显隐走 <html> 类而不是 React 状态：SSR 恒渲染 + 内联脚本首帧前藏横幅，
+   已关闭用户零闪烁零 CLS。工具类扛不住「祖先选择器」，所以落手写 CSS；
+   本规则不涉及色值，未来加色一律 var(--fp-*) */
+.fp-notice-off .fp-announcement {
+  display: none;
+}
