@@ -126,7 +126,11 @@ export default function AdminAnnouncement({ loaderData }: Route.ComponentProps) 
             label="中文内容（支持换行）"
             rules={[{ max: ANNOUNCEMENT_MAX_CHARS, message: `不能超过 ${ANNOUNCEMENT_MAX_CHARS} 字` }]}
           >
-            <Input.TextArea showCount maxLength={ANNOUNCEMENT_MAX_CHARS} rows={3} />
+            <Input.TextArea
+              showCount
+              maxLength={ANNOUNCEMENT_MAX_CHARS}
+              autoSize={{ minRows: 6, maxRows: 16 }}
+            />
           </Form.Item>
 
           <Form.Item
@@ -148,7 +152,11 @@ export default function AdminAnnouncement({ loaderData }: Route.ComponentProps) 
             label="English（可留空）"
             rules={[{ max: ANNOUNCEMENT_MAX_CHARS, message: `Max ${ANNOUNCEMENT_MAX_CHARS} chars` }]}
           >
-            <Input.TextArea showCount maxLength={ANNOUNCEMENT_MAX_CHARS} rows={2} />
+            <Input.TextArea
+              showCount
+              maxLength={ANNOUNCEMENT_MAX_CHARS}
+              autoSize={{ minRows: 4, maxRows: 10 }}
+            />
           </Form.Item>
 
           <div>

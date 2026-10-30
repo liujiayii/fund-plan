@@ -8,8 +8,8 @@
  * admin 每次保存版本必变，冷却中的用户会立刻重新看到新公告。
  */
 
-/** 公告中/英文各自的最大字符数（横幅不是文章，超长拒绝保存） */
-export const ANNOUNCEMENT_MAX_CHARS = 500;
+/** 公告中/英文各自的最大字符数（2026-10-30 主人定的：500 → 2000） */
+export const ANNOUNCEMENT_MAX_CHARS = 2000;
 
 /** 公告 KV key（service 层读写都用它） */
 export const ANNOUNCEMENT_KV_KEY = "site:announcement";
