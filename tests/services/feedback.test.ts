@@ -112,11 +112,18 @@ describe("moderateFeedback", () => {
     const db = getDb(env.DB);
     const userId = await seedUser();
     const fid = await seedFeedback(userId);
-    await moderateFeedback(db, fid, "planned", "下个版本排期");
+    await expect(moderateFeedback(db, fid, "planned", "下个版本排期")).resolves.toBe(true);
     const row = await db.query.feedback.findFirst({ where: eq(feedback.id, fid) });
     expect(row!.status).toBe("planned");
     expect(row!.statusNote).toBe("下个版本排期");
     expect(row!.statusUpdatedAt).not.toBeNull();
+  });
+
+  it("id 不存在返回 false，路由据此回失败而非假成功（CodeRabbit Minor #3）", async () => {
+    const db = getDb(env.DB);
+    const userId = await seedUser();
+    await seedFeedback(userId);
+    await expect(moderateFeedback(db, 99999, "done", "查无此需求")).resolves.toBe(false);
   });
 });
 
@@ -223,5 +230,22 @@ describe("wall action 权限接线", () => {
     const row = await db.query.feedback.findFirst({ where: eq(feedback.id, fid) });
     expect(row!.status).toBe("pending");
     expect(row!.statusNote).toBe("");
+  });
+
+  it("admin moderate 不存在的 id：返回失败提示而非假成功（CodeRabbit Minor #3）", async () => {
+    const db = getDb(env.DB);
+    // 测试环境 ADMIN_USERNAME=testadmin，注册同名用户即 admin
+    const adminId = await seedUser("testadmin");
+    const token = await createSession(db, adminId);
+
+    const res = await action({
+      request: post(
+        { intent: "moderate", feedbackId: "99999", status: "done", statusNote: "查无此需求" },
+        token,
+      ),
+      context: fakeContext(),
+      params: {},
+    } as never);
+    expect(res).toEqual({ error: "需求不存在，请刷新页面后重试" });
   });
 });

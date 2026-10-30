@@ -80,12 +80,15 @@ export async function action({ request, context }: Route.ActionArgs) {
       // Object.hasOwn 而非 in：普通对象字面量会被 "toString" in 绕过原型链
       if (!Object.hasOwn(FEEDBACK_STATUS_LABELS, status))
         return { error: "未知状态" };
-      await moderateFeedback(
+      const updated = await moderateFeedback(
         db,
         Number(fd.get("feedbackId")),
         status as FeedbackStatus,
         String(fd.get("statusNote") ?? ""),
       );
+      // 查无此需求（页面停留旧数据）≠ 数据库故障，给可行动的提示而非假成功
+      if (!updated)
+        return { error: "需求不存在，请刷新页面后重试" };
       return { ok: true, message: "已更新状态" };
     }
     catch {
@@ -189,12 +192,14 @@ function FeedbackRow({
               处理
             </Button>
           )}
+          {/* 图标+票数对读屏用户不可辨，label 带上标题与动作（CodeRabbit Minor #1） */}
           <Button
             size="small"
             icon={<LikeOutlined />}
             type={item.votedByMe ? "primary" : "default"}
             disabled={busy}
             onClick={toggleVote}
+            aria-label={item.votedByMe ? `取消「${item.title}」的投票` : `投票支持「${item.title}」`}
           >
             {item.voteCount}
           </Button>
@@ -233,10 +238,16 @@ export default function Wall({ loaderData }: Route.ComponentProps) {
     if ("ok" in mainFetcher.data && mainFetcher.data.ok) {
       // 异步提交完成后的副作用（关抽屉/弹窗），effect 正是该用的工具
       // ——OrderActions 关改单弹窗同款豁免理由：改成派生状态反而出 bug
-      // eslint-disable-next-line react/set-state-in-effect
-      setDrawerOpen(false);
-      // eslint-disable-next-line react/set-state-in-effect
-      setTarget(null);
+      // 按提交时的 intent 只关自己的面板：无条件互关会让「弹窗点取消后
+      // 另开一条」时，旧 moderate 成功回包把新弹窗当场关掉、冲掉未保存
+      // 的备注（CodeRabbit Minor #2）。取消时已作废 lastIntent，此时
+      // 走抽屉分支是 no-op（抽屉必然已关）
+      if (lastIntentRef.current === "moderate") {
+        setTarget(null);
+      }
+      else {
+        setDrawerOpen(false);
+      }
       if ("message" in mainFetcher.data && mainFetcher.data.message)
         void messageApi.success(mainFetcher.data.message);
       lastIntentRef.current = null;
@@ -390,7 +401,12 @@ export default function Wall({ loaderData }: Route.ComponentProps) {
       <Modal
         title="处理需求"
         open={target !== null}
-        onCancel={() => setTarget(null)}
+        onCancel={() => {
+          // 主动放弃本次处理：作废在途 moderate 回包的关弹窗资格，
+          // 防止它关掉之后另开的需求弹窗（CodeRabbit Minor #2）
+          lastIntentRef.current = null;
+          setTarget(null);
+        }}
         onOk={submitModerate}
         okText="保存"
         confirmLoading={mainFetcher.state !== "idle"}

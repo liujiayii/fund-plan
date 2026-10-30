@@ -145,14 +145,16 @@ export async function unvoteFeedback(
     );
 }
 
-/** admin 状态流转：写状态 + 备注 + 流转时间 */
+/** admin 状态流转：写状态 + 备注 + 流转时间。返回是否命中行——id 不存在（页面停留旧数据）为 false */
 export async function moderateFeedback(
   db: Db,
   feedbackId: number,
   status: FeedbackStatus,
   statusNote: string,
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  // returning 借「更新返回的行数」判断命中，0 行 = 查无此需求，
+  // 路由据此回失败提示而不是假成功（CodeRabbit Minor #3）
+  const rows = await db
     .update(feedback)
     .set({
       status,
@@ -160,5 +162,7 @@ export async function moderateFeedback(
       statusNote: statusNote.trim().slice(0, 200),
       statusUpdatedAt: Date.now(),
     })
-    .where(eq(feedback.id, feedbackId));
+    .where(eq(feedback.id, feedbackId))
+    .returning({ id: feedback.id });
+  return rows.length > 0;
 }
