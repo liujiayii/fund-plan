@@ -25,9 +25,9 @@ import {
  * 必须按同一套规则重估显隐，否则新版横幅要整页刷新才见天日。重估走
  * domain 的 shouldHideForVersion（与内联脚本同一份判定，不另写一份）。
  *
- * 栅格与 main 完全同源（max-w-[1120px] mx-auto px-6），横幅永远和正文对齐；
- * 间距（mt-4）挂在 Alert 自身——antd 关闭后 Alert 卸载、间距随之消失，
- * 外层容器不留死空间。
+ * 栅格：通栏铺满内容区（fp-main 全宽 + px-6），刻意不与正文列对齐——
+ * 2026-10-30 主人要求横幅比主体内容更宽。间距（mt-4）挂在 Alert 自身——
+ * antd 关闭后 Alert 卸载、间距随之消失，外层容器不留死空间。
  */
 export function AnnouncementBar({ notice }: { notice: Announcement | null }) {
   const version = notice?.version;
@@ -76,7 +76,7 @@ export function AnnouncementBar({ notice }: { notice: Announcement | null }) {
       id={ANNOUNCEMENT_ELEMENT_ID}
       data-version={String(notice.version)}
       data-cooldown={String(notice.cooldownDays)}
-      className="fp-announcement mx-auto w-full max-w-[1120px] px-6"
+      className="fp-announcement w-full px-6"
     >
       {/* warning 语义色（琥珀）点题「公告/注意」；喇叭图标与导航「公告」同款。
           zh/en 支持 \n 换行（whitespace-pre-line），en 留空时不出 description。
