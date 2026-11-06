@@ -1,20 +1,13 @@
 /**
- * 品牌视觉锤：上扬三折净值曲线。图形唯一出处收敛到 public/favicon.svg
- * （2026-09-14 拍板改外链引用）：favicon.ico / favicon.svg / 页内 Logo
- * 三处吃同一份资产，不再维护内联副本，也不会再撞「gradient stop 里的
- * var() 按 :root 注入时机静默不画」的 Chrome 坑。
- * 代价：不吃 theme.ts token 与页面 CSS，换主题要改资产文件本身。
- * display:block：img 默认 inline，底边会留一条 line-height 空隙。
+ * 沿用既有三折净值曲线，改用 currentColor 跟随主题。
+ * 内联图形不依赖浏览器系统明暗，手动切换 A/B 时也会同步，不产生图片闪烁。
  */
 export function Logo({ size = 24 }: { size?: number }) {
   return (
-    <img
-      src="/favicon.svg"
-      width={size}
-      height={size}
-      alt=""
-      aria-hidden="true"
-      className="block"
-    />
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className="block shrink-0 text-primary" aria-hidden="true">
+      <path d="M6.5 22.5 L12.6 15.4 L17.3 19 L25.5 9.5 L25.5 25.5 L6.5 25.5 Z" fill="currentColor" fillOpacity="0.14" />
+      <path d="M6.5 22.5 L12.6 15.4 L17.3 19 L25.5 9.5" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="25.5" cy="9.5" r="2.6" fill="currentColor" />
+    </svg>
   );
 }

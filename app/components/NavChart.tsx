@@ -1,11 +1,10 @@
 import type { LineConfig } from "@ant-design/charts";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
-import { FP_CHART_THEME } from "~/components/ui/chart-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
+import { useChartTheme } from "~/components/ui/use-chart-theme";
 import { NAV_SCALE } from "~/domain/money";
-import { COLOR } from "~/theme";
 
 /**
  * @ant-design/charts 是纯客户端库（底层 G2 依赖 canvas / DOM）。
@@ -59,6 +58,7 @@ export function NavChart({
 }) {
   const [range, setRange] = useState<string>("3m");
   const mounted = useIsClient();
+  const { chartTheme, colors } = useChartTheme();
 
   const chartData = useMemo(() => {
     const cfg = RANGES.find(r => r.key === range) ?? RANGES[1];
@@ -104,12 +104,12 @@ export function NavChart({
     // colorField 按 type 分组画多条线；单线时只有一类「本基金」也正常
     colorField: "type",
     // 全站图表统一主题（chart-theme.ts 单一出处）
-    theme: FP_CHART_THEME,
+    theme: chartTheme,
     // 基准线（沪深300）退到雾灰辅助位（2026-09-09 用户走查裁定）：此前吃
     // category10 第二位的紫罗兰，与本基金主线同属蓝紫区，两条线缠在一起
-    // 分不清主次。显式 color 数组覆盖主题色环：主序列品牌靛蓝、基准雾灰。
-    // 消费方仅此一处双序列折线，不动 chart-theme 的 category10（饼图在用）
-    color: [COLOR.primary, COLOR.neutral],
+    // 分不清主次。显式 color 数组覆盖主题色环：主序列品牌主色、基准雾灰。
+    // 局部覆盖不改变共享 category10，资产配置环图仍按自己的序列顺序取色。
+    color: [colors.primary, colors.neutral],
     // ⚠️ 刻意不传 height：G2 的 sizeOf 让显式 height 压过容器尺寸——
     // 传了它，CSS 压容器（窄屏 220）canvas 也不跟随，会竖向溢出容器。
     // 不传时 autoFit 读容器 clientHeight，高度由 responsive.css §6 全权管理

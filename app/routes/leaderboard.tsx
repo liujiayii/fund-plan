@@ -375,7 +375,7 @@ function Podium({
               {/* 奖牌：圆形实底 + 深海墨字（亮底深字）。
                   描边用 border 而非 ring——ring 在本项目是死类，见 MEDAL 注释 */}
               <span
-                className={`fp-podium-drop ${m.drop} mt-3 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 [border-style:solid] border-white/50 text-xs font-semibold font-num text-on-primary md:mt-5 md:h-11 md:w-11 md:text-lg ${m.badge}`}
+                className={`fp-podium-drop ${m.drop} mt-3 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 [border-style:solid] border-white/50 text-xs font-semibold font-num text-medal-ink md:mt-5 md:h-11 md:w-11 md:text-lg ${m.badge}`}
               >
                 {e.rank}
               </span>

@@ -386,14 +386,14 @@ export function MethodCurve() {
         </radialGradient>
         {/* 面积的水平淡出。曲线已经画到画布右缘之外，但填充在右缘仍是半不透明的，
             会留下一条竖直硬边（截图走查抓到的）——用一层遮罩把它淡掉。
-            用 <mask>（不是滤镜，宪法 §3 只禁滤镜）：默认按亮度取遮罩，
-            所以 stopColor 取近白的 textPrimary，别用深色 */}
+            用 <mask>（不是滤镜，宪法 §3 只禁滤镜）：显式只读取透明度，
+            不让主题文字的明暗改变面积填充强度 */}
         <linearGradient id={`${id}-fade`} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="var(--fp-text-primary)" stopOpacity="1" />
           <stop offset="62%" stopColor="var(--fp-text-primary)" stopOpacity="1" />
           <stop offset="100%" stopColor="var(--fp-text-primary)" stopOpacity="0" />
         </linearGradient>
-        <mask id={`${id}-fade-mask`} maskUnits="userSpaceOnUse" x="0" y="0" width={CURVE_VIEW.w} height={CURVE_VIEW.h}>
+        <mask id={`${id}-fade-mask`} mask-type="alpha" maskUnits="userSpaceOnUse" x="0" y="0" width={CURVE_VIEW.w} height={CURVE_VIEW.h}>
           <rect x="0" y="0" width={CURVE_VIEW.w} height={CURVE_VIEW.h} fill={`url(#${id}-fade)`} />
         </mask>
       </defs>

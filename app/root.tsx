@@ -1,7 +1,7 @@
 import type { Route } from "./+types/root";
 import { GithubOutlined } from "@ant-design/icons";
 import { DefaultFooter } from "@ant-design/pro-components";
-import { ConfigProvider, Space, theme } from "antd";
+import { ConfigProvider, Space } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import {
   isRouteErrorResponse,
@@ -17,18 +17,20 @@ import {
 import { POPUP_GLASS } from "~/antd-popup-glass";
 import { AnnouncementBar } from "~/components/AnnouncementBar";
 import { AppSidebar } from "~/components/AppSidebar";
-// 背景舞台（网格/光晕/粒子，2026-10-22 起替代退役的 FogStage 色雾承担衬底）
+// 唯一背景保留光带和网格，客户端粒子按当前主题实际色板绘制。
 import { BackdropStage } from "~/components/BackdropStage";
 import { MobileBrandBar } from "~/components/MobileBrandBar";
 import { MobileTabBar } from "~/components/MobileTabBar";
 import { NavProgressBar } from "~/components/NavProgressBar";
+import { ThemeProvider, useAppTheme } from "~/components/ThemeProvider";
 import { Logo } from "~/components/ui/Logo";
 import { NAV_ITEMS, resolveSelectedKey } from "~/domain/nav";
 import { buildJsonLd } from "~/domain/seo";
 import { readAnnouncement } from "~/services/announcement-service";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
-import { ANTD_TOKEN } from "~/theme";
+import { THEME_BOOTSTRAP, THEME_COLORS } from "~/theme";
+import { ANTD_THEME_CSS, getAntdTheme } from "~/theme-antd";
 // 数字品牌字体：Space Grotesk 三字重（自托管 woff2 随构建产物走）。
 // 只覆盖拉丁字符，中文继续系统栈——体积 ~50KB，国内加载零风险（spec §3.3）
 import "@fontsource/space-grotesk/400.css";
@@ -88,11 +90,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* 暗底站点必须声明 color-scheme：原生滚动条 / 表单控件 / 日期选择器才走深色，
-            否则玻璃页面里蹦出一根白滚动条（2026-09-10 走查补） */}
-        <meta name="color-scheme" content="dark" />
+        {/* 原生滚动条和表单随当前主题；最终 color-scheme 由主题变量块确定。 */}
+        <meta name="color-scheme" content="light dark" />
         {/* 移动端浏览器地址栏跟页面底同色，色值与 theme.ts 的 COLOR.bg 一致（静态资源吃不到变量，改色同步） */}
-        <meta name="theme-color" content="#071018" />
+        <meta name="theme-color" content={THEME_COLORS.ceramic.bg} suppressHydrationWarning />
+        {/* 首屏读取本机偏好，不改变共享游客缓存；脚本只包含内部常量。 */}
+        <script
+          // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml -- 水合前设置主题，避免首屏错色
+          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }}
+        />
+        <style
+          // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml -- antd 两套派生色值来自内部 token
+          dangerouslySetInnerHTML={{ __html: ANTD_THEME_CSS }}
+        />
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Meta />
@@ -110,8 +120,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <body>
         {/* 背景舞台放 body 首位：fixed 层，DOM 顺序与视觉层级（背景在最底）一致。
             2026-10-22 起替代退役的 FogStage 色雾，成为玻璃的唯一衬底 */}
-        <BackdropStage />
-        {children}
+        <ThemeProvider>
+          <BackdropStage />
+          {children}
+        </ThemeProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -120,6 +132,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const { theme: themeId } = useAppTheme();
   const data = useLoaderData<typeof loader>();
   const location = useLocation();
   const user = data?.user ?? null;
@@ -148,10 +161,10 @@ export default function App() {
   );
 
   return (
-    // antd 全局配置：中文语言包 + 暗色算法 + 视觉 token（见 app/theme.ts；为什么切暗色算法见 ANTD_TOKEN 注释）
+    // 只更新算法和变量，不重挂页面，保留表单输入与弹窗状态。
     <ConfigProvider
       locale={zhCN}
-      theme={{ algorithm: theme.darkAlgorithm, ...ANTD_TOKEN }}
+      theme={getAntdTheme(themeId)}
       // 弹层玻璃走 semantic classNames（官方把 .fp-glass 挂到 modal/drawer/
       // select 的面板节点，不再追 antd 内部类名）。配置本体与 DOM 守卫
       // 测试共用一份真相，见 app/antd-popup-glass.ts 的注释——里面有

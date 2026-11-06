@@ -1,8 +1,10 @@
+import type { RateTier } from "~/components/ui/calendar-theme";
 import type { DailyAsset } from "~/domain/asset-timeline";
 import type { PnlBucket, PnlDimension } from "~/domain/pnl-buckets";
 import { Button } from "antd";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
+import { calendarCellBackground, RATE_TIERS } from "~/components/ui/calendar-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
 import {
@@ -13,7 +15,10 @@ import {
   pageOfKey,
   shiftPage,
 } from "~/domain/pnl-buckets";
-import { COLOR, pnlColor } from "~/theme";
+import { COLOR } from "~/theme";
+
+// 保留既有消费方的导出路径；颜色分档本身是可独立测试的纯 UI 配置。
+export { FUND_RATE_TIERS } from "~/components/ui/calendar-theme";
 
 /**
  * 收益日历。同一个组件画四种统计粒度（日 / 周 / 月 / 年），
@@ -48,35 +53,6 @@ export const DIMENSION_OPTIONS = [
 /** 各粒度的网格列数（日/周 = 一周七天一排；月/年 = 四列三排刚好铺满一屏） */
 const COLUMNS: Record<PnlDimension, number> = { day: 7, week: 7, month: 4, year: 4 };
 
-/** 单档配置：|收益率| ≥ threshold 时取 alpha（hex8 后缀） */
-interface RateTier {
-  threshold: number;
-  alpha: string;
-}
-
-/**
- * 全组合日历分档（/me、/me/profit、/master）。
- * 基金组合的单日波动天然被多只基金摊薄，阈值收得紧。
- */
-const RATE_TIERS: readonly RateTier[] = [
-  { threshold: 0.015, alpha: "B3" }, // ≥1.5%：最深
-  { threshold: 0.008, alpha: "80" },
-  { threshold: 0.003, alpha: "4D" },
-  { threshold: 0, alpha: "28" }, // >0：最浅
-] as const;
-
-/**
- * 单基金日历分档（持仓页收益明细 tab）。基金净值单日 1%~2% 很常见，
- * 套全组合阈值满屏深色、文字看不清——阈值放宽一档（2026-09-09 主理人反馈）。
- * export：FundProfitContent 作为 rateTiers 传入
- */
-export const FUND_RATE_TIERS: readonly RateTier[] = [
-  { threshold: 0.03, alpha: "B3" }, // ≥3%：最深
-  { threshold: 0.015, alpha: "80" },
-  { threshold: 0.008, alpha: "4D" },
-  { threshold: 0, alpha: "28" }, // >0：最浅
-] as const;
-
 /**
  * 分档阈值随粒度放大的系数（随机游走 √N 近似）：一周 ≈ 5 个交易日、
  * 一月 ≈ 21、一年 ≈ 250（A 股年均交易日）。
@@ -92,33 +68,9 @@ const DIMENSION_RATE_SCALE: Record<PnlDimension, number> = {
   year: Math.sqrt(250),
 };
 
-/** 无数据 / 中性（收益为 0）格子的透明度 */
-const NEUTRAL_ALPHA = "1A"; // ~10%，极浅灰底
-
 // ─────────────────────────────────────────────────────────────
 // 工具函数
 // ─────────────────────────────────────────────────────────────
-
-/**
- * 按 |dayPnlRate| 绝对值选出透明度后缀。
- * dayPnlCents > 0 时 base 取 COLOR.up，< 0 取 COLOR.down；
- * 返回拼好的 hex8 色串（如 `#F0443880`，即 COLOR.up #F04438 拼透明度）。
- */
-function cellBgColor(dayPnlCents: number, dayPnlRate: number, tiers: readonly RateTier[]): string {
-  const base = pnlColor(dayPnlCents); // up / down / neutral
-  if (dayPnlCents === 0) {
-    return `${COLOR.neutral}${NEUTRAL_ALPHA}`;
-  }
-  const absRate = Math.abs(dayPnlRate);
-  // 从强档往弱档找，命中即停
-  for (const tier of tiers) {
-    if (absRate >= tier.threshold) {
-      return `${base}${tier.alpha}`;
-    }
-  }
-  // 理论不可达（threshold=0 兜底），保险回退
-  return `${base}${tiers[tiers.length - 1]!.alpha}`;
-}
 
 /** 分档阈值按粒度系数整体放大（非数字门槛不变，只挪 0.3% / 1.5% 这些边界） */
 function scaleTiers(tiers: readonly RateTier[], scale: number): readonly RateTier[] {
@@ -252,13 +204,11 @@ export function ProfitCalendar({
   selectedKey?: string;
   /**
    * 背景色分档（单基金口径传 FUND_RATE_TIERS，不传走全组合分档）。
-   * ⚠️ 只接受非空数组：空数组会让 cellBgColor 的兜底读到
-   * tiers[-1]（undefined）拼出坏色串——类型上保证不了「非空」，
-   * 运行时回退 RATE_TIERS（CodeRabbit PR #78 建议）
+   * 空数组会在按粒度缩放前回退全组合分档，保证周/月/年阈值也正确放大。
    */
   rateTiers?: readonly RateTier[];
 }) {
-  // 空数组防御：回退全组合分档，cellBgColor 的 tiers[-1] 兜底永不为 undefined
+  // 缩放前统一回退分档，避免空配置绕过后续的周/月/年阈值校准。
   const rateTiers = rateTiersProp && rateTiersProp.length > 0 ? rateTiersProp : RATE_TIERS;
   // 空数据直接走空态
   if (data.length === 0) {
@@ -486,14 +436,10 @@ function CalendarCell({
   onPick?: (key: string) => void;
 }) {
   const hasData = bucket !== undefined;
-  // 格子背景色
-  const bg = hasData
-    ? cellBgColor(bucket.pnlCents, bucket.pnlRate, tiers)
-    : `${COLOR.neutral}${NEUTRAL_ALPHA}`;
+  // DOM 颜色由 CSS 变量解析，B 首帧与无 JS 场景也能跟随 head / 系统主题。
+  const bg = calendarCellBackground(COLOR, bucket?.pnlCents ?? 0, bucket?.pnlRate ?? 0, tiers);
 
-  // 收益金额颜色：统一 textPrimary（2026-09-09 主理人定夺）。
-  // 涨跌语义全交给背景色（红/绿底 + 深浅分档）——此前文字走 pnlColor
-  // 与背景同色系实色，深档（50%~70% 不透明）下红字贴红底看不清
+  // 金额统一主文字色，涨跌交给红绿底；分档强度已为两套主题保留小字对比。
   const pnlFg = hasData && bucket.pnlCents !== 0 ? COLOR.textPrimary : undefined;
 
   // 有数据且调用方要交互时，格子可点（键盘可达：role + tabIndex + Enter/Space）

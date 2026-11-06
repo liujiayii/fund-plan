@@ -5,7 +5,8 @@ import {
   INITIAL_CASH_CENTS,
   TRADE_CUTOFF_HOUR,
 } from "~/domain/config";
-import { ANTD_TOKEN, COLOR, pnlColor } from "~/theme";
+import { COLOR, pnlColor, THEME_COLORS } from "~/theme";
+import { getAntdTheme } from "~/theme-antd";
 
 /**
  * 冒烟测试：验证测试框架跑得起来、路径别名 ~/ 解析正常、
@@ -34,76 +35,60 @@ describe("脚手架冒烟测试", () => {
   });
 });
 
-describe("视觉 token 不变式", () => {
-  it("主色不能与涨色相同（否则按钮和「涨」撞色，是重构前最大的视觉问题）", () => {
-    expect(COLOR.primary).not.toBe(COLOR.up);
-  });
-
-  it("涨色与跌色必须不同", () => {
-    expect(COLOR.up).not.toBe(COLOR.down);
-  });
-
-  it("pnlColor 三态：正涨、负跌、零中性", () => {
+describe("双主题视觉 token 不变式", () => {
+  it("pnlColor 保持国内涨红跌绿三态，DOM 引用可随主题更新", () => {
     expect(pnlColor(1)).toBe(COLOR.up);
     expect(pnlColor(-1)).toBe(COLOR.down);
     expect(pnlColor(0)).toBe(COLOR.neutral);
+    expect(COLOR.bg).toBe("var(--fp-bg)");
   });
 
-  it("antd 语义色未被涨跌色覆盖（否则错误提示会变绿、成功提示会变红）", () => {
-    const token = ANTD_TOKEN.token as Record<string, unknown>;
-    expect(token.colorSuccess).toBeUndefined();
-    expect(token.colorError).toBeUndefined();
-  });
+  describe.each(["ceramic", "graphite"] as const)("%s", (id) => {
+    const colors = THEME_COLORS[id];
+    const config = getAntdTheme(id);
+    const token = config.token!;
 
-  it("antd 的主色必须就是 COLOR.primary（两处分叉会让按钮与强调色不是一个蓝）", () => {
-    const token = ANTD_TOKEN.token as Record<string, unknown>;
-    expect(token.colorPrimary).toBe(COLOR.primary);
-  });
+    it("操作、涨跌和在途为不同语义", () => {
+      expect(new Set([colors.primary, colors.up, colors.down, colors.pending]).size).toBe(4);
+    });
 
-  it("深海冰盘：页面底是深海蓝黑，主文字是月白（liquid-glass 宪法 §2.1/§2.4）", () => {
-    expect(COLOR.bg).toBe("#071018");
-    expect(COLOR.textPrimary).toBe("#EFF7FC");
-  });
+    it("antd 的操作色与中性面来自当前 palette，金融色不污染成功/错误", () => {
+      expect(token.colorPrimary).toBe(colors.primary);
+      expect(token.colorBgContainer).toBe(colors.well);
+      expect(token.colorBgElevated).toBe(colors.elevated);
+      expect(token.colorBgMask).toBe(colors.mask);
+      expect(token.colorSuccess).toBeUndefined();
+      expect(token.colorError).toBeUndefined();
+    });
 
-  it("主色是亮冰蓝时必须有 onPrimary 深字（白字在亮药丸上对比不足，宪法 §2.5）", () => {
-    // 相对亮度（W3C）：亮色主色 + 缺 onPrimary = 主按钮白字瞎眼；暗色主色时本条天然通过
-    const [r, g, b] = [0, 2, 4].map(i => Number.parseInt(COLOR.primary.slice(1 + i, 3 + i), 16));
-    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-    if (lum > 0.5)
-      expect(COLOR.onPrimary).toBeDefined();
-    // onPrimary 自己必须是深色（亮度低于 0.25），否则「深字」名不副实
-    const [r2, g2, b2] = [0, 2, 4].map(i => Number.parseInt(COLOR.onPrimary.slice(1 + i, 3 + i), 16));
-    const lumOn = (0.2126 * r2 + 0.7152 * g2 + 0.0722 * b2) / 255;
-    expect(lumOn).toBeLessThan(0.25);
-  });
+    it("主按钮与金银铜奖牌的文字至少满足 4.5:1 对比", () => {
+      const luminance = (hex: string) => {
+        const channels = [1, 3, 5].map((index) => {
+          const value = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+          return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+      };
+      const a = luminance(colors.primary);
+      const b = luminance(colors.onPrimary);
+      expect((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toBeGreaterThanOrEqual(4.5);
+      const medalText = luminance(colors.medalInk);
+      for (const background of ["#F5C454", "#C9D6E2", "#CD8A54"]) {
+        const medalBg = luminance(background);
+        expect((Math.max(medalBg, medalText) + 0.05) / (Math.min(medalBg, medalText) + 0.05)).toBeGreaterThanOrEqual(4.5);
+      }
+    });
 
-  it("背景舞台 token 就位、色雾三团绝迹（2026-10-22 FogStage 退役）", () => {
-    // 雾退役后这三个键不该复辟（衬底职责已移交 BackdropStage 的网格/光晕/粒子）
-    const fogKeys = Object.keys(COLOR).filter(k => k.toLowerCase().includes("fog"));
-    expect(fogKeys).toEqual([]);
-    // 背景舞台五键：网格线 / 光晕进 CSS（--fp-backdrop-*），粒子三色进 JS 配置
-    expect(COLOR.backdropGrid).toBeDefined();
-    expect(COLOR.backdropGlow).toBeDefined();
-    expect(COLOR.particleA).toBeDefined();
-    expect(COLOR.particleB).toBeDefined();
-    expect(COLOR.particleC).toBeDefined();
-  });
-
-  it("待办第三语义不与涨跌、主色撞色", () => {
-    expect(COLOR.pending).not.toBe(COLOR.up);
-    expect(COLOR.pending).not.toBe(COLOR.down);
-    expect(COLOR.pending).not.toBe(COLOR.primary);
-  });
-
-  it("antd Card 底透明——玻璃渐变要透出来（宪法 §7）", () => {
-    const card = (ANTD_TOKEN.components as Record<string, Record<string, unknown>>).Card;
-    expect(card.colorBgContainer).toBe("transparent");
-  });
-
-  it("antd 中性面吃材料 token：容器 = well、浮面 = elevated、遮罩 = mask", () => {
-    const token = ANTD_TOKEN.token as Record<string, unknown>;
-    expect(token.colorBgContainer).toBe(COLOR.well);
-    expect(token.colorBgElevated).toBe(COLOR.elevated);
-    expect(token.colorBgMask).toBe(COLOR.mask);
+    it("卡片底透明交给材料层，背景提供光带与实际粒子色", () => {
+      expect(config.components?.Card?.colorBgContainer).toBe("transparent");
+      expect(colors.backdropGrid).toBeTruthy();
+      expect(colors.backdropGlow).toBeTruthy();
+      expect(colors.ribbonStart).toMatch(/^#/);
+      expect(colors.ribbonMiddle).toMatch(/^#/);
+      expect(colors.ribbonEnd).toMatch(/^#/);
+      expect(colors.particleA).toMatch(/^#[\dA-F]{6}$/i);
+      expect(colors.particleB).toMatch(/^#[\dA-F]{6}$/i);
+      expect(colors.particleC).toMatch(/^#[\dA-F]{6}$/i);
+    });
   });
 });

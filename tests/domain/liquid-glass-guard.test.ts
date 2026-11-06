@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { THEME_COLORS } from "../../app/theme";
 
 /**
  * 液态玻璃宪法守卫（docs/liquid-glass.md §8 验收 #2 的自动化版）。
@@ -58,21 +59,31 @@ describe("液态玻璃宪法守卫", () => {
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
-  it("背景舞台（2026-10-22 起）。三件套落地在 backdrop.css：网格 / 光晕 / 粒子容器 + 减动效", () => {
-    // 2026-10-22 色雾退役（FogStage 删除），衬底职责移交背景舞台。
-    // 铁律不变：玻璃下面必须有东西可透——舞台三件套就是那个「东西」，
-    // 谁想「顺手清理掉」背景 div，这条先红
+  it("背景舞台保留网格、柔光与 SVG 光带，粒子层不新增全屏滤镜", () => {
     const css = readFileSync(BACKDROP_CSS, "utf8");
+    const stage = readFileSync(path.join(APP_DIR, "components/BackdropStage.tsx"), "utf8");
+    const root = readFileSync(path.join(APP_DIR, "root.tsx"), "utf8");
     expect(css).toContain(".fp-backdrop {");
     expect(css).toContain(".fp-backdrop-grid");
     expect(css).toContain(".fp-backdrop-glow");
+    expect(css).toContain(".fp-backdrop-ribbon");
     expect(css).toContain(".fp-backdrop-particles");
-    expect(css).toContain("@keyframes fp-backdrop-pulse");
-    // 减动效：光晕的 CSS 关断必须自带（粒子是 JS 拦截，测不了 CSS 文本）
-    expect(css).toMatch(/\.fp-backdrop-glow\s*\{[^}]*animation: none/);
-    // 背景层不许发明模糊材料，也不许用 filter: blur 做软边（色雾时代的性能纪律延续）
+    expect(stage).toContain("<svg");
+    expect(stage).toContain("aria-hidden=\"true\"");
+    expect(css).toContain("pointer-events: none");
+    // 画布只在客户端挂载；首屏输出空容器，全站仍只挂一份背景。
+    expect(stage).not.toMatch(/<canvas\b/);
+    expect(root.match(/<BackdropStage\s*\/>/g)).toHaveLength(1);
+    expect(css).not.toMatch(/@keyframes|animation:/);
     expect(css).not.toMatch(/backdrop-filter/);
     expect(css).not.toMatch(/(^|[^-])filter:\s*blur/m);
+  });
+
+  it("材料与背景颜色全部来自主题变量，不残留旧冰川字面量", () => {
+    for (const file of [GLASS_CSS, BACKDROP_CSS]) {
+      const css = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      expect(css, path.basename(file)).not.toMatch(/#[\da-f]{3,8}\b|\brgba?\(|\bhsla?\(/i);
+    }
   });
 
   it("弹层玻璃走 semantic 官方通道：配置在 antd-popup-glass.ts，CSS 不追内部类名", () => {
@@ -89,9 +100,9 @@ describe("液态玻璃宪法守卫", () => {
     const css = readFileSync(GLASS_CSS, "utf8");
     const popupConf = readFileSync(path.join(APP_DIR, "antd-popup-glass.ts"), "utf8");
     const root = readFileSync(path.join(APP_DIR, "root.tsx"), "utf8");
-    expect(popupConf).toContain("container: \"fp-glass\"");
-    expect(popupConf).toContain("section: \"fp-glass\"");
-    expect(popupConf).toContain("root: \"fp-glass\"");
+    expect(popupConf).toContain("container: \"fp-glass fp-glass-chrome\"");
+    expect(popupConf).toContain("section: \"fp-glass fp-glass-chrome\"");
+    expect(popupConf).toContain("root: \"fp-glass fp-glass-chrome\"");
     expect(root).toContain("POPUP_GLASS");
     expect(css).toMatch(/\.ant-dropdown \.ant-dropdown-menu\s*\{/);
     // modal / drawer / select 的内部类名零命中（选择器形态；注释里
@@ -110,7 +121,7 @@ describe("液态玻璃宪法守卫", () => {
     expect(theme).not.toMatch(/export const (?:CARD_SHADOW|BAR_SHADOW)/);
   });
 
-  it("身份 / 方向 Tag 不再用 antd 预设蓝（宪法 §2.5：主色让给紫，蓝是旧身份）", () => {
+  it("身份 / 方向 Tag 不用 antd 预设蓝（宪法 §2.5：跟随主题语义色）", () => {
     const offenders = tsxFiles.filter(f => /color="blue"/.test(readFileSync(f, "utf8")));
     expect(offenders.map(f => path.relative(APP_DIR, f))).toEqual([]);
   });
@@ -122,17 +133,16 @@ describe("液态玻璃宪法守卫", () => {
     // 类型检查也不管字符串）。tooltip 里的类名是 bg-pending-soft，
     // 变量名却是 --fp-pending-bg，两者不同源，很容易写串。
     //
-    // 这条守卫把「主题类名」与「CSS 变量名」这对易混的名字钉死：
-    // 变量只能来自 COLOR 的键（kebab 化）加 uno.config 里手写的那几个。
-    const theme = readFileSync(path.join(APP_DIR, "theme.ts"), "utf8");
-    const colorBlock = theme.slice(
-      theme.indexOf("export const COLOR"),
-      theme.indexOf("} as const"),
+    // 变量来自 palette 键，而 COLOR 现在是动态生成的 CSS 变量映射，
+    // 不能再用源码正则截取 COLOR 对象。取两套键的交集，任一主题漏项都会红。
+    const palettes = Object.values(THEME_COLORS);
+    const paletteKeys = Object.keys(THEME_COLORS.ceramic).filter(
+      key => palettes.every(palette => Object.hasOwn(palette, key)),
     );
     const kebab = (s: string) => s.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
     const defined = new Set<string>([
-      ...[...colorBlock.matchAll(/^ {2}([a-z]+):/gim)].map(m => `--fp-${kebab(m[1]!)}`),
-      // uno.config.ts 的 FP_ROOT_VARS 里手写的那几个（非 COLOR 映射）
+      ...paletteKeys.map(key => `--fp-${kebab(key)}`),
+      // uno.config.ts 的 FP_ROOT_VARS 里手写的那几个（非 palette 映射）
       "--fp-num-font",
       "--fp-primary-gradient",
       "--fp-duration-fast",

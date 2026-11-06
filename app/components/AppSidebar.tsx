@@ -1,6 +1,7 @@
 import type { NavItem } from "~/domain/nav";
 import { NavLinks } from "~/components/NavLinks";
 import { Logo } from "~/components/ui/Logo";
+import { ThemeToggle } from "~/components/ui/ThemeToggle";
 import { UserMenu } from "~/components/ui/UserMenu";
 
 export interface AppSidebarProps {
@@ -42,7 +43,8 @@ export function AppSidebar({ navItems, selectedKey, user }: AppSidebarProps) {
       </nav>
 
       {/* 底：登录态（游客 = 登录/注册） */}
-      <div className="mt-2 border-t border-line pt-3 [border-top-style:solid]">
+      <div className="mt-2 grid gap-2 border-t border-line pt-3 [border-top-style:solid]">
+        <ThemeToggle />
         <UserMenu user={user} />
       </div>
     </aside>

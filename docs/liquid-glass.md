@@ -1,350 +1,222 @@
 # 液态玻璃设计宪法（全站 UI 硬约束）
 
-> 状态：2026-09-10 与主理人确认；同日施工前自审第二版（对照代码补了 §2.1 色雾实现、
-> §2.2 覆盖优先级、§2.6 内井 token、§3 操作条层级、§4 卖点卡预算、§6 节点预算表、§7 暗色算法）；
-> 同日二次换血：紫夜 → **冰川 Glacier**（十七套 demo 比选定稿，AI 味紫粉全数退役）。
-> **2026-10-22 修订：漂移色雾退役，§2.1 舞台换血为背景舞台**（网格 / 光晕 / 粒子，
-> 抄自 fund.tvmaze.cn 转正；FogStage 组件删除、`fogA/B/C` token 退役，
-> 守卫测试钉新结构）。「玻璃下面必须有东西可透」的铁律不变，变的只是底下垫的是什么。
-> 本文件进 git，是后续所有视觉改动的上位法。
-> 页面施工 spec：`.superpowers/specs/2026-09-10-liquid-glass-redesign.md`（本地，不入库）。
-> 前作 visual-refresh / visual-depth 的晨雾靛蓝身份作废；token 基建（`theme.ts` → uno → `--fp-*`）保留。
+> 状态：2026-11-05 双主题修订。正式保留 **A 瓷白钴蓝（ceramic）** 与
+> **B 墨蓝香槟（graphite）**，C 候选退役。默认跟随系统，用户可明确选择浅色或深色。
+> 本次按已确认原型调整材料：A 内容面收掉硬亮边与浮雕，导航保留清透层次；
+> B 保留烟晶玻璃与香槟高光。旧冰川单主题、紫色粒子背景与「禁止浅色」约定作废。
+> 本文件进 git；候选原型与实施计划留在本地 `.superpowers/`。
 
-本文只回答一件事：**玻璃是什么、用在哪、绝不能用在哪。** 页面怎么排、导航怎么改，看施工 spec。
+本文约束材料、层级与性能。页面布局、交易流程与金融计算不由主题改动。
 
----
+## 1. 身份与阅读优先级
 
-## 1. 身份一句话
-
-**深海蓝黑底 + 背景舞台（网格 / 光晕 / 粒子）+ 全站玻璃拟物。** 卡片、导航、按钮、抽屉、弹窗都是半透明冰块，浮在带纹理与呼吸感的背景舞台上。内容不「扁」——这是刻意选的左边那条路，不是 iOS 26/27 的铬玻璃。
-
-iOS 铬玻璃（内容扁、玻璃只给系统栏）是**二期切换目标**，本期不做。切换成本见施工 spec §十二。
-
-国内涨跌习惯保留：涨红跌绿，主色让给冰川青蓝，两套语义不准打架。
-玻璃质感的物理依据不变：**玻璃下面必须有东西可透，blur 才有东西可嚼**——
-2026-09-10 靠亮雾，2026-10-22 起靠网格纹理 + 呼吸光晕 + 漂移粒子（暗雾会闷成塑料的实测结论同样约束新舞台：底下不能是均匀死色）。
-
----
-
-## 2. 材料层（唯一合法的玻璃）
-
-全站只允许下面这一套。组件里禁止再发明第二种透明、第二种描边、第二种模糊。
-
-### 2.1 舞台（页面底，2026-10-22 起为背景舞台）
-
-| token | 值 | 角色 |
-| --- | --- | --- |
-| `bg` | `#071018` | 深海蓝黑，页面底 |
-| `backdropGrid` | `rgba(123, 92, 255, 0.18)` | 网格线（紫调 60px 方格，顶部径向遮罩） |
-| `backdropGlow` | `rgba(123, 92, 255, 0.3)` | 顶部紫色椭圆，8s 呼吸（CSS 侧再乘呼吸 opacity） |
-| `particleA/B/C` | `#00d4ff` / `#7b5cff` / `#06b6d4` | 粒子三色（只进 JS 配置，不进 CSS） |
-
-背景舞台是 **网格 + 呼吸光晕 + 漂移粒子三件套** 的固定定位层（`position: fixed; inset: 0; z-index: 0; pointer-events: none`），组件 `BackdropStage` 挂在根布局 body 首位，全站同一份，不按页复制；样式在 `styles/backdrop.css`，粒子库走 npm 包 `tsparticles@2.12.0`（`-E` 精确锁版本，v3 有「canvas 在但不绘制」的坑，换版本先做像素级验证）。
-紫调 `7b5cff` 系抄自 fund.tvmaze.cn 转正时的原始色相；浓度在源站参数上整体提过一档（源站 0.1/0.15 的线与晕在其深蓝黑底上勉强可见，在本站 `#071018` 上实测隐形——元素在、样式生效，纯是对比度不足）。
-`prefers-reduced-motion: reduce` 时光晕冻在最淡一档（CSS 关断在 `backdrop.css`）、粒子由 JS 侧 `matchMedia` 拦截不建 canvas，**网格与光晕照渲染**——删了舞台玻璃就没衬底，会变成一块脏灰塑料。调试可用 URL `?noparticles=1` 关掉粒子层。
-
-实现纪律（性能，不是审美）：
-
-- 网格与光晕是纯 CSS（双层 `linear-gradient` 方格线 / 预模糊的 `radial-gradient` 椭圆），**不用 `filter: blur()`**——全屏级元素每帧重算高斯模糊，低端安卓直接掉到个位数帧。
-- 动画只动合成层友好的属性：光晕只动 `opacity`（8s 呼吸）；粒子跑在 tsParticles 自己的 canvas rAF 里（`pauseOnBlur`、移动端减半数量）。
-- 内容层（`main` / 侧栏 / 胶囊）在舞台之上（`position: relative; z-index: 1`），否则 `backdrop-filter` 透到的是页面底色而不是舞台。
-
-### 2.2 玻璃（`.fp-glass`）
-
-所有「浮起来的面」都吃这一个类，禁止手写第二套 `backdrop-filter`。
-
-```css
-.fp-glass {
-  /* 双层：上层白色高光渐变，下层半透明深海底衬（冰川版）。
-     只有白色渐变时卡片下半截压在黑底上是纯黑、压在雾上被雾染色，文字可读性随雾漂移；
-     深海底衬把内容面稳在可读的中间蓝灰，雾仍从底下透。2026-09-14 主人验收
-     三轮定稿：底衬 0.45、模糊 4——通透不靠低衬而靠不糊（材料从「磨砂玻璃」
-     改宗「透明亚克力」，下层内容清晰直透；前两轮低衬路线 0.30/16、0.22/12
-     均被否）。玻璃感余量交给描边与高光脊。
-     ⚠️ 三条都带 !important：antd cssinjs 的样式标签在 SSR 时注入到 </head> 前、
-     排在本文件的 <link> 之后（entry.server.tsx），同特异性下 .ant-card 的
-     background 简写会把渐变冲成实色。responsive.css 盖 antd 内部类同此手法 */
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
-    rgba(12, 30, 48, 0.45) !important;
-  backdrop-filter: blur(4px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(4px) saturate(180%) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),  /* 顶边高光脊 */
-    0 18px 40px rgba(0, 0, 0, 0.35) !important;
-  /* 不写 border-radius、不写 position：圆角由角色决定（下表），定位由消费方
-     自带（antd Card 是 relative，侧栏 sticky，胶囊 fixed）。曾写过
-     border-radius: inherit——它会让 antd Card 继承父级的 0 圆角，删掉 */
-}
-/* 冰色描边走伪元素，不走 border 色——border 会被模糊吃掉 */
-.fp-glass::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.70),
-    rgba(88, 196, 245, 0.2) 40%,
-    rgba(30, 99, 214, 0.45) 70%,
-    rgba(255, 255, 255, 0.25)
-  );
-  /* 标准「只描边」mask；新代码复制这段，不要改角度或加第四色停 */
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-```
-
-消费方必须自带定位上下文（`relative` / `sticky` / `fixed` 任一），伪元素 `inset: 0` + `border-radius: inherit` 天然贴合圆角，不需要 `overflow: hidden`；只有叠了 `.fp-glass-specular` 的门面才需要 `overflow: hidden`（扫光条会跑出去）。
-圆角由角色决定，不写死在 `.fp-glass` 里：
-
-| 角色 | 圆角 |
-| --- | --- |
-| 控件 / 按钮 / 输入 / 胶囊 Tab | 999px（胶囊）或 12px |
-| 卡片 / 分组列表壳 | 22px |
-| 桌面侧栏轨 | 24px |
-| 弹窗 | 22px |
-| 移动端底抽屉顶角 | `22px 22px 0 0` |
-
-### 2.3 镜面高光（可选，仅门面）
-
-`.fp-glass-specular` 在玻璃上叠一道 8s 一轮、峰值 10%、宽而柔的横向扫光（`mix-blend-mode: screen`，一轮里 45% 时间静止）。
-**只允许**出现在：总资产卡、登录左屏、首页 hero——都是宽而矮的门面。
-**导航铬（侧栏、胶囊 Tab）不扫光**：竖长的轨上扫光像扫码枪（2026-09-10 主人反馈），铬的质感靠描边 + 高光脊。
-列表行、表格、表单、admin、抽屉内部 **禁止** 加高光——那是噪音。
-
-### 2.4 文字与数字
-
-| 角色 | token | 色 | 字体 |
+| 主题 | 内容面 | 导航与弹层 | 背景 |
 | --- | --- | --- | --- |
-| 主文字 | `textPrimary` | `#EFF7FC` | 系统栈（中文） |
-| 次要文字 | `textSecondary` | `#C7DAE6` | 系统栈 |
-| 三级文字（标签 / 坐标轴） | `textTertiary` | `#93ACBB` | 系统栈 |
-| 占位 / 禁用 | `textPlaceholder` | `#5F7684` | 系统栈 |
-| 平（0 盈亏 / 无数据） | `neutral` | `#93ACBB`（与三级文字同值，语义不同） | — |
-| 数字 | — | `#EFF7FC` | `"Space Grotesk"` + `tabular-nums`（已有 `font-num`） |
-| 涨 | `up` | `#FF5D55` | 可加极弱 `text-shadow: 0 0 8px rgba(255,93,85,.55)`，仅强调位 |
-| 跌 | `down` | `#37D399` | 同上，翡翠辉光仅强调位 |
-| 待办 / 在途 | `pending` | `#E8C36A` | 第三语义，不跟涨跌混 |
+| A · 瓷白钴蓝 | 轻瓷面，高不透明底、低对比细边、柔影，无内浮雕与扫光 | 更清透的玻璃，借背景与滚动内容表达悬浮层次 | 冷白底、低浓度蓝色柔光与静态光带 |
+| B · 墨蓝香槟 | 半透明烟晶，4–6px 轻模糊、细边与克制投影 | 烟晶导航，边缘少量香槟高光 | 墨蓝底、深海蓝光带与微弱暖反光 |
 
-antd 的 `colorTextDescription` / `colorTextLabel` 必须钉到 `textSecondary`：`Typography type="secondary"` 与 Card extra 走它，默认派生自三级色，暗底上整页副标题会糊成一片（2026-09-10 走查）。三级色只留给标签与坐标轴。
+A 更接近内容与导航分层的 Liquid Glass：金额、持仓与表格先保证清楚，光学效果集中在导航。
+B 沿用已确认原型的沉静玻璃感。两者共用布局、语义 token 与一份材料 CSS，不按主题复制页面。
 
-对比度底线（对玻璃内容面 ≈ `#1C2E40` 实测）：主文字 ≈ 12:1、次要 ≈ 8:1、三级 ≈ 5:1、占位 ≈ 3.2:1（占位不承载信息，允许）。
+国内涨跌语义保持涨红跌绿；品牌、选中、在途与涨跌各有独立 token。
+主色不映射 antd 的 `colorSuccess` / `colorError`。
 
-数字 **禁止** 用渐变填字、禁止外发光铺满所有金额。辉光只给总资产和当日涨跌两处。
+## 2. 材料层
 
-键盘可达：手写的导航元素（侧栏项、胶囊 Tab 项、操作条）必须有 `:focus-visible` 环——`outline: 2px solid primary; outline-offset: 2px`。玻璃上没有默认 outline 色可依赖，不写就是不可达。
+全站光学材料只定义在 `app/styles/liquid-glass.css`。组件只挂 `.fp-glass`；
+导航或弹层需要更清透时使用已有角色类或 `.fp-glass-chrome` 修饰。
+主题差异只来自 `app/theme.ts` 的 palette，不在页面各写透明度、描边或模糊。
 
-### 2.5 品牌色
+### 2.1 背景舞台
 
-| token | 值 | 用途 |
-| --- | --- | --- |
-| `primary` | `#58C4F5` | 选中、链接、进度条、图表主序列（冰川青蓝） |
-| `primaryTo` | `#B5E6FF` | 渐变终点；主 CTA 渐变 `90deg, primary → primaryTo`（冰白） |
-| `primaryBg` | `rgba(88, 196, 245, 0.2)` | 选中浅底（玻璃上的冰雾，不是实色块） |
-| `onPrimary` | `#07202E` | 主色上的深字：亮冰蓝药丸配深海墨字（Logo 曲线 / CTA 文字 / Avatar） |
+`BackdropStage` 在根布局只挂一份：固定满屏、`z-index: 0`、`aria-hidden`、
+不接指针。壳层 `.fp-shell` 在其上；每页不得重复创建。
 
-主 CTA 可以是实色渐变药丸（BUY NOW 那种），次按钮必须是玻璃胶囊。
-**主色是亮色，药丸上的字一律 `onPrimary` 深海墨**（白字对比不足）——antd 侧经
-`colorTextLightSolid` 全局派生（Button / Avatar / Badge），uno 侧用 `text-on-primary`。
-**主色绝不映射涨跌。** `colorSuccess` / `colorError` 继续保持 antd 原生语义。
+舞台由 **CSS 轻网格、静态柔光、SVG 光带与客户端粒子** 构成：
 
-### 2.6 内井、分割线与浅底（玻璃之内的扁材料）
+| token | 用途 |
+| --- | --- |
+| `bg` | 页面底 |
+| `backdropGrid` | 68px 网格线；遮罩控制可见范围 |
+| `backdropGlow` / `backdropGlowSecondary` | 两团低浓度径向柔光 |
+| `ribbonStart` / `ribbonMiddle` / `ribbonEnd` | 光带渐变 |
+| `ribbonEdge` / `ribbonShadow` | 光带细边与背面 |
+| `particleA` / `particleB` / `particleC` | A 钴蓝/冷青、B 香槟/冰蓝粒子；主色同时供连线与悬停抓线 |
 
-玻璃卡**里面**不再模糊，用这几个实色/半透明 token 分层：
+静态层颜色来自 CSS 变量；canvas 必须使用 `THEME_COLORS` 的实际色值，不能传入 `COLOR` 的变量引用。
+SSR 只输出光带与空粒子容器，粒子引擎在客户端懒加载。保留 `tsparticles` 与
+`tsparticles-engine` **精确 2.12.0**；升级前必须验证画布有实际像素，旧站 v3 曾无报错空画布。
+粒子缓慢漂移、连线、悬停抓线与点击补粒子，交互监听在 window，装饰层不拦页面操作。
+桌面 60、手机 30 的基础数量按视口密度调节，切后台自动暂停。`?noparticles=1` 只关闭粒子。
+动态监听减少动态偏好：启用时立即撤下画布，恢复时重新创建。切主题只更新背景，页面不重挂。
+异步加载串行处理最新主题；每轮独立宿主/id，取消立即移除宿主，返回后只销毁自己的容器，
+不能全局销毁引擎中的所有实例。加载期间暂停播放，确认仍有效后才启动。
+软边用径向渐变，**禁止全屏 `filter: blur()`** 与 SVG 折射滤镜。
 
-| token | 值 | 用途 |
-| --- | --- | --- |
-| `well` | `rgba(255, 255, 255, 0.06)` | 内井：表头、输入框填充、列表行 hover、侧栏选中底、签到条 |
-| `card` | `rgba(255, 255, 255, 0.06)` | 与 `well` 同值。保留键名只为兼容既有 `bg-card` 消费方，新代码一律写 `well` |
-| `border` | `rgba(255, 255, 255, 0.16)` | 分割线、输入框描边、表格行线 |
-| `elevated` | `rgba(10, 26, 40, 0.92)` | **不透明浮面**：Tooltip / Popover / G2 tooltip / 降级玻璃。这些面积小、生命期短、常压在图表或文字上，模糊反而看不清 |
-| `upBg` / `downBg` / `pendingBg` | 对应语义色 16% 透明 | 涨跌/待办胶囊浅底，日历格底 |
-| 遮罩 | `rgba(3, 10, 16, 0.55)` | Modal / Drawer mask（antd `colorBgMask`） |
-| **图版** `.fp-plate` | 底 `rgba(3, 10, 16, 0.5)` + 描边 `1px rgba(255,255,255,0.08)` + 顶边内高光 `inset 0 1px 0 rgba(255,255,255,0.10)` + 圆角 12px | **理念示意图的容器**（`/plan` 三张图）。它比内井更沉、再压一道顶边高光，图就从玻璃卡上「沉下去」一层。2026-09-23 主人选定「光学玻璃」画法时一并定下的 |
+### 2.2 内容面（`.fp-glass`）
 
-`well` 与 `border` 是纯白透明度，压在任何雾色上都成立——这就是为什么内井不需要按雾色调色。
+| token | 材料属性 |
+| --- | --- |
+| `glassBase` / `glassTop` / `glassBottom` | 稳定底衬与极轻渐变 |
+| `glassBorder` | 1px 低对比基础边 |
+| `glassEdgeStart` / `glassEdgeMiddle` / `glassEdgeEnd` | 伪元素边缘渐变 |
+| `glassRimOpacity` | 边缘渐变浓度，A 为 0 |
+| `glassShadow` / `glassInsetShadow` | 完整 CSS 阴影值；A 内阴影用透明零阴影 |
+| `glassBlur` | A 为 0px，B 为 4–6px |
 
-**图版（`.fp-plate`，2026-09-23 新增）**：手艺写在 `liquid-glass.css`，**扁材料**（不模糊、不投影、不是玻璃）。
-它与内井的分工是：内井装「同一张卡里并列的小块」，图版装「一整块图」。三条禁令：
+A 的内容面明确关闭采样滤镜；导航与弹层由下一节重新启用自己的材料参数。
+首屏没有主题属性时，以系统媒体查询同步选择材料行为；无 JS 的浅色也不扫光、不辉光。
+B 保留轻模糊，不能恢复旧版整卡强白色内高光或粗浮雕。边缘渐变只是细节，不能比内容醒目。
 
-- **只许装图**，不许当卡片壳、不许装表格/表单（那是 `SectionCard` + 内井的活）
-- 里面**不许再起第二层 `backdrop-filter`**（图版本身就是扁的，图是 SVG）
-- 它不计入 §6 的玻璃节点预算（没有模糊），但**不许因此到处铺**：它靠与内井的
-  **对比**立住分量，不靠数量。一页只用在一类内容上（`/plan` 三张理念图各一块，
-  共三块），**别再拿它装第二类东西**——一页上出现两种用法，对比就变成噪音了
+基础边、底衬与阴影保留 `!important`，因为 antd 运行时样式可能晚于 CSS 文件插入，
+其 `background` 简写会冲掉材料渐变。圆角、定位与尺寸不由 `.fp-glass` 写死。
 
----
+消费方必须有定位上下文（`relative` / `sticky` / `fixed`）；描边伪元素不接指针。
+常用角色圆角保持：卡片与弹窗 22px、侧栏 24px、下拉与图版 12px、
+移动底抽屉顶角 22px、胶囊导航由壳布局定义。
 
-## 3. 层级（谁在上、谁在下）
+### 2.3 导航、弹层与镜面高光
 
-从底到顶，不许跳级、不许玻璃叠玻璃超过两层。
+导航类 `.fp-sidebar` / `.fp-brandbar` / `.fp-tabbar` / `.fp-bottom-bar`
+在同一材料层切换到 `chromeBase`、`chromeBlur`、`chromeShadow`、
+`chromeBorder`、`chromeRimOpacity`。它们不复制另一份材料实现，也不扫光。
 
-```
-0  bg #071018
-1  背景舞台三件套（网格 / 光晕 / 粒子，全站一份，pointer-events: none）
-2  内容玻璃卡（.fp-glass）
-3  导航铬：桌面侧栏 / 移动端胶囊 Tab / 顶栏 / 页底操作条（.fp-glass，一律不加 specular）
-4  浮层：Drawer / Modal / Dropdown / Select 下拉（.fp-glass，遮罩 rgba(3,10,16,.55)）
-4' 小浮面：Tooltip / Popover / G2 tooltip（elevated 实色，不模糊，见 §2.6）
-```
+Modal、Drawer、Select 通过 `app/antd-popup-glass.ts` 的 **POPUP_GLASS semantic classNames**
+把 `fp-glass fp-glass-chrome` 挂到官方面板节点。不追这些组件的内部面板类名。
+Dropdown 缺少 popup 级 semantic 通道，保留 `.ant-dropdown .ant-dropdown-menu` 这一例外，
+并消费相同 chrome token。Drawer placement 只负责圆角与贴边形状。
 
-antd 浮层挂在 portal 里，tsx 拿不到它的根节点，`.fp-glass` 材料由 `liquid-glass.css` 直接写在
-`.ant-modal-content` / `.ant-drawer-content` / `.ant-dropdown-menu` / `.ant-select-dropdown` 上——
-这是**唯一**允许在手写 CSS 里打 antd 内部类给玻璃的地方，tsx 里不准 `classNames={{ content: "fp-glass" }}`
-之类各写一套。
+`.fp-glass-specular` 保留给总资产卡、登录门面、首页 hero：
+A 不生成扫光；B 为低浓度、16 秒一轮的柔光。列表行、表格、表单、admin、
+导航与抽屉内部禁止增加扫光。减弱动态时关闭，保留静态材料。
 
-**铁律：玻璃下面必须有东西可透。** 白玻璃压白底 = 塑料。背景舞台是最低衬底；图表、壁纸、持仓行从导航玻璃底下穿过去才算「看得见」。
+### 2.4 文字、数字与键盘
+
+`textPrimary` / `textSecondary` / `textTertiary` / `textPlaceholder`
+分别服务正文、次要信息、标签坐标、占位禁用；不能因切换主题改变语义。
+`neutral` 表示零盈亏与无数据，`pending` 表示在途，均不借用涨跌色。
+
+金额继续使用 Space Grotesk 与等宽数字；中文继续用系统字体。
+数字禁止渐变填字，禁止所有金额铺外发光。既有总资产、当日涨跌强调位可保留极弱辉光，
+A 关闭这类文字辉光，保证浅色阅读清楚。
+
+antd 的说明、标签与 `Typography type="secondary"` 使用 `textSecondary`，
+信息文字不能退成占位色。两套主题都要检查正文、次要文字、收益数字与坐标轴对比度。
+
+手写导航与操作条必须保留 `:focus-visible`：主色 2px 轮廓、适当偏移。
+不得用材料边缘替代键盘焦点反馈。
+
+### 2.5 品牌与金融语义
+
+`primary` / `primaryTo` / `primaryBg` 负责链接、选中、主图表序列与 CTA；
+`onPrimary` 负责主色上的文字与图标，两套主题各自定义，不能写死白字或深字。
+主 CTA 可以使用品牌实色渐变，次按钮使用内井与边框，不新增独立模糊节点。
+
+涨、跌、在途分别使用 `up/down/pending` 及对应 `*Bg` 浅底。
+antd 成功、失败继续保持组件自身语义。
+
+### 2.6 内井、图版与小浮面
+
+| token / 类 | 用途 |
+| --- | --- |
+| `well` | 一卡多格、表头、输入填充、行 hover 等内井 |
+| `card` | 兼容既有内容面消费方；新内部小块优先用 `well` |
+| `border` | 分割线、输入描边、表格行线 |
+| `elevated` | Tooltip / Popover / G2 tooltip 与无滤镜降级的稳定底 |
+| `mask` | Modal / Drawer 遮罩 |
+| `.fp-plate` | 用 `plate`、`plateBorder`、`plateHighlight` 组成的扁图版 |
+
+玻璃卡内部不再叠模糊。图版只装一整块理念图，不装表格、表单或卡片壳；
+它不模糊、不加外投影，因此不计入玻璃预算。每页只用于同一类内容，
+例如 `/plan` 的三张理念图。图版内部动效仍在 `motion.css`。
+
+## 3. 层级
+
+从底到顶：
+
+1. `bg` 与唯一背景舞台（静态衬底和客户端粒子）。
+2. 内容面：A 轻瓷面、B 烟晶卡；内部用内井或扁图版。
+3. 导航：桌面侧栏、移动品牌胶囊、底部 Tab、固定操作条。
+4. 浮层：Modal / Drawer / Dropdown / Select；小型 tooltip 用 `elevated`。
+
+同一位置不叠超过两层玻璃。内容滚过导航时可以形成透射，但不能让背景纹理抢过金额。
+任务页已有操作条时继续沿用隐藏底部 Tab 的壳逻辑，不增加第三层固定导航。
+
+## 4. 用在哪与禁令
+
+浮面继续挂 `.fp-glass`：SectionCard、分组壳、导航、固定操作条、登录容器、
+首页 hero 与官方弹层。同一张卡里的并列小块用内井，不能每格单独起玻璃。
+
+以下保持扁平：表格行与单元格、表头、表单内部、图表 canvas、代码与数字列、
+长列表行、涨跌胶囊、状态 Tag、Tooltip / Popover / G2 tooltip。
 
 禁止：
 
-- 玻璃卡里再套一块同等模糊的玻璃卡（最多：外卡玻璃 + 内井 `rgba(255,255,255,.06)` 实色，内井不模糊）
-- 给 Table / Form / 长列表的每一行单独上 `backdrop-filter`（性能自杀）
-- SVG 折射滤镜（`feDisplacementMap` 等）——低端安卓和 workerd SSR 都会哭。本期用 blur + 高光脊 + 彩虹描边冒充，不引入滤镜图元
-
----
-
-## 4. 用在哪 / 不用在哪
-
-### 必须是玻璃
-
-- 桌面侧栏轨
-- 移动端底部胶囊 Tab、移动端顶部品牌胶囊
-- 顶栏（若桌面保留顶区品牌条）
-- 页底固定操作条（持仓详情 / 基金详情的买卖条）
-- SectionCard / 分组列表壳
-- 主次按钮（主 = 渐变实色药丸或玻璃药丸，次 = 玻璃胶囊）
-- Modal / Drawer 面板、Dropdown / Select 下拉
-- 登录右表单卡、首页 hero 内嵌卡
-- 空态容器（指它所在的那张卡；空态自己不再单独起一层玻璃）
-
-**同一张卡内的并列小块不各自上玻璃**：首页 4 张卖点卡、平台数据 6 格、总览四格——
-这类「一卡多格」用**一张**玻璃壳 + 内井（`well`）分格。4 张卖点卡各自玻璃会把首页
-推到 10+ 个模糊节点，直接撞破 §6 的预算。
-
-### 必须是扁的（实色或透明，不模糊）
-
-- 表格单元格、表头（表头用 `well` 井，不投影）
-- 输入框内部（边框可以是玻璃描边，填充 `well` 不模糊）
-- 图表画布（G2 仍吃 `chart-theme.ts`，不给 canvas 套 backdrop-filter）；图表骨架屏的
-  闪光渐变改白色透明度（浅色那套 `rgba(0,0,0,.06)` 在暗底上是隐形的）
-- Tooltip / Popover / G2 tooltip（`elevated` 实色）
-- admin 密集表格
-- 代码/数字等宽列
-- 列表行、涨跌胶囊、状态 Tag（Tag 底用 antd 暗色算法派生，不手涂）
-
-### 明确禁写
-
-| 禁 | 为什么 |
-| --- | --- |
-| 彩虹描边出现在列表每一行 | 描边是铬的特权，行级会闪成圣诞树 |
-| 背景舞台按页复制、每页颜色不同 | 身份靠「全站同一份舞台」 |
-| 给舞台加第四件套 / 新的强调色 | 网格、光晕、粒子三件套就是全部，涨跌另算 |
-| 浅色默认肤 | 本期身份是暗底；浅色是二期 iOS 切换的事 |
-| `border-solid` 单边补 style | 老坑，四边 3px 隐形框 |
-| 字面量色值（`text-[#xxx]`） | 一律主题类；舞台/描边的 rgba 只写在 token（theme.ts）或本文件对应的 CSS 类里 |
-
----
+- 组件 TS/TSX 中出现 `backdrop-filter` / `backdrop-blur-*`，包括注释里的误用示例。
+- 除 `liquid-glass.css` 外任何手写 CSS 定义光学采样材料。
+- 每行描彩边、每卡扫光、页面各造一套背景或新增强调色。
+- 除唯一舞台以外重复创建背景粒子；指针跟随反光、SVG 位移滤镜与全屏高斯软化。
+- 裸色与裸阴影散入材料 CSS；颜色和阴影必须来自 `var(--fp-*)`。
+- 用 `border-solid` 为单边补 style；应只补对应边的 style。
+- 将 C 候选或旧单主题的固定颜色重新带回正式主题。
 
 ## 5. 动效
 
-| token | 值 |
-| --- | --- |
-| `--fp-duration-fast` | 150ms |
-| `--fp-duration-base` | 240ms |
-| `--fp-duration-slow` | 360ms |
-| `--fp-ease` | `cubic-bezier(0.22, 1, 0.36, 1)` |
-| 光晕呼吸 | 8s ease-in-out infinite（透明度 0.5 ↔ 0.8） |
-| 粒子漂移 | tsParticles canvas，speed 0.7、60fps 上限、切后台自动暂停 |
-| 镜面高光 | 8s cubic-bezier(0.4, 0, 0.2, 1) infinite（与 §2.3 / liquid-glass.css 同值） |
+网格、柔光与光带保持静态；粒子只允许低速漂移及既有抓线/补粒子交互。
+B 门面高光可运行，A 关闭；导航始终不扫光。
+既有 `fade-up`、count-up、桌面 hover 轻抬与理念图编排保留原有职责，
+禁止路由转场、数字闪烁、主按钮 scale、整页连续光效。
 
-允许：光晕呼吸、粒子漂移、门面高光扫过、卡片 hover 抬 2px（仅 `md:` 以上，触屏不加位移）、进场 `fade-up`、总资产 count-up（已有）、**图版入场编排**、**图版悬停微动**（后两条 2026-09-23 新增，见下）。
+图版编排保持四条约束：进入视口只播一次；SSR 输出终态；
+减少动态时直接终态；仅动 `opacity`、`transform`、`stroke-dashoffset`。
+悬停微动使用 240ms 的内层缩放与 `stroke-opacity`，不与入场动画抢同一节点属性。
 
-禁止：路由切换转场、数字闪烁、主按钮 scale（会挤邻居）、全站每张卡都扫高光。
-
-**图版入场编排（2026-09-23 新增）**——`/plan` 三张理念图的亮相。四条硬约束：
-
-1. **一次性**：进视口播一次、播完解除观察，不来回抖、不循环（循环留给背景舞台的光晕与粒子）
-2. **SSR 出终态**：服务端 HTML 里必须是**画好的图**，`fp-reveal` / `is-play` 这类类名只在客户端挂上。
-   不然爬虫与无 JS 用户看到的是一张空图，而 `/plan` 的 SEO 是刻意做到首屏 HTML 里的。
-   范式照 `app/components/ui/count-up.ts`：**服务端出终值、客户端才播**
-3. **`prefers-reduced-motion` 下不播**，直接停在终态（关断写进 `responsive.css` §7「动效无障碍」）
-4. 只动 `opacity` / `transform` / `stroke-dashoffset` 三个属性（合成层友好）；
-   **不许**动 `filter`、`blur`、`width/height`（会重排、会有滤镜开销）
-
-**图版悬停微动（2026-09-23 新增）**：240ms（`--fp-duration-base`），只改 `stroke-opacity` 与
-`transform: scale(1.03)`。**不许位移**（禁令里「主按钮 scale 会挤邻居」说的是布局位移，
-图内部缩放不动别人），**也不许与入场动画抢同一个属性**——入场只碰 `opacity`/`transform`，
-所以悬停碰的是 `stroke-opacity` 与内层包裹组的 `transform`（棱镜外面套一层专职缩放的 `<g>`）。
-
-**keyframe 住在哪**：工具类消费的（`fade-up` / `float`）住在 `uno.config.ts` 的 animation theme；
-图版编排的（`fp-fig-rise` / `fp-fig-pop` / `fp-fig-draw`）住在 `app/styles/motion.css`，
-两者都**必须**在 `responsive.css` §8 里有关断。
-
-`prefers-reduced-motion: reduce`：色雾冻住、高光动画关、fade-up / count-up / hover 位移关、
-**图版编排不播（直接终态）、悬停缩放不改尺寸**。模糊和描边保留。
-
----
+工具类动效在 UnoCSS animation theme，图版动效在 `motion.css`；
+全站减动效关断在 `responsive.css`，材料扫光关断在 `liquid-glass.css`。
+`prefers-reduced-motion: reduce` 下撤下粒子，仍保留静态背景、描边与可读内容。
 
 ## 6. 性能与降级
 
-`backdrop-filter` 在低端安卓上贵。规则：
-
-1. **同一视口最多 8 个** 带 `backdrop-filter` 的节点。侧栏 1 + 可见卡片 ≤ 5 + Tab 1 + 浮层 1。长列表虚拟化或扁着画，不要给每行上滤镜。
-
-   各页预算（施工时对着数，超了就把并列小块合成一卡）：
-
-   | 页 | 壳（侧栏或顶+底胶囊） | 内容玻璃卡 | 合计 |
-   | --- | --- | --- | --- |
-   | `/` | 1–2 | hero 内嵌卡 1 + 示范盘 1 + 平台数据 1 + 排行榜引流 1 + 卖点 1 + 底 CTA 1 | ≤ 8 |
-   | `/me` | 1–2 | 总览 1 + 签到 1（窄屏并入总览）+ 持仓 1 + tabs 1（+ 抽屉 1） | ≤ 7 |
-   | `/master` | 1–2 | 总览 1 + 走势 1 + 日历 1 + tabs 1 | ≤ 6 |
-   | `/funds/:code` | 1–2 + 操作条 1 | 头卡 1 + 图 1 + 数据卡 ≤ 3 | ≤ 8 |
-   | `/admin*` | 1–2 | 统计 1 + 表 1 | ≤ 4 |
-
-2. 侦测到 `backdrop-filter` 无效（老 WebView）时，`.fp-glass` 退化成 `background: var(--fp-elevated)`，描边保留，模糊去掉。用 `@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))` 写在 `liquid-glass.css` 同文件里，不要 JS 探测、不要第二个类名。
-3. 图表、canvas、大量数字滚动的区域，背后不要再叠一层模糊卡。
-4. `backdrop-filter` 压在**动态**背景（色雾）上意味着每帧重采样。这就是预算 8 的来源：静态背景可以放宽，动态背景不行。
-
----
+- 每个视口最多 **8 个**光学玻璃节点；A 的内容面已经停用采样，
+  仍不能借此给列表每行增加材料。B 按侧栏/顶栏、可见卡、Tab、浮层合计预算。
+- 首页 ≤ 8、`/me` ≤ 7、`/master` ≤ 6、基金详情 ≤ 8、后台 ≤ 4。
+  一卡多格合并外壳，玻璃卡内部不叠玻璃。
+- 背景的固定 SVG 与 CSS 渐变不使用全屏滤镜；粒子 canvas 全站最多一份，
+  手机减少数量、失焦暂停、减少动态时撤下。引擎加载/渲染失败静默降级到静态衬底。
+- 无 `backdrop-filter` 支持时，`.fp-glass` 与 Dropdown 统一退成
+  `background: var(--fp-elevated)`，保持描边与内容可读，不用 JS 探测。
+- 降级使用同文件的 `@supports not ((backdrop-filter: blur(1px)) or
+  (-webkit-backdrop-filter: blur(1px)))`，必须覆盖导航修饰后的材料。
 
 ## 7. 与现有基建的关系
 
-- **唯一色值出处仍是 `app/theme.ts`。** 本文件的 hex 是规范，落地时抄进 `COLOR`，uno 映射自动跟进。不准在组件里写第二份。
-- Uno 工具类优先；`.fp-glass` / `.fp-glass-specular` / 色雾层 / **图版 `.fp-plate`** 是少数必须手写的 CSS，放 `app/styles/liquid-glass.css`，在 `root.tsx` 里排在 `virtual:uno.css` 之后、`responsive.css` 之前。
-- **图版编排动效**（§5 那两条新动效）单独放 `app/styles/motion.css`：它是**动效层**不是材料层，混进 `liquid-glass.css` 会让那份文件名不副实（与 `podium.css` 同类——工具类扛不住的专门场景各自成文）。`root.tsx` 的 import 顺序是
-  `antd reset → virtual:uno.css → liquid-glass.css → podium.css → motion.css → responsive.css`——
-  **`responsive.css` 必须最后**，因为 §7「动效无障碍」的 `prefers-reduced-motion` 关断要与编排规则打平局时靠 source-order 取胜。
-- 不启用 `presetAttributify`，不写自定义提取器，`preflights.reset: false` 保持。
-- antd 切 **`theme.darkAlgorithm`**（root.tsx 引；`theme.ts` 仍零 import）。默认算法在暗底上派生的是白容器、浅灰边、深字——每个组件都要手改，改不完。暗色算法把 Tag / Alert / Table / Segmented / Dropdown 的中性色一次派生对，`ANTD_TOKEN` 只钉品牌与材料：
-  - seed：`colorPrimary` `colorInfo` = `primary`；`colorBgLayout` = `bg`；`colorBgBase` = `bg`（暗色算法从它派生全部中性面）；`colorTextBase` = `textPrimary`；`borderRadius` 12；`controlHeight` 36
-  - 材料：`colorBgContainer` = `well`（输入框 / Segmented / Table 表体填充）；`colorBgElevated` = `elevated`（Tooltip / Popover / Dropdown 底，Dropdown 与 Modal 再由 CSS 盖成玻璃）；`colorBorder` / `colorBorderSecondary` / `colorSplit` = `border`；`colorBgMask` = 遮罩
-  - Card：`colorBgContainer: "transparent"`（玻璃渐变要透出来）、`borderRadiusLG: 22`
-  - `colorSuccess` / `colorError` **仍不写**，涨跌不映射
-  - smoke 测试钉：`colorPrimary === COLOR.primary`、`colorSuccess`/`colorError` 未定义、`Card.colorBgContainer === "transparent"`
-- Space Grotesk 继续只覆盖数字。中文系统栈。不引新字体。
-- Logo 图形语言可留（净值曲线），填充改吃新渐变。favicon 同步。
-
----
+- 唯一实际色值出处为 `app/theme.ts` 的 `THEME_COLORS.ceramic/graphite`。
+  `COLOR` 供普通 DOM/SVG 引用语义 CSS 变量；UnoCSS 从 palette 键输出 kebab-case
+  `--fp-*` 变量。运行时主题、antd 算法与图表实际色板由主题基础设施统一切换。
+- HTML 主题属性为 `data-theme="ceramic|graphite"`；默认跟随系统，显式偏好持久化。
+  A 使用 antd 默认算法，B 使用暗色算法，不能把 CSS 变量字符串交给颜色派生算法。
+- Card 保持透明容器背景与 22px 圆角，由材料 CSS 提供面；输入、表格等使用内井。
+- UnoCSS 工具类优先，复杂材料与伪元素留在本文件对应的 CSS。
+  `preflights.reset: false`、禁 attributify、不写自定义提取器等现有纪律不变。
+- 样式顺序保持 reset → UnoCSS → 材料/背景 → podium/motion → responsive。
+  `responsive.css` 在最后，确保减动效与尺寸覆盖有效。
+- 字体、数字精度、数据库与金融计算不因主题变化而调整。
 
 ## 8. 验收（材料层）
 
-1. 任意内页截图，都能看见同一份紫粉青色雾从卡片底下透出来。
-2. grep 组件源码，`backdrop-filter` / `backdrop-blur-*` 只出现在 `liquid-glass.css`（和降级块），不出现在 tsx——由 `tests/domain/liquid-glass-guard.test.ts` 钉死（扫 `app/**/*.tsx`），不靠人眼。
-3. 一张持仓卡里没有第二层 `backdrop-filter`。
-4. `prefers-reduced-motion` 下色雾静止、高光不跑，页面仍是暗底玻璃，不是突然变扁。
-5. 390 宽：胶囊 Tab 压在内容上，内容从玻璃里透出来；桌面 ≥1080：侧栏轨同理。
-6. 每页视口内带 `backdrop-filter` 的节点数 ≤ 8（§6 预算表逐页数）。
-7. Tab 键走一遍侧栏 / 胶囊 / 操作条，每一站都有可见的 focus 环。
-8. `pnpm verify` 全绿；金融计算零改动。
+1. A 内容卡无硬白亮边、无内浮雕、无扫光；导航和内容层次清楚。
+2. B 保留烟晶、细边与低浓度香槟反光，收益文字、坐标轴与表格可读。
+3. 全站只有一份背景；粒子有实际像素、主题三色正确，抓线/补粒子不阻塞页面交互。
+   快速切主题、加载中切减少动态与卸载不残留画布，不误销毁新实例。
+4. 守卫测试保证材料独占 CSS、全部主题变量存在、semantic 弹层通道与图版约束。
+5. 390px 与 ≥1080px 检查导航、操作条、Modal/Drawer/Select，内容和交互不被遮挡。
+6. 减弱动态时扫光关闭、粒子撤下，恢复后可重画；`?noparticles=1` 保留静态衬底。
+   无滤镜时底衬与文字仍清楚；玻璃节点预算未超。
+7. 键盘走遍主题入口、导航、弹层与操作条，焦点清晰。
+8. `pnpm verify` 与必要的真实运行时检查通过，金融计算零改动。
 
----
+## 9. 修改纪律
 
-## 9. 谁可以改这份文件
-
-改材料（色、模糊半径、描边、层级、禁令）= 改宪法，必须先改本文件再动代码。
-改某页怎么排、某按钮文案、导航有几项 = 改施工 spec，不必动本文件。
-发现本文件和施工 spec 打架，以本文件为准。
+改变材料、主题身份、层级或禁令时，先修订本文件再调整代码。
+纯页面编排与文案调整记入各自施工记录，不在这里堆砌历史。
+若文件与旧本地施工计划冲突，以这份当前约定为准。
