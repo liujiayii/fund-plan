@@ -59,7 +59,7 @@ describe("液态玻璃宪法守卫", () => {
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
-  it("背景舞台只保留静态网格、柔光与 SVG 光带，不重建持续运行的粒子层", () => {
+  it("背景舞台保留网格、柔光与 SVG 光带，粒子层不新增全屏滤镜", () => {
     const css = readFileSync(BACKDROP_CSS, "utf8");
     const stage = readFileSync(path.join(APP_DIR, "components/BackdropStage.tsx"), "utf8");
     const root = readFileSync(path.join(APP_DIR, "root.tsx"), "utf8");
@@ -67,11 +67,12 @@ describe("液态玻璃宪法守卫", () => {
     expect(css).toContain(".fp-backdrop-grid");
     expect(css).toContain(".fp-backdrop-glow");
     expect(css).toContain(".fp-backdrop-ribbon");
+    expect(css).toContain(".fp-backdrop-particles");
     expect(stage).toContain("<svg");
     expect(stage).toContain("aria-hidden=\"true\"");
     expect(css).toContain("pointer-events: none");
-    // 背景不读取浏览器状态，首屏和水合输出相同；全站只挂一份。
-    expect(stage).not.toMatch(/tsparticles|requestAnimationFrame|useEffect|addEventListener|<canvas\b/);
+    // 画布只在客户端挂载；首屏输出空容器，全站仍只挂一份背景。
+    expect(stage).not.toMatch(/<canvas\b/);
     expect(root.match(/<BackdropStage\s*\/>/g)).toHaveLength(1);
     expect(css).not.toMatch(/@keyframes|animation:/);
     expect(css).not.toMatch(/backdrop-filter/);

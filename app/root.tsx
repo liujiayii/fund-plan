@@ -17,7 +17,7 @@ import {
 import { POPUP_GLASS } from "~/antd-popup-glass";
 import { AnnouncementBar } from "~/components/AnnouncementBar";
 import { AppSidebar } from "~/components/AppSidebar";
-// 背景仅静态光带和网格，颜色跟随主题变量。
+// 唯一背景保留光带和网格，客户端粒子按当前主题实际色板绘制。
 import { BackdropStage } from "~/components/BackdropStage";
 import { MobileBrandBar } from "~/components/MobileBrandBar";
 import { MobileTabBar } from "~/components/MobileTabBar";

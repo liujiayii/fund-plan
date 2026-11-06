@@ -36,6 +36,8 @@ const FP_ROOT_VARS = [
 ].join("\n");
 
 export default defineConfig({
+  // 粒子宿主在 .ts 中动态创建，Vite 默认不扫描该后缀，显式保留定位与加载隐藏类。
+  safelist: ["absolute", "inset-0", "invisible"],
   presets: [
     // Wind4 是 UnoCSS 对齐 Tailwind v4 的预设，工具类名与 Tailwind 一致
     presetWind4({
@@ -96,6 +98,9 @@ export default defineConfig({
       "placeholder": COLOR.textPlaceholder, // 占位/禁用：text-placeholder
       "rise-soft": COLOR.upBg, // 涨浅底：bg-rise-soft
       "fall-soft": COLOR.downBg, // 跌浅底：bg-fall-soft
+      "particle-a": COLOR.particleA, // 背景粒子主色：DOM 用变量，canvas 用实际 palette
+      "particle-b": COLOR.particleB,
+      "particle-c": COLOR.particleC,
     },
     /**
      * （阴影主题表已退役：全站阴影是 .fp-glass 的材料，liquid-glass.css 唯一出处。

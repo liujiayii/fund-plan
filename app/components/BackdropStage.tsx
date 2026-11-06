@@ -1,8 +1,46 @@
+import { useEffect, useRef } from "react";
+import { createParticleController, mountParticleLayer } from "~/components/backdrop-particles";
+import { useAppTheme } from "~/components/ThemeProvider";
+
 /**
- * 全站唯一背景舞台：SSR 直接输出静态光带，主题变化只换 CSS 变量。
- * 没有浏览器分支、画布或指针监听，减少动态偏好下也保持相同的静态衬底。
+ * 全站唯一背景舞台：SSR 输出静态光带与空粒子容器，客户端按需懒加载粒子。
+ * 主题变化只替换粒子实例与 CSS 变量，不重挂页面；减动效动态撤下画布。
  */
 export function BackdropStage() {
+  const { theme } = useAppTheme();
+  const particleRootRef = useRef<HTMLDivElement>(null);
+  const controllerRef = useRef<ReturnType<typeof createParticleController> | null>(null);
+  const activeThemeRef = useRef(theme);
+  const motionRef = useRef<MediaQueryList | null>(null);
+
+  useEffect(() => {
+    // 调试只关闭粒子，网格/柔光/光带始终保留；SSR 从不读取 window。
+    if (new URLSearchParams(window.location.search).get("noparticles") === "1")
+      return;
+    const root = particleRootRef.current;
+    if (!root)
+      return;
+
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const lifecycle = createParticleController((nextTheme, signal) => mountParticleLayer(root, nextTheme, signal));
+    controllerRef.current = lifecycle;
+    motionRef.current = query;
+    const sync = () => lifecycle.setTheme(query.matches ? null : activeThemeRef.current);
+    sync();
+    query.addEventListener("change", sync);
+    return () => {
+      query.removeEventListener("change", sync);
+      lifecycle.dispose();
+      controllerRef.current = null;
+      motionRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    activeThemeRef.current = theme;
+    controllerRef.current?.setTheme(motionRef.current?.matches ? null : theme);
+  }, [theme]);
+
   return (
     <div className="fp-backdrop" aria-hidden="true">
       <div className="fp-backdrop-glow" />
@@ -52,6 +90,7 @@ export function BackdropStage() {
           />
         </g>
       </svg>
+      <div ref={particleRootRef} className="fp-backdrop-particles" />
     </div>
   );
 }

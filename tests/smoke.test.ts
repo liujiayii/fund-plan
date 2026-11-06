@@ -79,13 +79,16 @@ describe("双主题视觉 token 不变式", () => {
       }
     });
 
-    it("卡片底透明交给材料层，背景提供静态光带 token", () => {
+    it("卡片底透明交给材料层，背景提供光带与实际粒子色", () => {
       expect(config.components?.Card?.colorBgContainer).toBe("transparent");
       expect(colors.backdropGrid).toBeTruthy();
       expect(colors.backdropGlow).toBeTruthy();
       expect(colors.ribbonStart).toMatch(/^#/);
       expect(colors.ribbonMiddle).toMatch(/^#/);
       expect(colors.ribbonEnd).toMatch(/^#/);
+      expect(colors.particleA).toMatch(/^#[\dA-F]{6}$/i);
+      expect(colors.particleB).toMatch(/^#[\dA-F]{6}$/i);
+      expect(colors.particleC).toMatch(/^#[\dA-F]{6}$/i);
     });
   });
 });

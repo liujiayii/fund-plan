@@ -1,6 +1,6 @@
 /**
- * 静态背景舞台：轻网格、柔光与 SVG 光带，全站只挂一份。
- * 颜色随 --fp-* 变量切换，软边全靠渐变，不创建全屏滤镜或动画循环。
+ * 背景舞台：静态轻网格、柔光、SVG 光带与客户端粒子，全站只挂一份。
+ * 静态层颜色随 --fp-* 变量切换，软边全靠渐变，不创建全屏滤镜。
  * z-index: 0 在壳层之下，裁剪装饰溢出且不接指针。
  */
 .fp-backdrop {
@@ -13,7 +13,8 @@
 
 .fp-backdrop-glow,
 .fp-backdrop-grid,
-.fp-backdrop-ribbon {
+.fp-backdrop-ribbon,
+.fp-backdrop-particles {
   position: absolute;
   inset: 0;
 }
@@ -41,9 +42,22 @@
   opacity: 0.52;
 }
 
+/* 引擎只负责画布内容，布局与事件穿透留给舞台，不增加光学材料节点。 */
+.fp-backdrop-particles canvas {
+  display: block;
+  pointer-events: none;
+}
+
 /* B 沿用已确认的烟晶原型浓度；A 留更多瓷白空白。 */
 [data-theme="graphite"] .fp-backdrop-ribbon {
   opacity: 0.6;
+}
+
+/* 偏好变化后 JS 会销毁粒子；CSS 先关可见性，避免异步清理期间闪现。 */
+@media (prefers-reduced-motion: reduce) {
+  .fp-backdrop-particles {
+    visibility: hidden;
+  }
 }
 
 /* 无 JS 时也与系统深色的 palette 保持同一浓度。 */

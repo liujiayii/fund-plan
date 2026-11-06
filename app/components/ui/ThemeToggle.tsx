@@ -30,8 +30,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
         <Icon className="text-base" />
         {!compact && (
           <span className="fp-sidebar-label text-xs">
-            外观 ·
-            {THEME_LABELS[preference]}
+            {`外观 · ${THEME_LABELS[preference]}`}
           </span>
         )}
       </button>
