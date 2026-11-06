@@ -59,6 +59,10 @@ describe("理念三图 SSR 结构", () => {
     expect(vennA).not.toContain("plan-venn-selection-");
   });
 
+  it("面积淡出只取 alpha，深浅主题文字不会改变遮罩强度", () => {
+    expect(curve).toMatch(/<mask[^>]*mask-type="alpha"/);
+  });
+
   it("不许出现 SVG 滤镜（宪法 §3：低端安卓与 workerd 都扛不住）", () => {
     for (const svg of [vennA, vennB, curve]) {
       expect(svg).not.toMatch(/<filter|feGaussianBlur|feDisplacementMap/);

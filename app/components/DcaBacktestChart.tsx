@@ -2,10 +2,9 @@ import type { LineConfig } from "@ant-design/charts";
 import type { DcaCurvePoint } from "~/domain/dca-backtest";
 import { lazy, Suspense, useMemo } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
-import { FP_CHART_THEME } from "~/components/ui/chart-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
+import { useChartTheme } from "~/components/ui/use-chart-theme";
 import { centsToYuan } from "~/domain/money";
-import { COLOR } from "~/theme";
 
 /**
  * @ant-design/charts 是纯客户端库（底层 G2 依赖 canvas / DOM）。
@@ -31,6 +30,7 @@ const Line = lazy(async () => {
  */
 export function DcaBacktestChart({ curve }: { curve: DcaCurvePoint[] }) {
   const mounted = useIsClient();
+  const { chartTheme, colors } = useChartTheme();
 
   const chartData = useMemo(
     () =>
@@ -54,10 +54,10 @@ export function DcaBacktestChart({ curve }: { curve: DcaCurvePoint[] }) {
     // colorField 按 type 分组画两条线（与 NavChart 的双序列同款）
     colorField: "type",
     // 全站图表统一主题（chart-theme.ts 单一出处）
-    theme: FP_CHART_THEME,
-    // 显式色序：先出现的「累计投入」走雾灰辅助位、「持仓市值」走品牌靛蓝主线——
-    // 与 NavChart 的「主序列靛蓝、辅助线雾灰」是同一条规则（2026-09-09 走查裁定）
-    color: [COLOR.neutral, COLOR.primary],
+    theme: chartTheme,
+    // 显式色序：先出现的「累计投入」走雾灰辅助位，「持仓市值」走品牌主色。
+    // 与 NavChart 一样，主序列突出、辅助线退后。
+    color: [colors.neutral, colors.primary],
     // ⚠️ 刻意不传 height：高度由 responsive.css §6 的 .fp-chart-box 全权管理
     autoFit: true,
     // 投入与市值都是正数，含 0 基准线才能看出「回本」的位置

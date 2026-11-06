@@ -1,204 +1,166 @@
 /**
- * 全站视觉 token —— 颜色、渐变与数字字体的**唯一出处**。
- *
- * ⚠️ 本文件刻意零 import：它被 node 环境的单测导入，
- * 一旦引入 antd 就会把整个组件库拖进测试进程。
- * `ANTD_TOKEN` 只是普通对象，`theme.darkAlgorithm` 请在 root.tsx 里引。
- *
- * 2026-09-10 液态玻璃换血为冰川（docs/liquid-glass.md 是上位法，本文件的 hex
- * 必须与宪法 §2 逐字相同）：深海蓝黑底 + 冰蓝亮雾 + 青冰主色。
- *
- * 为什么主色是冰蓝而不是红：涨跌用红绿是国内习惯，主色让给冰川青蓝，
- * 按钮/选中/进度条才不会和「涨」撞成一片。冰蓝与跌绿虽同属冷调，
- * 但隔着完整的青绿→蓝青色相带，且明度差一档（主色亮、跌色沉）。
- *
- * 2026-10-22 背景换血：漂移色雾（FogStage 三团）退役，衬底职责移交给
- * 背景舞台 BackdropStage（网格 / 光晕 / 粒子，抄自 fund.tvmaze.cn 转正，
- * 样式在 styles/backdrop.css）。玻璃的 blur 从此嚼的是网格与光晕，
- * 「底下必须有东西可透」的铁律不变（宪法 §2.1 修订见 docs/liquid-glass.md）。
+ * A/B 双主题的唯一 token 来源，保持零框架依赖以供 UnoCSS 与领域测试直接读取。
+ * A：瓷白钴蓝，内容面轻、玻璃集中导航；B：墨蓝香槟，保留烟晶层次。
+ * DOM 消费 COLOR 的 CSS 引用；canvas 与 antd 算法消费 THEME_COLORS 的实际色值。
  */
-
-export const COLOR = {
-  /** 品牌 / 操作：选中、链接、进度条、图表主序列（宪法 §2.5） */
-  primary: "#58C4F5",
-  /** 渐变终点（冰白）：主 CTA 药丸 `primary → primaryTo`、Logo、favicon */
-  primaryTo: "#B5E6FF",
-  /** 主色浅底：玻璃上的冰雾（选中项底、焦点环、Table 行 hover），不是实色块 */
-  primaryBg: "rgba(88, 196, 245, 0.2)",
-  /**
-   * 主色上的深字（on-primary）：冰川药丸是亮冰蓝渐变，白字对比不足，配深海墨字。
-   * 消费方：uno 类 text-on-primary；antd 侧经 colorTextLightSolid 派生（Button/Avatar）
-   */
-  onPrimary: "#07202E",
-  /** 涨 / 收益为正（珊瑚红） */
-  up: "#FF5D55",
-  /** 跌 / 收益为负（翡翠绿） */
-  down: "#37D399",
-  /** 涨浅底：涨跌胶囊、日历格 */
-  upBg: "rgba(255, 93, 85, 0.16)",
-  /** 跌浅底 */
-  downBg: "rgba(55, 211, 153, 0.16)",
-  /** 待办 / 在途（第三语义，宪法 §2.4）：待确认订单、在途资金。不跟涨跌混 */
-  pending: "#E8C36A",
-  /** 待办浅底 */
-  pendingBg: "rgba(232, 195, 106, 0.16)",
-  /** 平（0 或无数据）——与三级文字同值，语义不同 */
-  neutral: "#93ACBB",
-  /** 页面底：深海蓝黑（宪法 §2.1）。蓝调夜里冰雾才有「冰海」衬底 */
-  bg: "#071018",
-  /**
-   * 卡片底。⚠️ 与 well 同值：玻璃卡本身的材料在 .fp-glass（liquid-glass.css），
-   * 本键只为兼容既有 bg-card 消费方（AuthShell 右屏等）；新代码一律写 well
-   */
-  card: "rgba(255, 255, 255, 0.06)",
-  /** 内井（宪法 §2.6）：表头、输入框填充、行 hover、侧栏选中底、签到条 */
-  well: "rgba(255, 255, 255, 0.06)",
-  /** 分割线 / 输入框描边 / 表格行线 */
-  border: "rgba(255, 255, 255, 0.16)",
-  /** 不透明浮面：Tooltip / Popover / G2 tooltip / @supports 降级玻璃（宪法 §2.6） */
-  elevated: "rgba(10, 26, 40, 0.92)",
-  /** Modal / Drawer 遮罩（antd colorBgMask） */
-  mask: "rgba(3, 10, 16, 0.55)",
-  // ── 背景舞台（BackdropStage：网格 / 光晕 / 粒子）。
-  //    --fp-backdrop-grid / --fp-backdrop-glow 只被 styles/backdrop.css 消费，不出 uno 类；
-  //    particle 三色只被 BackdropStage.tsx 的 tsParticles 配置消费（JS 侧，不进 CSS）。
-  //    紫调 7b5cff 系抄自 fund.tvmaze.cn 转正时的原始色相，浓度按本站底色调过 ──
-  backdropGrid: "rgba(123, 92, 255, 0.18)",
-  backdropGlow: "rgba(123, 92, 255, 0.3)",
-  particleA: "#00d4ff",
-  particleB: "#7b5cff",
-  particleC: "#06b6d4",
-  // ── 文字四档（对齐 antd colorText* 语义，宪法 §2.4）。月白系带蓝调 ──
-  textPrimary: "#EFF7FC",
-  textSecondary: "#C7DAE6",
-  textTertiary: "#93ACBB",
-  textPlaceholder: "#5F7684",
+export const THEME_COLORS = {
+  ceramic: {
+    primary: "#305BDC",
+    primaryTo: "#6687ED",
+    primaryBg: "rgba(48,91,220,0.10)",
+    onPrimary: "#FFFFFF",
+    // 金银铜奖牌始终是浅装饰底，前景独立于主按钮的明暗规则。
+    medalInk: "#253242",
+    up: "#C43C48",
+    down: "#21775F",
+    upBg: "rgba(196,60,72,0.10)",
+    downBg: "rgba(33,119,95,0.10)",
+    pending: "#956717",
+    pendingBg: "rgba(149,103,23,0.10)",
+    neutral: "#68788D",
+    bg: "#F1F5FA",
+    card: "#FFFFFF",
+    well: "rgba(34,61,103,0.045)",
+    border: "rgba(35,55,90,0.11)",
+    elevated: "#FCFDFF",
+    mask: "rgba(24,39,63,0.32)",
+    textPrimary: "#202D43",
+    textSecondary: "#52647D",
+    textTertiary: "#64758A",
+    textPlaceholder: "#8793A4",
+    glassBase: "rgba(255,255,255,0.86)",
+    glassTop: "rgba(255,255,255,0.18)",
+    glassBottom: "rgba(233,242,255,0.035)",
+    glassBorder: "rgba(28,56,105,0.065)",
+    glassEdgeStart: "rgba(255,255,255,0.38)",
+    glassEdgeMiddle: "rgba(143,172,215,0.08)",
+    glassEdgeEnd: "rgba(255,255,255,0.16)",
+    glassShadow: "0 4px 20px rgba(39,66,112,0.045)",
+    glassInsetShadow: "inset 0 0 0 transparent",
+    glassBlur: "0px",
+    glassRimOpacity: "0",
+    chromeBase: "rgba(246,251,255,0.58)",
+    chromeBlur: "14px",
+    chromeShadow: "0 5px 22px rgba(35,64,109,0.08)",
+    chromeBorder: "rgba(255,255,255,0.35)",
+    chromeRimOpacity: "0.48",
+    plate: "rgba(34,61,103,0.04)",
+    plateBorder: "rgba(35,55,90,0.07)",
+    plateHighlight: "rgba(255,255,255,0.6)",
+    backdropGrid: "rgba(66,103,159,0.045)",
+    backdropGlow: "rgba(118,164,237,0.19)",
+    backdropGlowSecondary: "rgba(153,208,220,0.15)",
+    ribbonStart: "#D2E0F6",
+    ribbonMiddle: "#B0CBEE",
+    ribbonEnd: "#D8EBF4",
+    ribbonEdge: "rgba(255,255,255,0.52)",
+    ribbonShadow: "rgba(72,111,173,0.09)",
+    primaryGradient: "linear-gradient(115deg, #305BDC 0%, #456DDF 100%)",
+    skeletonFrom: "rgba(40,65,110,0.045)",
+    skeletonTo: "rgba(40,65,110,0.09)",
+  },
+  graphite: {
+    primary: "#D3BD93",
+    primaryTo: "#E4D5B8",
+    primaryBg: "rgba(211,189,147,0.14)",
+    onPrimary: "#1B232B",
+    medalInk: "#253242",
+    up: "#F28E89",
+    down: "#75C5A6",
+    upBg: "rgba(242,142,137,0.14)",
+    downBg: "rgba(117,197,166,0.13)",
+    pending: "#E3BE76",
+    pendingBg: "rgba(227,190,118,0.14)",
+    neutral: "#9CAFBE",
+    bg: "#101C29",
+    card: "rgba(24,44,62,0.6)",
+    well: "rgba(213,232,249,0.055)",
+    border: "rgba(169,197,222,0.17)",
+    elevated: "#203141",
+    mask: "rgba(3,9,16,0.62)",
+    textPrimary: "#F0F4F7",
+    textSecondary: "#BFCCD7",
+    textTertiary: "#A0B3C4",
+    textPlaceholder: "#76899B",
+    glassBase: "rgba(22,42,60,0.57)",
+    glassTop: "rgba(191,219,243,0.12)",
+    glassBottom: "rgba(4,17,30,0.08)",
+    glassBorder: "rgba(161,195,223,0.20)",
+    glassEdgeStart: "rgba(213,235,251,0.53)",
+    glassEdgeMiddle: "rgba(101,156,210,0.18)",
+    glassEdgeEnd: "rgba(186,204,221,0.24)",
+    glassShadow: "0 12px 34px rgba(0,9,21,0.24)",
+    glassInsetShadow: "inset 0 1px 0 rgba(209,231,249,0.18)",
+    glassBlur: "4px",
+    glassRimOpacity: "0.7",
+    chromeBase: "rgba(25,44,61,0.55)",
+    chromeBlur: "8px",
+    chromeShadow: "0 8px 26px rgba(0,9,21,0.27)",
+    chromeBorder: "rgba(184,211,232,0.25)",
+    chromeRimOpacity: "0.8",
+    plate: "rgba(3,14,24,0.25)",
+    plateBorder: "rgba(170,201,227,0.09)",
+    plateHighlight: "rgba(211,232,249,0.1)",
+    backdropGrid: "rgba(155,193,227,0.045)",
+    backdropGlow: "rgba(46,102,165,0.30)",
+    backdropGlowSecondary: "rgba(148,125,83,0.13)",
+    ribbonStart: "#274764",
+    ribbonMiddle: "#416C8C",
+    ribbonEnd: "#858D8D",
+    ribbonEdge: "rgba(184,218,247,0.22)",
+    ribbonShadow: "rgba(0,8,21,0.28)",
+    primaryGradient: "linear-gradient(115deg, #D3BD93 0%, #E4D5B8 100%)",
+    skeletonFrom: "rgba(213,232,249,0.055)",
+    skeletonTo: "rgba(213,232,249,0.13)",
+  },
 } as const;
 
-/**
- * 品牌渐变：主 CTA 药丸、Logo 视觉锤、favicon 的唯一出处（宪法 §2.5）。
- * 90deg：左冰蓝 → 右冰白。药丸上是深海墨字（text-on-primary / colorTextLightSolid）。
- */
-export const PRIMARY_GRADIENT = "linear-gradient(90deg, #58C4F5 0%, #B5E6FF 100%)";
+export type ThemeId = keyof typeof THEME_COLORS;
+export type ThemePreference = ThemeId | "system";
+export type ThemeColors = { readonly [K in keyof typeof THEME_COLORS.ceramic]: string };
+export const THEME_STORAGE_KEY = "fp-theme-preference";
+export const THEME_LABELS = { system: "跟随系统", ceramic: "A · 瓷白钴蓝", graphite: "B · 墨蓝金属" } as const;
 
-/**
- * 数字用等宽字体栈。Space Grotesk 头部优先（自托管），
- * 等宽纪律由 font-num 工具类自带的 tabular-nums 保证。
- */
-export const NUM_FONT
-  = "\"Space Grotesk\", \"DIN Alternate\", \"SF Mono\", ui-monospace, \"Menlo\", monospace";
-
-/**
- * 涨红跌绿（国内习惯；暗底上是珊瑚红 / 翡翠绿）。
- *
- * ⚠️ 0 返回中性灰而非 undefined：让「0 盈亏」看起来像正常文字会分不清
- * 「不赚不亏」与「这列不是盈亏」。
- */
-export function pnlColor(v: number): string {
-  if (v > 0)
-    return COLOR.up;
-  if (v < 0)
-    return COLOR.down;
-  return COLOR.neutral;
+/** 旧偏好、损坏的值及已淘汰的 C 都回到系统，不把任意值写进 DOM。 */
+export function parseThemePreference(value: unknown): ThemePreference {
+  return value === "ceramic" || value === "graphite" ? value : "system";
 }
 
+export function resolveTheme(preference: ThemePreference, dark: boolean): ThemeId {
+  return preference === "system" ? (dark ? "graphite" : "ceramic") : preference;
+}
+
+export function cssTokenName(key: string): string {
+  return `--fp-${key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)}`;
+}
+
+/** CSS 变量可在浏览器首帧和主题切换时直接更新，存量内联颜色也能同步。 */
+export const COLOR = Object.freeze(
+  Object.fromEntries(Object.keys(THEME_COLORS.ceramic).map(key => [key, `var(${cssTokenName(key)})`])),
+) as ThemeColors;
+
+export const PRIMARY_GRADIENT = "var(--fp-primary-gradient)";
+export const NUM_FONT = "\"Space Grotesk\", \"DIN Alternate\", \"SF Mono\", ui-monospace, \"Menlo\", monospace";
+
+/** 国内涨红跌绿；普通成功/错误不复用这一金融语义。 */
+export function pnlColor(value: number): string {
+  return value > 0 ? COLOR.up : value < 0 ? COLOR.down : COLOR.neutral;
+}
+
+function paletteCss(id: ThemeId): string {
+  const variables = Object.entries(THEME_COLORS[id]).map(([key, value]) => `  ${cssTokenName(key)}: ${value};`);
+  return [...variables, `  color-scheme: ${id === "graphite" ? "dark" : "light"};`].join("\n");
+}
+
+/** 无 JS 时也可跟随系统；显式 data-theme 优先于媒体查询，避免手动主题被系统覆盖。 */
+export const THEME_CSS = [
+  `:root, :root[data-theme="ceramic"] {\n${paletteCss("ceramic")}\n}`,
+  `:root[data-theme="graphite"] {\n${paletteCss("graphite")}\n}`,
+  `@media (prefers-color-scheme: dark) { :root:not([data-theme]) {\n${paletteCss("graphite")}\n} }`,
+].join("\n");
+
 /**
- * antd ConfigProvider 的 theme 配置（暗底，配合 root.tsx 的 theme.darkAlgorithm）。
- *
- * 为什么切暗色算法：默认算法在暗底上派生的是白容器、浅灰边、深字，
- * 每个组件都要手改、改不完；暗色算法把 Tag / Alert / Table / Segmented /
- * Dropdown 的中性色一次派生对，这里只钉品牌与材料（宪法 §7）。
- *
- * ⚠️ 绝不要把 colorSuccess 映射成 COLOR.up、colorError 映射成 COLOR.down。
- * 那会反向污染所有非金融语义：错误 Alert 变绿、成功 Alert 变红。
- * antd 的语义色保持原样，涨跌只通过 COLOR.up / COLOR.down / pnlColor 表达。
- *
- * colorTextLightSolid 钉成 onPrimary 深海墨：冰川主色是亮冰蓝，antd 默认的
- * 白字（实心按钮 / 头像 / 徽标）在亮蓝上对比不足，统一换成深海墨字。
+ * CSS 加载前执行，避免深浅首屏闪烁；不读 Cookie、不改变游客缓存键。
+ * 存储禁用时仍可跟随系统，脚本只含内部常量，不拼接用户输入。
  */
-export const ANTD_TOKEN = {
-  token: {
-    colorPrimary: COLOR.primary,
-    colorInfo: COLOR.primary,
-    // 实心控件上的字（主按钮 / Avatar / Badge）：冰川药丸配深海墨字
-    colorTextLightSolid: COLOR.onPrimary,
-    // 暗色算法从 colorBgBase 派生全部中性面；Layout 底同色
-    colorBgBase: COLOR.bg,
-    colorBgLayout: COLOR.bg,
-    colorTextBase: COLOR.textPrimary,
-    colorText: COLOR.textPrimary,
-    colorTextSecondary: COLOR.textSecondary,
-    colorTextTertiary: COLOR.textTertiary,
-    colorTextQuaternary: COLOR.textPlaceholder,
-    // ⚠️ Typography type="secondary" / Card extra 等走 colorTextDescription，antd 默认
-    // 派生自 colorTextTertiary——暗底上整页副标题都糊成一片（2026-09-10 走查）。
-    // 钉到次要档：「次要说明」就该是次要色，三级色只留给标签/坐标轴
-    colorTextDescription: COLOR.textSecondary,
-    colorTextLabel: COLOR.textSecondary,
-    // 显式钉死：与 --fp-primary-bg 零漂移，不赌派生算法
-    colorPrimaryBg: COLOR.primaryBg,
-    // 材料：容器填充 = 内井，浮面 = 不透明深色，边线 = 白 16%
-    colorBgContainer: COLOR.well,
-    colorBgElevated: COLOR.elevated,
-    colorBorder: COLOR.border,
-    colorBorderSecondary: COLOR.border,
-    colorSplit: COLOR.border,
-    colorBgMask: COLOR.mask,
-    borderRadius: 12,
-    controlHeight: 36,
-  },
-  components: {
-    // 卡片：透明底让 .fp-glass 渐变透出来；圆角 22 是「卡片」角色档（宪法 §2.2）
-    Card: { colorBgContainer: "transparent", headerBg: "transparent", borderRadiusLG: 22 },
-    // 主按钮冰蓝辉光取代黑影；次按钮玻璃胶囊（井底 + 描边，无影）
-    Button: {
-      primaryShadow: "0 8px 20px rgba(88, 196, 245, 0.35)",
-      defaultShadow: "none",
-      defaultBg: COLOR.well,
-      defaultBorderColor: COLOR.border,
-      fontWeight: 500,
-    },
-    // 表格扁着画：表头井、无表头竖线、行 hover 冰雾、表体透明（吃卡片玻璃）
-    Table: {
-      headerBg: COLOR.well,
-      headerSplitColor: "transparent",
-      rowHoverBg: COLOR.primaryBg,
-      borderColor: COLOR.border,
-      colorBgContainer: "transparent",
-    },
-    // 输入框：填充井（全局 colorBgContainer），焦点环品牌淡环
-    Input: {
-      activeShadow: `0 0 0 3px ${COLOR.primaryBg}`,
-      hoverBorderColor: COLOR.primary,
-      activeBorderColor: COLOR.primary,
-    },
-    // Modal / Drawer 面板透明——材料由 liquid-glass.css 直接写在内部类上
-    Modal: { contentBg: "transparent", headerBg: "transparent", footerBg: "transparent" },
-    Drawer: { colorBgElevated: "transparent" },
-    Tabs: { inkBarColor: COLOR.primary },
-    Segmented: {
-      trackBg: COLOR.well,
-      itemSelectedBg: COLOR.primaryBg,
-      itemSelectedColor: COLOR.textPrimary,
-    },
-    Alert: { borderRadius: 12 },
-    // 无色 Tag = 井底次要字（身份 Tag 去预设色后全走这里）
-    Tag: { defaultBg: COLOR.well, defaultColor: COLOR.textSecondary },
-    Progress: { remainingColor: COLOR.well },
-    // 骨架屏闪光：黑色透明度在暗底隐形，改白
-    Skeleton: {
-      gradientFromColor: "rgba(255, 255, 255, 0.06)",
-      gradientToColor: "rgba(255, 255, 255, 0.14)",
-    },
-    // Tooltip 默认走 colorBgSpotlight，暗色算法把它派生成浅底，深字在上面看不清。
-    // 钉回不透明浮面 + 月白字，和 Popover 同一套材料
-    Tooltip: {
-      colorBgSpotlight: COLOR.elevated,
-      colorTextLightSolid: COLOR.textPrimary,
-    },
-    // message 是独立浮层，主题 token 盖不住它的实色底，样式在 liquid-glass.css
-    Message: {
-      contentBg: COLOR.elevated,
-    },
-  },
-};
+export const THEME_BOOTSTRAP = `(function(){var p="system";try{var v=localStorage.getItem("${THEME_STORAGE_KEY}");if(v==="ceramic"||v==="graphite")p=v;}catch(e){}var d=false;try{d=matchMedia("(prefers-color-scheme: dark)").matches;}catch(e){}var t=p==="system"?(d?"graphite":"ceramic"):p;document.documentElement.dataset.theme=t;document.documentElement.dataset.themePreference=p;var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=${JSON.stringify({ ceramic: THEME_COLORS.ceramic.bg, graphite: THEME_COLORS.graphite.bg })}[t];})();`;

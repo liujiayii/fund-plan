@@ -1,20 +1,10 @@
 /**
- * 液态玻璃材料层——docs/liquid-glass.md §2 / §3 / §6 的 CSS 原文落地处。
- *
- * 本文件是全站 **唯一** 允许出现 backdrop-filter 的地方
- * （tests/domain/liquid-glass-guard.test.ts 钉死）。组件只挂 .fp-glass 类，
- * 禁止在 tsx 里再发明第二种透明、第二种描边、第二种模糊。
- *
- * import 顺序（root.tsx）：antd reset → virtual:uno.css → 本文件 → responsive.css。
- * 色值一律 var(--fp-*)（uno.config 的 preflight 从 theme.ts 全量输出）；
- * 只有玻璃本体的白色透明度与描边彩虹是材料常量，允许写 rgba 字面量。
+ * 全站唯一的光学材料层（docs/liquid-glass.md）。
+ * 内容面与导航共享 .fp-glass，通过主题 token 区分瓷面与烟晶；
+ * 颜色、边缘和阴影只从 theme.ts 的 --fp-* 变量读取。
+ * 圆角、尺寸、定位由消费方负责，不能在这里冲掉 sticky / fixed。
  */
 
-/* ══════════ 0. 舞台：页面底 ══════════ */
-
-/* antd 的 Layout 已退役（Task 4），body 底色没人管了，这里钉死。
-   min-height 让背景舞台（fixed）在短页面上也有满屏可衬。
-   （2026-10-22 色雾三团退役，衬底职责移交 styles/backdrop.css 的背景舞台） */
 html,
 body {
   background: var(--fp-bg);
@@ -22,63 +12,64 @@ body {
   min-height: 100%;
 }
 
-/* ══════════ 2. 玻璃（宪法 §2.2）══════════ */
-
-/* 双层背景（冰川版）：下层是半透明深海底衬，上层是白色高光渐变。
-   只有白色渐变时，卡片下半截压在近黑页面底上几乎纯黑、压在雾上又被雾染色，
-   文字可读性随雾漂移；深色底衬把内容面稳定在一个可读的中间蓝灰，雾仍从底下透。
-   2026-09-14 主人验收三轮定稿：底衬 0.45、模糊 4——前两轮走「低衬高糊」
-   （0.30/16、0.22/12）主人仍嫌闷；第三轮主人拍板反着调：衬抬回 0.45
-   保对比，模糊砍到 4 让下层内容**清晰直透**——材料从「磨砂玻璃」改宗
-   「透明亚克力」，通透不靠低衬而靠不糊。玻璃感余量交给描边与高光脊。
-   ⚠️ 三条材料属性带 !important：antd cssinjs 的样式标签在 SSR 时注入到
-   </head> 前、排在本文件的 <link> 之后（entry.server.tsx），同特异性下
-   .ant-card 的 background 简写会把渐变冲成实色。
-   不写 border-radius（由角色决定：antd Card 吃 borderRadiusLG=22，手写元素
-   挂 rounded-* 类）、不写 position（消费方自带：Card relative / 侧栏 sticky /
-   胶囊 fixed）——曾写过 border-radius: inherit，它让 antd Card 继承父级的
-   0 圆角，删掉 */
+/* 内容面：A 高不透明轻瓷面，B 轻模糊烟晶。important 防止 antd
+   在 SSR 后插入的 background 简写冲掉材料；基础边始终低对比。 */
 .fp-glass {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(12, 30, 48, 0.45) !important;
-  backdrop-filter: blur(4px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(4px) saturate(180%) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 18px 40px rgba(0, 0, 0, 0.35) !important;
+  background: linear-gradient(160deg, var(--fp-glass-top), var(--fp-glass-bottom)), var(--fp-glass-base) !important;
+  border: 1px solid var(--fp-glass-border) !important;
+  backdrop-filter: blur(var(--fp-glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--fp-glass-blur)) !important;
+  box-shadow: var(--fp-glass-inset-shadow), var(--fp-glass-shadow) !important;
 }
 
-/* 冰色描边走伪元素，不走 border 色——border 会被模糊吃掉。
-   inset:0 + border-radius: inherit 天然贴合宿主圆角，不需要 overflow hidden。
-   停色：白起 → 冰雾淡 → 浓钴冰 → 白收（紫夜版粉停已随换血退役） */
+/* 1px 光学边与基础边重合，不能叠成两道厚亮线。A 的 rim 为 0，
+   保留基础细边即可；遮罩只读取 alpha，直接复用不透明文字 token。 */
 .fp-glass::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -1px;
   border-radius: inherit;
   padding: 1px;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.7),
-    rgba(88, 196, 245, 0.2) 40%,
-    rgba(30, 99, 214, 0.45) 70%,
-    rgba(255, 255, 255, 0.25)
+    var(--fp-glass-edge-start),
+    var(--fp-glass-edge-middle) 48%,
+    var(--fp-glass-edge-end)
   );
-  /* 标准「只描边」mask；新代码复制这段，不要改角度或加第四色停 */
   -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
+    linear-gradient(var(--fp-text-primary) 0 0) content-box,
+    linear-gradient(var(--fp-text-primary) 0 0);
+  mask:
+    linear-gradient(var(--fp-text-primary) 0 0) content-box,
+    linear-gradient(var(--fp-text-primary) 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+  opacity: var(--fp-glass-rim-opacity);
   pointer-events: none;
-  /* 描边压在内容之上但不挡事件；z-index 让它盖过 antd Card 内部的 body 底 */
   z-index: 1;
 }
 
-/* ══════════ 3. 镜面高光（宪法 §2.3：只给门面）══════════ */
+/* 浅色内容停止采样，让金额与表格更稳定；下一条只给导航和官方弹层
+   恢复独立的清透材料。两条特异性相同，角色覆盖必须排在后面。 */
+[data-theme="ceramic"] .fp-glass {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 
-/* 宿主必须 overflow: hidden（扫光条从 -100% 扫到 100% 会跑出圆角）。
-   允许出现在：桌面侧栏、移动端胶囊 Tab、总资产卡、登录左屏、首页 hero */
+.fp-glass:is(.fp-sidebar, .fp-brandbar, .fp-tabbar, .fp-bottom-bar, .fp-glass-chrome) {
+  background: linear-gradient(160deg, var(--fp-glass-top), var(--fp-glass-bottom)), var(--fp-chrome-base) !important;
+  border-color: var(--fp-chrome-border) !important;
+  backdrop-filter: blur(var(--fp-chrome-blur)) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(var(--fp-chrome-blur)) saturate(135%) !important;
+  box-shadow: var(--fp-chrome-shadow) !important;
+}
+
+.fp-glass:is(.fp-sidebar, .fp-brandbar, .fp-tabbar, .fp-bottom-bar, .fp-glass-chrome)::before {
+  opacity: var(--fp-chrome-rim-opacity);
+}
+
+/* 镜面高光只给宽而矮的门面，导航不挂此类。强度与频率都低于旧版，
+   浅色与减动效完全关掉；宿主裁剪光带，不能影响周围点击。 */
 .fp-glass-specular {
   overflow: hidden;
 }
@@ -88,128 +79,115 @@ body {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  /* 宽而柔的光带（多色停渐出渐入），峰值 10%；硬边 28% 的窄带扫过去像扫码枪
-     （2026-09-10 主人反馈「质感差」后重调）。8s 一轮，其中 45% 时间静止 */
   background: linear-gradient(
-    100deg,
-    transparent 25%,
-    rgba(255, 255, 255, 0.04) 38%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 255, 255, 0.04) 62%,
-    transparent 75%
+    105deg,
+    transparent 28%,
+    color-mix(in srgb, var(--fp-glass-edge-start) 12%, transparent) 50%,
+    transparent 72%
   );
   transform: translateX(-100%);
   mix-blend-mode: screen;
   pointer-events: none;
-  animation: fp-specular 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: fp-specular 16s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+[data-theme="ceramic"] .fp-glass-specular::after {
+  display: none;
+  animation: none;
 }
 
 @keyframes fp-specular {
   0% {
     transform: translateX(-100%);
   }
-  55%,
+
+  45%,
   100% {
     transform: translateX(100%);
   }
 }
 
-/* ══════════ 4. 数字辉光（宪法 §2.4：只给总资产与当日涨跌）══════════ */
-
-/* color-mix 从 token 派生 55% 透明的同色辉光；不支持 color-mix 的老内核
-   整条声明无效 = 无辉光，退化无害 */
+/* 数字辉光只保留既有总资产/当日涨跌强调位，浅色不需要额外发光。 */
 .fp-glow-rise {
-  text-shadow: 0 0 8px color-mix(in srgb, var(--fp-up) 55%, transparent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--fp-up) 35%, transparent);
 }
 
 .fp-glow-fall {
-  text-shadow: 0 0 8px color-mix(in srgb, var(--fp-down) 55%, transparent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--fp-down) 35%, transparent);
 }
 
 .fp-glow-ink {
-  text-shadow: 0 0 12px color-mix(in srgb, var(--fp-text-primary) 35%, transparent);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--fp-text-primary) 20%, transparent);
 }
 
-/* ══════════ 5. antd 浮层材料（宪法 §3）══════════ */
+[data-theme="ceramic"] :is(.fp-glow-rise, .fp-glow-fall, .fp-glow-ink) {
+  text-shadow: none;
+}
 
-/* 2026-09-14 起弹层材料主通道是 root.tsx ConfigProvider 的 semantic
-   classNames（modal/drawer/select 把 .fp-glass 官方挂到面板节点），
-   本节只剩 Dropdown 独苗：它没有 popup 级 semantic（只有 root/item），
-   CSS 追内部类名是唯一通道。antd 改它 DOM 时这里会静默失效——
-   排查弹层裸奔先看这条（教训：v5→v6 内部节点两次改名，
-   Modal 裸奔了整个 v6 早期才被主人抓出来，才有了 semantic 迁移）。
-   材料规则是 .fp-glass 的复制（不能用 @apply：uno 的
-   transformerDirectives 只处理 uno 管的文件）。!important 双保险 */
+/* 首屏 HTML 不写主题属性：无 JS 时由系统媒体查询选浅色材料。
+   显式选择仍只由 data-theme 决定；角色排除防止清透导航被一起关掉。 */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .fp-glass:not(.fp-sidebar, .fp-brandbar, .fp-tabbar, .fp-bottom-bar, .fp-glass-chrome) {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  :root:not([data-theme]) .fp-glass-specular::after {
+    display: none;
+    animation: none;
+  }
+
+  :root:not([data-theme]) :is(.fp-glow-rise, .fp-glow-fall, .fp-glow-ink) {
+    text-shadow: none;
+  }
+}
+
+/* Modal / Drawer / Select 由 POPUP_GLASS 的 semantic classNames 挂
+   fp-glass-chrome。Dropdown 没有 popup 级通道，是唯一内部类例外。 */
 .ant-dropdown .ant-dropdown-menu {
   position: relative;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(12, 30, 48, 0.45) !important;
-  backdrop-filter: blur(4px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(4px) saturate(180%) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 18px 40px rgba(0, 0, 0, 0.35) !important;
-  /* 下拉 12（宪法 §2.2 角色圆角表；Modal 22 / Select 12 走 root.tsx
-     semantic styles 的 inline，不再此处管） */
+  background: linear-gradient(160deg, var(--fp-glass-top), var(--fp-glass-bottom)), var(--fp-chrome-base) !important;
+  border: 1px solid var(--fp-chrome-border) !important;
+  backdrop-filter: blur(var(--fp-chrome-blur)) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(var(--fp-chrome-blur)) saturate(135%) !important;
+  box-shadow: var(--fp-chrome-shadow) !important;
   border-radius: 12px !important;
 }
 
-/* Drawer 的 placement 级圆角与描边：placement 类（bottom/right）是公开
-   概念、稳定；面板节点挂的是官方 semantic 给的 .fp-glass（root.tsx），
-   两侧都不追内部类名。bottom 顶角 22 与底弹层同语言；right 贴边不圆、
-   左缘补一道描边与内容分界（2026-09-14） */
+/* placement 是 Drawer 的公开概念，只改形状，不追内部面板节点。 */
 .ant-drawer-bottom .fp-glass {
   border-radius: 22px 22px 0 0 !important;
 }
 
 .ant-drawer-right .fp-glass {
-  border-left: 1px solid var(--fp-border);
+  border-left-color: var(--fp-chrome-border) !important;
 }
 
-/* Tooltip / Popover 是小浮面：elevated 实色，不模糊（宪法 §2.6）。
-   antd 暗色算法派生的 colorBgElevated 已是 elevated，这里补描边与圆角 */
+/* 小浮面使用 elevated 稳定底色，不再起一层模糊。 */
 .ant-tooltip .ant-tooltip-inner,
 .ant-popover .ant-popover-inner {
   border: 1px solid var(--fp-border);
   border-radius: 12px;
 }
 
-/* ══════════ 6. 图版（宪法 §2.6：装一整块图的扁材料）══════════ */
-
-/* 2026-09-23 新增（主人选定「光学玻璃」画法时一并定下）。
-   与内井（well）的分工：内井装「一张卡里并列的小块」，图版装「一整块图」。
-   它比自己所在的玻璃卡更沉、再压一道顶边内高光，图就从玻璃面上「沉下去」一层
-   —— 材料对比是「高级感」最直接的一招：同一张卡里有了深浅两级，眼睛就有了落点。
-
-   ⚠️ 扁材料：没有 backdrop-filter（因此不计入 §6 的玻璃节点预算），也不加投影。
-   ⚠️ 只许装图（/plan 三张理念图），不许当卡片壳、不许装表格与表单。
-   ⚠️ 里面的动效不写在这份文件（动效层在 motion.css），这里只管材料。 */
+/* 图版只承载一整块理念图：扁面、无采样、无外投影。 */
 .fp-plate {
   border-radius: 12px;
-  background: rgba(3, 10, 16, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  /* 顶边内高光：与玻璃卡的顶边脊同一套语言，图版才读成「一块面」而不是一块色斑 */
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: var(--fp-plate);
+  border: 1px solid var(--fp-plate-border);
+  box-shadow: inset 0 1px 0 var(--fp-plate-highlight);
 }
 
-/* ══════════ 7. 降级（宪法 §6.2）══════════ */
-
-/* 老 WebView 没有 backdrop-filter：玻璃退成 elevated 实色，描边保留。
-   不用 JS 探测、不加第二个类名——同一批选择器换一套 background */
+/* 相同特异性覆盖导航修饰，老 WebView 也有稳定可读的实底。 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  /* .fp-glass 一行已覆盖 semantic 挂类的 modal/drawer/select 面板；
-     dropdown 走 CSS 通道，降级也得自己带 */
   .fp-glass,
+  .fp-glass:is(.fp-sidebar, .fp-brandbar, .fp-tabbar, .fp-bottom-bar, .fp-glass-chrome),
   .ant-dropdown .ant-dropdown-menu {
     background: var(--fp-elevated) !important;
   }
 }
 
-/* ══════════ 8. 减弱动态（宪法 §5：材料部分）══════════ */
-
-/* 高光停。背景舞台（网格/光晕/粒子）的减动效在 backdrop.css 自带
-   （粒子是 JS 侧 matchMedia 拦截，光晕的 CSS 关断也在那边）；
-   fade-up / float / hover 位移的关闭在 responsive.css §7（那是全站动效出处） */
+/* 背景本来就是静态；这里只关镜面动画。其余页面动效由 responsive.css 负责。 */
 @media (prefers-reduced-motion: reduce) {
   .fp-glass-specular::after {
     animation: none;

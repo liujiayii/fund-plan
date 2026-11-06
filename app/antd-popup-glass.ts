@@ -20,7 +20,7 @@ import type { ConfigProviderProps } from "antd";
  *   是 liquid-glass.css §5 的独苗
  */
 export const POPUP_GLASS = {
-  modal: { classNames: { container: "fp-glass" }, styles: { container: { borderRadius: 22 } } },
-  drawer: { classNames: { section: "fp-glass" } },
-  select: { classNames: { popup: { root: "fp-glass" } }, styles: { popup: { root: { borderRadius: 12 } } } },
+  modal: { classNames: { container: "fp-glass fp-glass-chrome" }, styles: { container: { borderRadius: 22 } } },
+  drawer: { classNames: { section: "fp-glass fp-glass-chrome" } },
+  select: { classNames: { popup: { root: "fp-glass fp-glass-chrome" } }, styles: { popup: { root: { borderRadius: 12 } } } },
 } satisfies Partial<ConfigProviderProps>;

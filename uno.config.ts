@@ -5,7 +5,7 @@ import {
   transformerDirectives,
   transformerVariantGroup,
 } from "unocss";
-import { COLOR, NUM_FONT, PRIMARY_GRADIENT } from "./app/theme";
+import { COLOR, NUM_FONT, THEME_CSS } from "./app/theme";
 
 /**
  * UnoCSS 配置。
@@ -26,31 +26,13 @@ import { COLOR, NUM_FONT, PRIMARY_GRADIENT } from "./app/theme";
  *    import 映射成主题类与 --fp-* CSS 变量，漂移在结构上不可能发生。
  */
 
-/** camelCase → kebab-case（CSS 变量命名用）：textPrimary → text-primary */
-function kebab(s: string): string {
-  return s.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
-}
-
-/**
- * COLOR 全量输出为 --fp-* CSS 变量（config 级 preflight）。
- * 消费方：app/styles/*.css——手写 CSS 进不了 JS 模块图，import 不到 theme.ts，
- * 只能靠这些变量共享 token（responsive.css 的 var(--fp-card) 等即来源于此）。
- * ⚠️ 本文件是 --fp-* 唯一的定义处；给 theme.ts 加新 token 时记得这里自动带上
- * （COLOR 上的键全自动，其余——字体/阴影/渐变——是手写的几行）。
- */
+/** 明暗色板由 theme.ts 输出，工具类只引用变量，不能把变量引用回写成自身。 */
 const FP_ROOT_VARS = [
-  ...Object.entries(COLOR).map(([k, v]) => `  --fp-${kebab(k)}: ${v};`),
   `  --fp-num-font: ${NUM_FONT};`,
-  // 注意 --fp-primary-to 不在这里手写：COLOR.primaryTo 键已被上面的
-  // 全量映射自动输出（曾手写+自动各出一份导致变量重复定义，Task 12 收尾删除）
-  // 卡片/操作条阴影变量已退役（2026-09-10）：阴影是 .fp-glass 的材料，见 liquid-glass.css
-  `  --fp-primary-gradient: ${PRIMARY_GRADIENT};`,
-  // 动效 token（visual-refresh spec §5：动效也是 token，不散写）。
-  // 消费方：手写 CSS 与任意值类（如 duration-[240ms]）想换基准时长时引变量
-  `  --fp-duration-fast: 150ms;`,
-  `  --fp-duration-base: 240ms;`,
-  `  --fp-duration-slow: 360ms;`,
-  `  --fp-ease: cubic-bezier(0.22, 1, 0.36, 1);`,
+  "  --fp-duration-fast: 150ms;",
+  "  --fp-duration-base: 240ms;",
+  "  --fp-duration-slow: 360ms;",
+  "  --fp-ease: cubic-bezier(0.22, 1, 0.36, 1);",
 ].join("\n");
 
 export default defineConfig({
@@ -97,6 +79,7 @@ export default defineConfig({
       "primary": COLOR.primary, // 冰川青蓝：text-primary / bg-primary / outline-primary
       "on-primary": COLOR.onPrimary, // 主色上的深字：text-on-primary（亮药丸配墨字）
       "primary-bg": COLOR.primaryBg, // 主色冰雾底：bg-primary-bg（选中态）
+      "medal-ink": COLOR.medalInk, // 金银铜装饰底上的固定深字
       "rise": COLOR.up, // 涨：text-rise
       "fall": COLOR.down, // 跌：text-fall
       "flat": COLOR.neutral, // 平：text-flat
@@ -167,7 +150,7 @@ export default defineConfig({
    */
   preflights: [
     {
-      getCSS: () => `:root {\n${FP_ROOT_VARS}\n}`,
+      getCSS: () => `${THEME_CSS}\n:root {\n${FP_ROOT_VARS}\n}`,
     },
   ],
   /**

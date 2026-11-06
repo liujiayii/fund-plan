@@ -2,11 +2,10 @@ import type { AreaConfig } from "@ant-design/charts";
 import type { DailyAsset } from "~/domain/asset-timeline";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
-import { FP_AREA_FILL, FP_CHART_THEME } from "~/components/ui/chart-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
+import { useChartTheme } from "~/components/ui/use-chart-theme";
 import { centsToYuan } from "~/domain/money";
-import { COLOR } from "~/theme";
 
 /**
  * @ant-design/charts 是纯客户端库（底层 G2 依赖 canvas / DOM）。
@@ -19,7 +18,7 @@ import { COLOR } from "~/theme";
  * 所以这里用 lazy() 把它切成独立 chunk，再靠 mounted 标志确保
  * 只有在浏览器里（首次 effect 之后）才真正渲染图表。
  */
-// Area（面积图）：支付宝资产走势同款观感——曲线下靛蓝渐变填充，
+// Area（面积图）：支付宝资产走势同款观感——曲线下主色渐变填充，
 // 比裸线多一档「体量感」（visual-refresh spec §4.2）
 const Area = lazy(async () => {
   const mod = await import("@ant-design/charts");
@@ -52,6 +51,7 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
   const [range, setRange] = useState<string>("3m");
   const [mode, setMode] = useState<string>("pnl");
   const mounted = useIsClient();
+  const { chartTheme, areaFill, colors } = useChartTheme();
 
   const chartData = useMemo(() => {
     const cfg = RANGES.find(r => r.key === range) ?? RANGES[1];
@@ -96,7 +96,7 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
     xField: "date",
     yField: "asset",
     // 全站图表统一主题（chart-theme.ts 单一出处）
-    theme: FP_CHART_THEME,
+    theme: chartTheme,
     // ⚠️ 刻意不传 height：G2 的 sizeOf 让显式 height 压过容器尺寸——
     // 传了它，CSS 压容器（窄屏 220）canvas 也不跟随，会竖向溢出容器。
     // 不传时 autoFit 读容器 clientHeight，高度由 responsive.css §6 全权管理
@@ -130,11 +130,11 @@ export function AssetTrendChart({ data }: { data: DailyAsset[] }) {
     children: [
       {
         type: "area",
-        style: { shape: "smooth", fill: FP_AREA_FILL, lineWidth: 0, stroke: "transparent" },
+        style: { shape: "smooth", fill: areaFill, lineWidth: 0, stroke: "transparent" },
       },
       {
         type: "line",
-        style: { shape: "smooth", stroke: COLOR.primary, lineWidth: 2 },
+        style: { shape: "smooth", stroke: colors.primary, lineWidth: 2 },
       },
     ],
   };

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { MobileNavDrawer } from "~/components/MobileNavDrawer";
 import { Logo } from "~/components/ui/Logo";
+import { ThemeToggle } from "~/components/ui/ThemeToggle";
 import { UserMenu } from "~/components/ui/UserMenu";
 import { resolveSelectedKey } from "~/domain/nav";
 
@@ -64,7 +65,10 @@ export function MobileBrandBar({ navItems, user }: MobileBrandBarProps) {
 
         {/* 账户位：游客=单个登录胶囊 / 登录=头像（loginOnly 保证两态各占
             一个元素位；UserMenu 自带设置/登出菜单与登出表单） */}
-        <UserMenu user={user} compact loginOnly />
+        <div className="flex items-center gap-1">
+          <ThemeToggle compact />
+          <UserMenu user={user} compact loginOnly />
+        </div>
       </header>
 
       <MobileNavDrawer

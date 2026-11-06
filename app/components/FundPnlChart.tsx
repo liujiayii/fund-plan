@@ -2,9 +2,9 @@ import type { LineConfig } from "@ant-design/charts";
 import type { FundCumPnlPoint } from "~/domain/fund-pnl";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { ChartSkeleton, useIsClient } from "~/components/ui/chart";
-import { FP_CHART_THEME } from "~/components/ui/chart-theme";
 import { EmptyState } from "~/components/ui/EmptyState";
 import { PeriodTabs } from "~/components/ui/PeriodTabs";
+import { useChartTheme } from "~/components/ui/use-chart-theme";
 import { centsToYuan } from "~/domain/money";
 
 /**
@@ -32,6 +32,7 @@ const RANGES = [
 export function FundPnlChart({ cumulative }: { cumulative: FundCumPnlPoint[] }) {
   const [range, setRange] = useState<string>("1m");
   const mounted = useIsClient();
+  const { chartTheme } = useChartTheme();
 
   const chartData = useMemo(() => {
     const cfg = RANGES.find(r => r.key === range) ?? RANGES[0];
@@ -56,7 +57,7 @@ export function FundPnlChart({ cumulative }: { cumulative: FundCumPnlPoint[] }) 
     xField: "date",
     yField: "pnl",
     // 全站图表统一主题（chart-theme.ts 单一出处）
-    theme: FP_CHART_THEME,
+    theme: chartTheme,
     // ⚠️ 刻意不传 height：G2 的 sizeOf 让显式 height 压过容器尺寸——
     // 高度由 responsive.css §6 的 .fp-chart-box 全权管理（与 NavChart 同款）
     autoFit: true,
