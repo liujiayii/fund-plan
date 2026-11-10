@@ -29,7 +29,7 @@ import { buildJsonLd } from "~/domain/seo";
 import { readAnnouncement } from "~/services/announcement-service";
 import { getAppContext } from "~/services/context";
 import { getCurrentUser } from "~/services/guard";
-import { THEME_BOOTSTRAP, THEME_COLORS } from "~/theme";
+import { DEFAULT_THEME, THEME_BOOTSTRAP, THEME_COLORS } from "~/theme";
 import { ANTD_THEME_CSS, getAntdTheme } from "~/theme-antd";
 // 数字品牌字体：Space Grotesk 三字重（自托管 woff2 随构建产物走）。
 // 只覆盖拉丁字符，中文继续系统栈——体积 ~50KB，国内加载零风险（spec §3.3）
@@ -91,9 +91,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {/* 原生滚动条和表单随当前主题；最终 color-scheme 由主题变量块确定。 */}
-        <meta name="color-scheme" content="light dark" />
+        <meta name="color-scheme" content="dark light" />
         {/* 移动端浏览器地址栏跟页面底同色，色值与 theme.ts 的 COLOR.bg 一致（静态资源吃不到变量，改色同步） */}
-        <meta name="theme-color" content={THEME_COLORS.ceramic.bg} suppressHydrationWarning />
+        <meta name="theme-color" content={THEME_COLORS[DEFAULT_THEME].bg} suppressHydrationWarning />
         {/* 首屏读取本机偏好，不改变共享游客缓存；脚本只包含内部常量。 */}
         <script
           // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml -- 水合前设置主题，避免首屏错色

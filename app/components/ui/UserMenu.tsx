@@ -1,4 +1,4 @@
-import { LogoutOutlined, SettingOutlined } from "@ant-design/icons";
+import { DownOutlined, LogoutOutlined, SettingOutlined } from "@ant-design/icons";
 import { Avatar, Dropdown, Space } from "antd";
 import { useRef } from "react";
 import { useNavigate } from "react-router";
@@ -9,7 +9,7 @@ export interface UserMenuProps {
   user: { username: string; role: string } | null;
   /**
    * 紧凑形态（移动端品牌胶囊右侧）：只出头像，不出用户名。
-   * 桌面侧栏底部用完整形态：头像 + 用户名 + 身份后缀
+   * 侧栏与抽屉底部用完整形态：头像 + 用户名 / 身份两行 + 下拉提示
    */
   compact?: boolean;
   /**
@@ -84,16 +84,22 @@ export function UserMenu({ user, compact, loginOnly }: UserMenuProps) {
             手写 button 没有默认焦点环可依赖，focus-visible 环自己给（宪法 §2.4） */}
         <button
           type="button"
-          className="flex min-w-0 cursor-pointer items-center gap-2 rounded-full border-0 bg-transparent p-1 text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className={`flex min-w-0 cursor-pointer items-center gap-2 border-0 bg-transparent text-ink outline-none transition-colors hover:bg-well focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${compact ? "h-9 w-9 justify-center rounded-full p-1" : "w-full rounded-[12px] p-2"}`}
           aria-label="用户菜单"
         >
-          {/* 冰川头像：亮冰蓝底配深海墨字（colorTextLightSolid 已全局钉 onPrimary） */}
-          <Avatar size={28} className="shrink-0 bg-primary text-on-primary">{avatarText}</Avatar>
+          {/* 头像跟随当前主题主色；完整账户区稍大，手机紧凑形态保持原尺寸。 */}
+          <Avatar size={compact ? 28 : 32} className="shrink-0 bg-primary text-on-primary">{avatarText}</Avatar>
           {!compact && (
-            <span className="fp-sidebar-label min-w-0 truncate text-sm" title={user.username}>
-              {user.username}
-              {user.role === "admin" ? "（主理人）" : ""}
-            </span>
+            <>
+              {/* 身份单列为次级信息，长用户名只省略自身，不再挤掉身份。 */}
+              <span className="fp-sidebar-label grid min-w-0 flex-1 gap-0.5 text-left">
+                <span className="truncate text-sm font-medium" title={user.username}>{user.username}</span>
+                {user.role === "admin" && <span className="text-xs text-muted">主理人</span>}
+              </span>
+              <span className="fp-sidebar-label shrink-0 text-xs text-muted">
+                <DownOutlined aria-hidden />
+              </span>
+            </>
           )}
         </button>
       </Dropdown>

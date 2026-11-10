@@ -2,7 +2,7 @@ import type { ThemeConfig } from "antd";
 import type { ThemeId } from "~/theme";
 import { token2CSSVar } from "@ant-design/cssinjs";
 import { theme } from "antd";
-import { COLOR, THEME_COLORS } from "~/theme";
+import { COLOR, DEFAULT_THEME, THEME_COLORS } from "~/theme";
 
 // antd 自定义 key 就是实际类名，不会自动增加 css-var- 前缀。
 const ANTD_CSS_KEY = "fp";
@@ -48,7 +48,7 @@ function createAntdTheme(id: ThemeId): ThemeConfig {
       borderRadius: 12,
       controlHeight: 36,
     },
-    // 组件私有 token 也绑定变量，否则深色首屏会残留服务端 A 的表单标签和未选中项。
+    // 组件私有 token 也绑定变量，避免手动主题的首屏残留服务端默认配色。
     components: {
       Form: { labelColor: COLOR.textPrimary, labelRequiredMarkColor: antVar("colorError") },
       Card: { colorBgContainer: "transparent", headerBg: "transparent", borderRadiusLG: 22, extraColor: COLOR.textPrimary },
@@ -147,8 +147,7 @@ function antdVariables(id: ThemeId): string {
 
 /** 同一份游客 HTML 服务两套主题；水合前、无 JS 都由根选择器决定配色。 */
 export const ANTD_THEME_CSS = [
-  `:root ${ANTD_CSS_SCOPE}{ ${antdVariables("ceramic")} }`,
+  `:root ${ANTD_CSS_SCOPE}{ ${antdVariables(DEFAULT_THEME)} }`,
   `:root[data-theme="ceramic"] ${ANTD_CSS_SCOPE}{ ${antdVariables("ceramic")} }`,
   `:root[data-theme="graphite"] ${ANTD_CSS_SCOPE}{ ${antdVariables("graphite")} }`,
-  `@media(prefers-color-scheme:dark){:root:not([data-theme]) ${ANTD_CSS_SCOPE}{ ${antdVariables("graphite")} }}`,
 ].join("\n");
