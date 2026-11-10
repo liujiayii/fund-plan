@@ -32,19 +32,21 @@ export function AppSidebar({ navItems, selectedKey, user }: AppSidebarProps) {
       className="fp-sidebar fp-desktop fp-glass sticky top-3 m-3 hidden h-[calc(100vh-24px)] w-[220px] shrink-0 flex-col rounded-[24px] p-3 md:flex"
       aria-label="主导航"
     >
-      {/* 品牌：Logo + 站名（图标轨下站名隐藏） */}
-      <a href="/" className="mb-4 flex items-center gap-2 px-2 py-1 font-bold text-ink no-underline">
-        <Logo size={28} />
-        <span className="fp-sidebar-label whitespace-nowrap">模拟基金</span>
-      </a>
+      {/* 品牌与外观共用顶部一行；图标轨下纵向排列，底部只保留账户入口。 */}
+      <div className="fp-sidebar-header mb-4 flex items-center justify-between gap-1">
+        <a href="/" className="flex min-w-0 items-center gap-2 px-2 py-1 font-bold text-ink no-underline">
+          <Logo size={28} />
+          <span className="fp-sidebar-label whitespace-nowrap">模拟基金</span>
+        </a>
+        <ThemeToggle />
+      </div>
 
       <nav className="flex flex-1 flex-col gap-1">
         <NavLinks navItems={navItems} selectedKey={selectedKey} />
       </nav>
 
       {/* 底：登录态（游客 = 登录/注册） */}
-      <div className="mt-2 grid gap-2 border-t border-line pt-3 [border-top-style:solid]">
-        <ThemeToggle />
+      <div className="mt-2 grid border-t border-line pt-3 [border-top-style:solid]">
         <UserMenu user={user} />
       </div>
     </aside>

@@ -3,6 +3,7 @@ import { Button, Card, ConfigProvider, Form, Input, InputNumber, Pagination, Pro
 import { createElement as h } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { THEME_COLORS } from "~/theme";
 import { ANTD_THEME_CSS, getAntdTheme } from "~/theme-antd";
 
 function renderControls(id: "ceramic" | "graphite") {
@@ -61,6 +62,12 @@ describe("antd 首屏主题变量", () => {
     expect(ANTD_THEME_CSS).toContain("--ant-control-item-bg-hover:");
     expect(ANTD_THEME_CSS).toContain("--ant-control-item-bg-active-disabled:");
     expect(ANTD_THEME_CSS).toContain(":root[data-theme=\"graphite\"]");
-    expect(ANTD_THEME_CSS).toContain(":root:not([data-theme])");
+    expect(ANTD_THEME_CSS).toContain(":root[data-theme=\"ceramic\"]");
+  });
+
+  it("未设置主题属性时 antd 也默认深色，不跟随系统切换", () => {
+    const rootRules = ANTD_THEME_CSS.match(/:root \.fp\{([^}]+)\}/)?.[1];
+    expect(rootRules).toContain(`--ant-color-bg-base:${THEME_COLORS.graphite.bg};`);
+    expect(ANTD_THEME_CSS).not.toContain("prefers-color-scheme");
   });
 });

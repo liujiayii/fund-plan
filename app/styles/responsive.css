@@ -291,6 +291,11 @@
   .fp-sidebar-label {
     display: none;
   }
+  /* 72px 图标轨容不下品牌与外观并排；两者改为同一中轴纵向排列。 */
+  .fp-sidebar-header {
+    flex-direction: column;
+    gap: 8px;
+  }
   .fp-sidebar a,
   .fp-sidebar button {
     justify-content: center;

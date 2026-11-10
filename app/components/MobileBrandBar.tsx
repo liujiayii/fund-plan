@@ -66,7 +66,7 @@ export function MobileBrandBar({ navItems, user }: MobileBrandBarProps) {
         {/* 账户位：游客=单个登录胶囊 / 登录=头像（loginOnly 保证两态各占
             一个元素位；UserMenu 自带设置/登出菜单与登出表单） */}
         <div className="flex items-center gap-1">
-          <ThemeToggle compact />
+          <ThemeToggle />
           <UserMenu user={user} compact loginOnly />
         </div>
       </header>

@@ -124,24 +124,6 @@ body {
   text-shadow: none;
 }
 
-/* 首屏 HTML 不写主题属性：无 JS 时由系统媒体查询选浅色材料。
-   显式选择仍只由 data-theme 决定；角色排除防止清透导航被一起关掉。 */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .fp-glass:not(.fp-sidebar, .fp-brandbar, .fp-tabbar, .fp-bottom-bar, .fp-glass-chrome) {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-
-  :root:not([data-theme]) .fp-glass-specular::after {
-    display: none;
-    animation: none;
-  }
-
-  :root:not([data-theme]) :is(.fp-glow-rise, .fp-glow-fall, .fp-glow-ink) {
-    text-shadow: none;
-  }
-}
-
 /* Modal / Drawer / Select 由 POPUP_GLASS 的 semantic classNames 挂
    fp-glass-chrome。Dropdown 没有 popup 级通道，是唯一内部类例外。 */
 .ant-dropdown .ant-dropdown-menu {

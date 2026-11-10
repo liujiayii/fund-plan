@@ -123,18 +123,15 @@ export const THEME_COLORS = {
 } as const;
 
 export type ThemeId = keyof typeof THEME_COLORS;
-export type ThemePreference = ThemeId | "system";
+export type ThemePreference = ThemeId;
 export type ThemeColors = { readonly [K in keyof typeof THEME_COLORS.ceramic]: string };
+export const DEFAULT_THEME: ThemeId = "graphite";
 export const THEME_STORAGE_KEY = "fp-theme-preference";
-export const THEME_LABELS = { system: "跟随系统", ceramic: "A · 瓷白钴蓝", graphite: "B · 墨蓝金属" } as const;
+export const THEME_LABELS = { ceramic: "浅色 · 瓷白钴蓝", graphite: "深色 · 墨蓝金属" } as const;
 
-/** 旧偏好、损坏的值及已淘汰的 C 都回到系统，不把任意值写进 DOM。 */
+/** 未选择、旧 system 偏好与损坏值都回退深色，保留用户明确选过的浅色。 */
 export function parseThemePreference(value: unknown): ThemePreference {
-  return value === "ceramic" || value === "graphite" ? value : "system";
-}
-
-export function resolveTheme(preference: ThemePreference, dark: boolean): ThemeId {
-  return preference === "system" ? (dark ? "graphite" : "ceramic") : preference;
+  return value === "ceramic" || value === "graphite" ? value : DEFAULT_THEME;
 }
 
 export function cssTokenName(key: string): string {
@@ -159,15 +156,14 @@ function paletteCss(id: ThemeId): string {
   return [...variables, `  color-scheme: ${id === "graphite" ? "dark" : "light"};`].join("\n");
 }
 
-/** 无 JS 时也可跟随系统；显式 data-theme 优先于媒体查询，避免手动主题被系统覆盖。 */
+/** 首屏与无 JS 场景统一默认深色；只有明确选择浅色才覆盖默认变量。 */
 export const THEME_CSS = [
-  `:root, :root[data-theme="ceramic"] {\n${paletteCss("ceramic")}\n}`,
-  `:root[data-theme="graphite"] {\n${paletteCss("graphite")}\n}`,
-  `@media (prefers-color-scheme: dark) { :root:not([data-theme]) {\n${paletteCss("graphite")}\n} }`,
+  `:root, :root[data-theme="graphite"] {\n${paletteCss(DEFAULT_THEME)}\n}`,
+  `:root[data-theme="ceramic"] {\n${paletteCss("ceramic")}\n}`,
 ].join("\n");
 
 /**
  * CSS 加载前执行，避免深浅首屏闪烁；不读 Cookie、不改变游客缓存键。
- * 存储禁用时仍可跟随系统，脚本只含内部常量，不拼接用户输入。
+ * 存储禁用或旧偏好失效时使用默认深色；脚本只含内部常量，不拼接用户输入。
  */
-export const THEME_BOOTSTRAP = `(function(){var p="system";try{var v=localStorage.getItem("${THEME_STORAGE_KEY}");if(v==="ceramic"||v==="graphite")p=v;}catch(e){}var d=false;try{d=matchMedia("(prefers-color-scheme: dark)").matches;}catch(e){}var t=p==="system"?(d?"graphite":"ceramic"):p;document.documentElement.dataset.theme=t;document.documentElement.dataset.themePreference=p;var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=${JSON.stringify({ ceramic: THEME_COLORS.ceramic.bg, graphite: THEME_COLORS.graphite.bg })}[t];})();`;
+export const THEME_BOOTSTRAP = `(function(){var t="${DEFAULT_THEME}";try{var v=localStorage.getItem("${THEME_STORAGE_KEY}");if(v==="ceramic"||v==="graphite")t=v;}catch(e){}document.documentElement.dataset.theme=t;document.documentElement.dataset.themePreference=t;var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=${JSON.stringify({ ceramic: THEME_COLORS.ceramic.bg, graphite: THEME_COLORS.graphite.bg })}[t];})();`;

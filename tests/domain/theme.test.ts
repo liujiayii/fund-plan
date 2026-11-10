@@ -1,21 +1,33 @@
 import { runInNewContext } from "node:vm";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { COLOR, parseThemePreference, resolveTheme, THEME_BOOTSTRAP, THEME_COLORS, THEME_CSS } from "~/theme";
+import { ThemeProvider, useAppTheme } from "~/components/ThemeProvider";
+import { COLOR, parseThemePreference, THEME_BOOTSTRAP, THEME_COLORS, THEME_CSS } from "~/theme";
 
 describe("双主题偏好与首屏", () => {
-  it("只接受 A/B 与系统偏好，淘汰或损坏的值回退到系统", () => {
+  it("仅保留手动深浅色，未选择、旧系统偏好与损坏值都默认深色", () => {
     expect(parseThemePreference("ceramic")).toBe("ceramic");
     expect(parseThemePreference("graphite")).toBe("graphite");
     for (const value of ["system", "pearl", "", null, undefined, {}, 1]) {
-      expect(parseThemePreference(value)).toBe("system");
+      expect(parseThemePreference(value)).toBe("graphite");
     }
   });
 
-  it("系统明暗映射 A/B，手动选择优先", () => {
-    expect(resolveTheme("system", false)).toBe("ceramic");
-    expect(resolveTheme("system", true)).toBe("graphite");
-    expect(resolveTheme("ceramic", true)).toBe("ceramic");
-    expect(resolveTheme("graphite", false)).toBe("graphite");
+  it("服务端和水合初始上下文统一使用深色", () => {
+    function ThemeReader() {
+      const { theme, preference } = useAppTheme();
+      return `${theme}:${preference}`;
+    }
+    expect(renderToStaticMarkup(createElement(ThemeProvider, null, createElement(ThemeReader))))
+      .toBe("graphite:graphite");
+  });
+
+  it("没有主题属性或 JavaScript 时，默认 CSS 仍为深色", () => {
+    const rootRules = THEME_CSS.match(/:root\s*(?:,[^{]*)?\{([^}]+)\}/)?.[1];
+    expect(rootRules).toContain(`--fp-bg: ${THEME_COLORS.graphite.bg};`);
+    expect(rootRules).toContain("color-scheme: dark;");
+    expect(THEME_CSS).not.toContain("prefers-color-scheme");
   });
 
   it("两套 palette 拥有同样的语义键，DOM 使用变量，canvas 使用实际颜色", () => {
@@ -45,16 +57,25 @@ describe("双主题偏好与首屏", () => {
     return { dataset, meta };
   }
 
-  it("首屏脚本在 React 前应用手动偏好", () => {
-    const result = bootstrap("graphite", false);
-    expect(result.dataset.theme).toBe("graphite");
-    expect(result.dataset.themePreference).toBe("graphite");
-    expect(result.meta.content).toBe(THEME_COLORS.graphite.bg);
+  it.each(["ceramic", "graphite"] as const)("首屏保留手动选择 %s，不受系统明暗影响", (theme) => {
+    for (const dark of [false, true]) {
+      const result = bootstrap(theme, dark);
+      expect(result.dataset.theme).toBe(theme);
+      expect(result.dataset.themePreference).toBe(theme);
+      expect(result.meta.content).toBe(THEME_COLORS[theme].bg);
+    }
   });
 
-  it("首屏脚本默认跟随系统，存储受限也不阻止渲染", () => {
-    expect(bootstrap(null, false).dataset.theme).toBe("ceramic");
-    expect(bootstrap("pearl", true).dataset.theme).toBe("graphite");
+  it.each([null, "system", "pearl", ""])("首屏存储值 %s 回退深色，与系统偏好无关", (saved) => {
+    for (const dark of [false, true]) {
+      const result = bootstrap(saved, dark);
+      expect(result.dataset).toEqual({ theme: "graphite", themePreference: "graphite" });
+      expect(result.meta.content).toBe(THEME_COLORS.graphite.bg);
+    }
+  });
+
+  it("存储受限仍默认深色，不阻止首屏渲染", () => {
+    expect(bootstrap(null, false, true).dataset.theme).toBe("graphite");
     expect(bootstrap(null, true, true).dataset.theme).toBe("graphite");
   });
 });

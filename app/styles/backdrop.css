@@ -39,7 +39,7 @@
 .fp-backdrop-ribbon {
   width: 100%;
   height: 100%;
-  opacity: 0.52;
+  opacity: 0.6;
 }
 
 /* 引擎只负责画布内容，布局与事件穿透留给舞台，不增加光学材料节点。 */
@@ -48,21 +48,14 @@
   pointer-events: none;
 }
 
-/* B 沿用已确认的烟晶原型浓度；A 留更多瓷白空白。 */
-[data-theme="graphite"] .fp-backdrop-ribbon {
-  opacity: 0.6;
+/* 默认沿用深色烟晶的浓度；手动浅色留更多瓷白空白。 */
+[data-theme="ceramic"] .fp-backdrop-ribbon {
+  opacity: 0.52;
 }
 
 /* 偏好变化后 JS 会销毁粒子；CSS 先关可见性，避免异步清理期间闪现。 */
 @media (prefers-reduced-motion: reduce) {
   .fp-backdrop-particles {
     visibility: hidden;
-  }
-}
-
-/* 无 JS 时也与系统深色的 palette 保持同一浓度。 */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .fp-backdrop-ribbon {
-    opacity: 0.6;
   }
 }

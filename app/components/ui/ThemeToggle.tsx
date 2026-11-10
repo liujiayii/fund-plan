@@ -1,22 +1,22 @@
-import { DesktopOutlined, MoonOutlined, SunOutlined } from "@ant-design/icons";
+import { MoonOutlined, SunOutlined } from "@ant-design/icons";
 import { Dropdown } from "antd";
 import { useAppTheme } from "~/components/ThemeProvider";
 import { parseThemePreference, THEME_LABELS } from "~/theme";
 
-/** 游客与已登录用户共用的外观入口；紧凑形态用于手机顶栏。 */
-export function ThemeToggle({ compact = false }: { compact?: boolean }) {
+/** 侧栏与手机顶部共用图标入口，完整主题名称只在提示和选择菜单里展示。 */
+export function ThemeToggle() {
   const { preference, theme, setPreference } = useAppTheme();
-  const Icon = preference === "system" ? DesktopOutlined : theme === "graphite" ? MoonOutlined : SunOutlined;
+  const Icon = theme === "graphite" ? MoonOutlined : SunOutlined;
+  const label = `切换主题，当前${THEME_LABELS[preference]}`;
   return (
     <Dropdown
       trigger={["click"]}
-      placement={compact ? "bottomRight" : "topLeft"}
+      placement="bottomRight"
       menu={{
         selectable: true,
         selectedKeys: [preference],
         onClick: ({ key }) => setPreference(parseThemePreference(key)),
         items: [
-          { key: "system", icon: <DesktopOutlined />, label: THEME_LABELS.system },
           { key: "ceramic", icon: <SunOutlined />, label: THEME_LABELS.ceramic },
           { key: "graphite", icon: <MoonOutlined />, label: THEME_LABELS.graphite },
         ],
@@ -24,15 +24,12 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
     >
       <button
         type="button"
-        aria-label={`切换主题，当前${THEME_LABELS[preference]}`}
-        className={`fp-theme-toggle flex cursor-pointer items-center justify-center gap-2 rounded-full border-0 bg-transparent text-muted outline-none hover:bg-well focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${compact ? "h-9 w-9 shrink-0" : "min-h-9 w-full px-2 py-1.5"}`}
+        aria-label={label}
+        aria-haspopup="menu"
+        title={label}
+        className="fp-theme-toggle flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-muted outline-none transition-colors hover:bg-well hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
-        <Icon className="text-base" />
-        {!compact && (
-          <span className="fp-sidebar-label text-xs">
-            {`外观 · ${THEME_LABELS[preference]}`}
-          </span>
-        )}
+        <Icon className="text-base" aria-hidden />
       </button>
     </Dropdown>
   );
